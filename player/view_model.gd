@@ -4,8 +4,9 @@ extends Node3D
 ## your hand, and whatever you're holding. Bobs as you move and swings when you
 ## use a tool. Lives under the camera.
 
-const REST := Vector3(0.3, -0.3, -0.28)
-const REST_PITCH := 1.3
+## Elbow position below and right of the eye; the forearm points forward and up from it.
+const REST := Vector3(0.34, -0.37, -0.12)
+const REST_PITCH := 1.85
 
 var _arm: Node3D
 var _hand: Node3D
@@ -35,8 +36,8 @@ func refresh(held_id: String, torso_item: String, skin: Color, crew_color_index:
 		if long_sleeve:
 			sleeve_color = CharacterModel.CLOTHING_COLORS.get(torso_item, skin)
 		var forearm := CapsuleMesh.new()
-		forearm.radius = 0.042
-		forearm.height = 0.34
+		forearm.radius = 0.036
+		forearm.height = 0.32
 		forearm.radial_segments = 8
 		forearm.rings = 1
 		_part(_arm, forearm, Vector3(0.0, -0.13, 0.0), sleeve_color)
@@ -57,7 +58,7 @@ func refresh(held_id: String, torso_item: String, skin: Color, crew_color_index:
 	if held_id.is_empty():
 		return
 	_held = ItemModels.build(held_id)
-	_held.rotation.x = PI - 0.35
+	_held.rotation.x = PI + 0.5  # blade tilts up from the forearm, about 45° above the horizon
 	_hand.add_child(_held)
 
 
