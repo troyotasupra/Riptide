@@ -1,17 +1,21 @@
 extends Control
-## Title screen: pick a name, host a crew or join one by IP.
+## Title screen: pick a name, make your character, host a crew or join one.
 ##
 ## Command-line shortcuts for quick co-op testing (pass after `--`):
-##   --host  --join=127.0.0.1  --name=Troy  --seed=1234  --port=24570  --window=x,y,w,h
-##   --free-mouse (don't capture the cursor)  --autopilot[=board|stress] (raft test driver)
+##   --host  --continue  --join=127.0.0.1  --name=Troy  --seed=1234  --port=24570  --window=x,y,w,h
+##   --profile=name (a separate player profile, for several copies on one PC)
+##   --free-mouse (don't capture the cursor)  --autopilot[=board|stress|gather] (test drivers)
 ##   --no-focus (window never takes keyboard focus)  --shot=path.png --shot-delay=seconds
-##   --spawn=camp (start on the camp island)  --face=camp (look toward it)  --time=0.5 (time of day, 0..1)
-##   --autopilot=gather (walk to props, harvest, eat; logs [inventory] and [notify])
+##   --spawn=camp|boat  --face=camp|sea|bow  --time=0.5 (time of day, 0..1)
+##   --scenario=camp|client (scripted end-to-end checks)  --hide-ocean
 
+var _main: VBoxContainer
 var _name_edit: LineEdit
 var _address_edit: LineEdit
 var _port_edit: LineEdit
 var _status: Label
+var _creator: CharacterCreator
+var _settings: SettingsPanel
 var _seed_override := 0
 
 
@@ -33,64 +37,80 @@ func _build_ui() -> void:
 	add_child(center)
 	center.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 
-	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(380.0, 0.0)
-	box.add_theme_constant_override("separation", 8)
-	center.add_child(box)
+	_main = VBoxContainer.new()
+	_main.custom_minimum_size = Vector2(400.0, 0.0)
+	_main.add_theme_constant_override("separation", 8)
+	center.add_child(_main)
 
-	var title := Label.new()
-	title.text = "RIPTIDE"
+	var title := UiKit.title(_main, "RIPTIDE", 72)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 72)
-	box.add_child(title)
-	var subtitle := Label.new()
-	subtitle.text = "co-op survival on a hostile sea"
+	var subtitle := UiKit.label(_main, "co-op survival on a hostile sea")
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(subtitle)
 
-	_name_edit = _add_field(box, "Your name", Net.local_name)
-	_address_edit = _add_field(box, "Host address (to join)", "127.0.0.1")
-	_port_edit = _add_field(box, "Port", str(Net.DEFAULT_PORT))
+	_name_edit = _add_field(_main, "Your name", Profile.player_name)
+	var profile_row := HBoxContainer.new()
+	profile_row.add_theme_constant_override("separation", 8)
+	_main.add_child(profile_row)
+	UiKit.button(profile_row, "Character", _open_creator).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiKit.button(profile_row, "Settings", _open_settings).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	var buttons := HBoxContainer.new()
-	buttons.add_theme_constant_override("separation", 8)
-	box.add_child(buttons)
-	_add_button(buttons, "Host new world", _on_host)
-	_add_button(buttons, "Join crew", _on_join)
-	_add_button(buttons, "Quit", get_tree().quit)
 	if SaveGame.has_save():
-		var continue_button := Button.new()
-		continue_button.text = "Continue saved world (host)"
-		continue_button.pressed.connect(_on_continue)
-		box.add_child(continue_button)
-		var warning := Label.new()
-		warning.text = "Hosting a new world replaces your save the next time it autosaves."
-		warning.modulate = Color(1.0, 1.0, 1.0, 0.6)
-		warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		box.add_child(warning)
+		UiKit.button(_main, "Continue saved world (host)", _on_continue)
+	UiKit.button(_main, "Host new world", _on_host)
+	if SaveGame.has_save():
+		UiKit.label(_main, "Hosting a new world replaces your save the next time it autosaves.", true)
 
-	_status = Label.new()
-	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status.custom_minimum_size = Vector2(380.0, 48.0)
-	box.add_child(_status)
+	_address_edit = _add_field(_main, "Host address (to join)", "127.0.0.1")
+	_port_edit = _add_field(_main, "Port", str(Net.DEFAULT_PORT))
+	var join_row := HBoxContainer.new()
+	join_row.add_theme_constant_override("separation", 8)
+	_main.add_child(join_row)
+	UiKit.button(join_row, "Join crew", _on_join).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiKit.button(join_row, "Quit", get_tree().quit).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	_status = UiKit.label(_main, "")
+	_status.custom_minimum_size = Vector2(400.0, 48.0)
+
+	_creator = CharacterCreator.new()
+	_creator.visible = false
+	center.add_child(_creator)
+	_creator.closed.connect(_show_main)
+	_settings = SettingsPanel.new()
+	_settings.visible = false
+	center.add_child(_settings)
+	_settings.closed.connect(_show_main)
+	UiKit.focus_first(_main)
 
 
 func _add_field(parent: Control, label_text: String, value: String) -> LineEdit:
-	var label := Label.new()
-	label.text = label_text
-	parent.add_child(label)
+	UiKit.label(parent, label_text)
 	var edit := LineEdit.new()
 	edit.text = value
 	parent.add_child(edit)
 	return edit
 
 
-func _add_button(parent: Control, text: String, action: Callable) -> void:
-	var button := Button.new()
-	button.text = text
-	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button.pressed.connect(action)
-	parent.add_child(button)
+func _open_creator() -> void:
+	_main.visible = false
+	_creator.visible = true
+
+
+func _open_settings() -> void:
+	_main.visible = false
+	_settings.visible = true
+
+
+func _show_main() -> void:
+	_main.visible = true
+	UiKit.focus_first(_main)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if _creator.visible:
+			_creator.close()
+		elif _settings.visible:
+			_settings.close()
 
 
 func _on_status(message: String) -> void:
@@ -103,6 +123,7 @@ func _port() -> int:
 
 func _on_host() -> void:
 	Net.set_local_name(_name_edit.text)
+	SaveGame.pending = {}
 	GameState.world_seed = _seed_override if _seed_override != 0 else randi_range(1, 2147483646)
 	Net.host_game(_port())
 

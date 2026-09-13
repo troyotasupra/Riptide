@@ -17,7 +17,7 @@ var resources: ResourceField
 var camp: CampSystems
 var players_root := Node3D.new()
 var boats_root := Node3D.new()
-## Saved crew members who aren't connected right now, by name.
+## Saved crew members who aren't connected right now, by player id.
 var saved_players := {}
 var _age := 0.0
 ## peer id -> {"id": target, "at": ocean clock} for hold-to-gather validation
@@ -38,6 +38,7 @@ func _ready() -> void:
 	add_child(Hud.new())
 	if not GameState.free_mouse:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	Sound.start_ambience()
 
 	Net.peer_ready.connect(_on_peer_ready)
 	Net.peer_left.connect(_on_peer_left)
@@ -119,13 +120,34 @@ func find_boat(boat_name: String) -> Boat:
 
 func spawn_point(index: int) -> Vector3:
 	if GameState.spawn_override in ["camp", "boat"] and camp_island != null:
-		var inland := (camp_island.center - camp_island.cove).normalized()
-		var p := camp_island.cove + inland * 10.0 + inland.orthogonal() * (index - 2.5) * 1.5
-		return Vector3(p.x, camp_island.height_at(p.x, p.y) + 1.2, p.y)
+		return camp_beach_point(index)
+	return start_beach_point(index)
+
+
+func start_beach_point(index: int) -> Vector3:
 	var shore := island.find_shore_point(Vector2(0.0, 1.0))
 	var x := shore.x + (index - 2.5) * 1.5
 	var z := shore.z - 6.0
 	return Vector3(x, island.height_at(x, z) + 1.2, z)
+
+
+func camp_beach_point(index: int) -> Vector3:
+	var inland := (camp_island.center - camp_island.cove).normalized()
+	var p := camp_island.cove + inland * 10.0 + inland.orthogonal() * (index - 2.5) * 1.5
+	return Vector3(p.x, camp_island.height_at(p.x, p.y) + 1.2, p.y)
+
+
+## Plays a sound at a spot for everyone in the world (host only).
+func sfx_at(set_name: String, pos: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	Sound.play_at(set_name, pos)
+	Net.send_to_ready(self, "_sfx", [set_name, pos])
+
+
+@rpc("authority", "call_remote", "unreliable")
+func _sfx(set_name: String, pos: Vector3) -> void:
+	Sound.play_at(set_name, pos)
 
 
 func _generate() -> void:
@@ -155,6 +177,7 @@ func _generate() -> void:
 	sailboat.transform = layout.transform
 	boats_root.add_child(sailboat)
 	sailboat.moor(layout.lines)
+	sailboat.set_crew_flag(GameState.crew_color, GameState.emblem)
 
 	camp.create_pickups(camp_island)
 
@@ -172,7 +195,7 @@ func save_now() -> void:
 	var now: float = Ocean.time
 	var players := saved_players.duplicate(true)
 	for player: Player in players_root.get_children():
-		players[player.display_name] = player.survivor.to_save(now)
+		players[player.player_id] = player.survivor.to_save(now)
 	var depleted := {}
 	for id: String in resources.depleted:
 		depleted[id] = maxf(0.0, resources.depleted[id] - now)
@@ -180,8 +203,10 @@ func save_now() -> void:
 	for boat: Boat in boats_root.get_children():
 		boats[String(boat.name)] = boat.global_transform
 	var ok := SaveGame.write({
-		"version": 1,
+		"version": 2,
 		"seed": GameState.world_seed,
+		"crew_color": GameState.crew_color,
+		"emblem": GameState.emblem,
 		"time_of_day": GameState.time_of_day(),
 		"resources": depleted,
 		"boats": boats,
@@ -261,6 +286,10 @@ func request_interact(target_id: String, slot: int) -> void:
 			var pickup: Node3D = camp.pickup_nodes.get(parts[1]) if parts.size() > 1 else null
 			if pickup != null and at.distance_to(pickup.global_position) <= INTERACT_RANGE:
 				camp.pickup(survivor, parts[1])
+		"bag":
+			var bag: Node3D = camp.bag_nodes.get(parts[1]) if parts.size() > 1 else null
+			if bag != null and at.distance_to(bag.global_position) <= INTERACT_RANGE:
+				camp.open_container_for(survivor, "bag:" + parts[1])
 		"struct":
 			var structure: Node3D = camp.structure_nodes.get(parts[1]) if parts.size() > 1 else null
 			if structure != null and at.distance_to(structure.global_position) <= INTERACT_RANGE + 1.0:
@@ -283,6 +312,7 @@ func _use_spring(survivor: Survivor, at: Vector3, slot: int) -> void:
 		return
 	survivor.survival.drink(SPRING_DRINK)
 	survivor.notify("The spring water is cold and clean.")
+	sfx_at("splash", at)
 	survivor.push_survival()
 
 
@@ -306,23 +336,39 @@ func _fill_canteen(survivor: Survivor, slot: int, filled: String) -> bool:
 	if stack == null or stack.id != "canteen":
 		return false
 	survivor.inventory.slots[slot] = {"id": filled, "count": 1, "spoils_at": 0.0}
+	sfx_at("splash", survivor.player.world_transform().origin)
 	survivor.push_inventory()
 	return true
 
 
+## Host: a crew member blacked out. Their pack stays where they fell (what they
+## wear stays on them); they wake at their bed, or on the nearest beach.
 func _respawn(player: Player) -> void:
 	var s := player.survivor
+	var fell_at := player.world_transform().origin
+	var lost: Array = []
+	for i in s.inventory.slots.size():
+		if s.inventory.slots[i] != null:
+			lost.append(s.inventory.slots[i])
+	if not lost.is_empty():
+		camp.drop_items(player, lost, "%s's pack" % player.display_name)
+		s.inventory = Inventory.new()
+	sfx_at("hit", fell_at)
 	s.survival.health = Survival.MAX
 	s.survival.hunger = maxf(s.survival.hunger, 50.0)
 	s.survival.thirst = maxf(s.survival.thirst, 50.0)
 	s.survival.body_temp = Survival.NORMAL_TEMP
 	s.survival.sickness = 0.0
 	s.wetness = 0.0
-	if camp.teleport_to_spot(player, camp.respawn_spot(player.display_name)):
-		s.notify("You blacked out... and woke where you last slept.")
-	else:
-		player.teleport(spawn_point(randi() % Net.MAX_PLAYERS))
-		s.notify("You blacked out... and woke up back on the first beach.")
+	var where := "where you last slept"
+	if not camp.teleport_to_spot(player, camp.respawn_spot(player.player_id)):
+		var start := start_beach_point(randi() % Net.MAX_PLAYERS)
+		var camp_beach := camp_beach_point(randi() % Net.MAX_PLAYERS)
+		var nearest := start if fell_at.distance_to(start) < fell_at.distance_to(camp_beach) else camp_beach
+		player.teleport(nearest)
+		where = "on the nearest beach"
+	s.notify("You blacked out... and woke %s. %s" % [where, "Your pack is where you fell." if not lost.is_empty() else ""])
+	s.push_inventory()
 	s.push_survival()
 
 
@@ -336,24 +382,28 @@ func _sender_id() -> int:
 func _on_peer_ready(peer_id: int) -> void:
 	if peer_id != multiplayer.get_unique_id():
 		for existing: Player in players_root.get_children():
-			_spawn_player.rpc_id(peer_id, existing.peer_id, existing.display_name, existing.world_transform().origin)
+			_spawn_player.rpc_id(peer_id, existing.peer_id, existing.display_name, existing.player_id, existing.look, existing.worn, existing.world_transform().origin)
 		resources.sync_to(peer_id)
 		camp.sync_to(peer_id)
 	var player_name: String = Net.roster[peer_id]["name"]
+	var player_id := Net.player_id_of(peer_id)
+	var look := Net.look_of(peer_id)
 	var index := players_root.get_child_count()
 	var pos := spawn_point(index)
-	_spawn_player(peer_id, player_name, pos)
-	Net.send_to_ready(self, "_spawn_player", [peer_id, player_name, pos])
+	_spawn_player(peer_id, player_name, player_id, look, {}, pos)
+	Net.send_to_ready(self, "_spawn_player", [peer_id, player_name, player_id, look, {}, pos])
 	var player := players_root.get_node(str(peer_id)) as Player
-	if saved_players.has(player_name):
-		player.survivor.from_save(saved_players[player_name], Ocean.time)
-		saved_players.erase(player_name)
-		player.survivor.push_inventory()
-		player.survivor.push_survival()
+	if saved_players.has(player_id):
+		player.survivor.from_save(saved_players[player_id], Ocean.time)
+		saved_players.erase(player_id)
+	else:
+		player.survivor.give_starting_outfit()
+	player.survivor.push_inventory()
+	player.survivor.push_survival()
 	if GameState.spawn_override == "boat":
 		player.teleport_aboard("Sailboat", Sailboat.BUNK_SPAWN + Vector3(0.0, 0.0, 1.0 + index * 0.8))
 	else:
-		camp.teleport_to_spot(player, camp.respawn_spot(player_name))
+		camp.teleport_to_spot(player, camp.respawn_spot(player_id))
 
 
 func _on_peer_left(peer_id: int) -> void:
@@ -361,20 +411,23 @@ func _on_peer_left(peer_id: int) -> void:
 		boat.paddlers.erase(peer_id)
 	var player := players_root.get_node_or_null(str(peer_id)) as Player
 	if player != null:
-		saved_players[player.display_name] = player.survivor.to_save(Ocean.time)
+		saved_players[player.player_id] = player.survivor.to_save(Ocean.time)
 	camp.forget_peer(peer_id)
 	_despawn_player(peer_id)
 	Net.send_to_ready(self, "_despawn_player", [peer_id])
 
 
 @rpc("authority", "call_remote", "reliable")
-func _spawn_player(peer_id: int, player_name: String, pos: Vector3) -> void:
+func _spawn_player(peer_id: int, player_name: String, player_id: String, look: Dictionary, worn: Dictionary, pos: Vector3) -> void:
 	if players_root.has_node(str(peer_id)):
 		return
 	var player := Player.new()
 	player.name = str(peer_id)
 	player.peer_id = peer_id
+	player.player_id = player_id
 	player.display_name = player_name
+	player.look = AppearanceTable.sanitize(look)
+	player.worn = worn
 	player.is_local = peer_id == multiplayer.get_unique_id()
 	player.set_multiplayer_authority(peer_id)
 	player.yaw = PI  # face out to sea, toward the raft

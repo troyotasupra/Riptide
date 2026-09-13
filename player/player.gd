@@ -1,8 +1,9 @@
 class_name Player
 extends CharacterBody3D
 ## First-person crew member. The owning peer moves it and streams its state;
-## every other peer draws a smoothed copy. Survival and belongings live in the
-## child Survivor node, which the host keeps authoritative.
+## every other peer draws the crew member's full, animated character. Survival,
+## belongings and clothing live in the child Survivor node, which the host
+## keeps authoritative.
 ##
 ## Aboard a boat, the body stands on that boat's still deck proxy (far below
 ## the world) and is drawn relative to the real, pitching hull. See boat.gd.
@@ -20,6 +21,7 @@ const FALL_MULTIPLIER := MovementTuning.FALL_MULTIPLIER
 const EYE_HEIGHT := 1.6
 const CROUCH_EYE_HEIGHT := 1.0
 const MOUSE_SENSITIVITY := 0.0022
+const STICK_LOOK_SPEED := 2.8
 const STAMINA_MAX := 100.0
 const SPRINT_COST := 16.0
 const SWIM_COST := 5.0
@@ -40,9 +42,16 @@ const STRESS_FLING_SPEED := 12.0
 const REMOTE_SMOOTHING := 14.0
 const INTERACT_REACH := 3.5
 const BUILD_REACH := 7.0
+const GIVE_REACH := 3.5
+const SWING_TOOLS := ["knife", "machete", "hatchet"]
+const SWING_SECONDS := 0.55
 
 var peer_id := 1
+var player_id := ""
 var display_name := "Sailor"
+var look := {}
+## slot -> item id, what everyone sees this crew member wearing.
+var worn := {}
 var is_local := false
 ## The boat whose deck proxy this body is standing in, or null when in the world.
 var platform: Boat = null
@@ -55,14 +64,18 @@ var paddling := false
 ## 0 resting .. 1 sprinting or swimming hard; drives hunger and thirst on the host.
 var exertion := 0.0
 var carried_weight_kg := 0.0
+var held_id := ""
 ## What the crosshair is on (local player only).
 var focus_id := ""
 var focus_text := ""
+var give_peer := 0
+var give_text := ""
 
 var survivor: Survivor
 var camera: Camera3D
-var visual: Node3D
-var _head: Node3D
+var model: CharacterModel
+var view_model: ViewModel
+var _label: Label3D
 var _eye_height := EYE_HEIGHT
 var _tick := 0
 var _paddle_boat: Boat = null
@@ -71,11 +84,17 @@ var _paddle_sprint_sent := false
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _has_target := false
+var _remote_speed := 0.0
+var _last_remote_pos := Vector3.ZERO
+var _step_accum := 0.0
+var _was_swimming := false
 # Hold-to-gather
 var _focus_hold := 0.0
 var _hold_id := ""
 var _hold_time := 0.0
 var _hold_needed := 0.0
+var _hold_action := "interact"
+var _swing_timer := 0.0
 # Building
 var _ghost: MeshInstance3D
 var _ghost_material: StandardMaterial3D
@@ -121,15 +140,27 @@ func _ready() -> void:
 	survivor.player = self
 	add_child(survivor)
 
-	visual = _build_visual()
-	visual.top_level = true
-	visual.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
-	add_child(visual)
+	model = CharacterModel.new()
+	model.name = "Character"
+	model.top_level = true
+	model.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	add_child(model)
+	model.setup(look, worn, GameState.crew_color, GameState.emblem)
+
+	_label = Label3D.new()
+	_label.text = display_name
+	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_label.font_size = 40
+	_label.pixel_size = 0.006
+	_label.outline_size = 8
+	_label.top_level = true
+	_label.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	add_child(_label)
 
 	if is_local:
 		camera = Camera3D.new()
 		camera.top_level = true
-		camera.fov = 80.0
+		camera.fov = Settings.fov
 		camera.near = 0.05
 		camera.far = 3000.0
 		camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
@@ -142,7 +173,11 @@ func _ready() -> void:
 		_torch_light.position = Vector3(0.3, -0.2, -0.4)
 		_torch_light.visible = false
 		camera.add_child(_torch_light)
-		visual.visible = false
+		view_model = ViewModel.new()
+		view_model.name = "ViewModel"
+		camera.add_child(view_model)
+		model.visible = false
+		_label.visible = false
 		GameState.local_player = self
 
 
@@ -151,11 +186,23 @@ func _exit_tree() -> void:
 		GameState.local_player = null
 
 
+func apply_worn(ids: Dictionary) -> void:
+	worn = ids.duplicate()
+	if model != null:
+		model.set_worn(worn)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _set_worn(ids: Dictionary) -> void:
+	if multiplayer.get_remote_sender_id() == 1:
+		apply_worn(ids)
+
+
 func is_asleep() -> bool:
 	return is_local and GameState.world != null and GameState.world.camp != null and GameState.world.camp.local_asleep
 
 
-## 0..1 progress of the current hold-E gather, or 0 when not holding.
+## 0..1 progress of the current hold-to-gather, or 0 when not holding.
 func hold_fraction() -> float:
 	if _hold_id.is_empty() or _hold_needed <= 0.0:
 		return 0.0
@@ -166,44 +213,48 @@ func is_placing() -> bool:
 	return not _ghost_type.is_empty()
 
 
+func _controls_active() -> bool:
+	return not GameState.ui_open and not is_asleep() \
+		and (Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or Controls.using_gamepad or GameState.free_mouse)
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_local:
 		return
-	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-	if event is InputEventMouseMotion and captured:
-		yaw -= event.relative.x * MOUSE_SENSITIVITY
-		pitch = clampf(pitch - event.relative.y * MOUSE_SENSITIVITY, -1.5, 1.5)
+	if event is InputEventMouseMotion:
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not GameState.ui_open:
+			var sensitivity := MOUSE_SENSITIVITY * Settings.mouse_sensitivity
+			yaw -= event.relative.x * sensitivity
+			pitch = clampf(pitch - event.relative.y * sensitivity * (-1.0 if Settings.invert_y else 1.0), -1.5, 1.5)
 		return
 	if event.is_action_pressed("leave"):
 		Net.leave_game("You left the session.")
 		return
 	if is_asleep():
-		if (event is InputEventKey or event is InputEventMouseButton) and event.pressed:
+		if (event is InputEventKey or event is InputEventMouseButton or event is InputEventJoypadButton) and event.pressed:
 			GameState.world.camp.rpc_id(1, "request_wake")
 			get_viewport().set_input_as_handled()
 		return
 	if GameState.ui_open:
 		return
-	if event is InputEventMouseButton and event.pressed and not captured:
+	if event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not GameState.free_mouse:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
 		return
-	if event.is_action_pressed("pause"):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		return
-	if not captured:
+	if not _controls_active():
 		return
 	if event.is_action_pressed("paddle") and platform != null and platform.can_paddle:
 		paddling = not paddling
 	elif event.is_action_pressed("interact") and not focus_id.is_empty():
-		_press_interact()
+		_press_interact("interact")
 	elif event.is_action_pressed("primary"):
-		if is_placing():
-			_confirm_place()
-		else:
-			survivor.use_selected()
+		_press_primary()
 	elif event.is_action_pressed("rotate") and is_placing():
 		_ghost_yaw += PI / 8.0
+	elif event.is_action_pressed("drop"):
+		survivor.request_drop(survivor.selected_slot)
+	elif event.is_action_pressed("give") and give_peer != 0:
+		survivor.request_give(survivor.selected_slot, give_peer)
 	elif event.is_action_pressed("hotbar_next"):
 		survivor.select_slot(survivor.selected_slot + 1)
 	elif event.is_action_pressed("hotbar_prev"):
@@ -234,15 +285,25 @@ func _process(delta: float) -> void:
 	var world := base * get_global_transform_interpolated()
 
 	if is_local:
+		if _controls_active():
+			var stick := Input.get_vector("look_left", "look_right", "look_up", "look_down")
+			var speed := STICK_LOOK_SPEED * Settings.stick_sensitivity * delta
+			yaw -= stick.x * speed
+			pitch = clampf(pitch - stick.y * speed * (-1.0 if Settings.invert_y else 1.0), -1.5, 1.5)
 		# Use the live yaw/pitch rather than the physics-tick body rotation so
-		# mouse look responds every frame.
-		var look := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, pitch)
-		camera.global_transform = Transform3D(base.basis * look, world.origin + base.basis * Vector3(0.0, _eye_height, 0.0))
-		_torch_light.visible = ItemTable.get_item(CampSystems.held_item(self)).get("tool", "") == "torch"
+		# looking around responds every frame.
+		var view := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, pitch)
+		camera.global_transform = Transform3D(base.basis * view, world.origin + base.basis * Vector3(0.0, _eye_height, 0.0))
+		camera.fov = Settings.fov
+		_torch_light.visible = ItemTable.get_item(held_id).get("tool", "") == "torch"
+		var skin: Color = AppearanceTable.SKIN[int(AppearanceTable.sanitize(look).skin)]
+		view_model.refresh(held_id, worn.get("torso", ""), skin, GameState.crew_color)
+		view_model.animate(delta, Vector2(velocity.x, velocity.z).length())
+		_update_ambience(world.origin)
 	else:
-		visual.global_transform = world
-		_head.position.y = _eye_height
-		_head.rotation.x = pitch
+		model.global_transform = Transform3D(world.basis, world.origin)
+		model.animate(delta, _remote_speed, swimming, crouching, pitch)
+		_label.global_position = world.origin + Vector3.UP * 2.2
 
 
 ## Where this player really is in the world, even while standing in a deck proxy.
@@ -357,13 +418,13 @@ func _apply_teleport_aboard(boat_name: String, local: Vector3) -> void:
 # --- local simulation ------------------------------------------------------
 
 func _local_physics(delta: float) -> void:
+	held_id = survivor.selected_id()
 	if platform == null and _hold_for_ground():
 		_finish_tick()
 		return
-	var asleep := is_asleep()
-	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not GameState.ui_open and not asleep
+	var active := _controls_active()
 	var input := Vector2.ZERO
-	if captured:
+	if active:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	if not GameState.autopilot.is_empty():
 		input = _autopilot_input(delta)
@@ -382,10 +443,13 @@ func _local_physics(delta: float) -> void:
 		swimming = depth > SWIM_EXIT_DEPTH
 	else:
 		swimming = depth > SWIM_DEPTH
-	crouching = captured and Input.is_action_pressed("crouch") and not swimming
+	if swimming and not _was_swimming:
+		Sound.play("splash", -4.0)
+	_was_swimming = swimming
+	crouching = active and Input.is_action_pressed("crouch") and not swimming
 
 	var moving := input != Vector2.ZERO
-	var sprinting := captured and moving and input.y < 0.0 and Input.is_action_pressed("sprint") \
+	var sprinting := active and moving and input.y < 0.0 and Input.is_action_pressed("sprint") \
 		and not crouching and not swimming and stamina > 0.0
 	var speed := WALK_SPEED
 	if swimming:
@@ -416,7 +480,7 @@ func _local_physics(delta: float) -> void:
 	velocity.x = lerpf(velocity.x, wish.x, blend)
 	velocity.z = lerpf(velocity.z, wish.z, blend)
 
-	var jump := (captured and Input.is_action_just_pressed("jump")) or (not GameState.autopilot.is_empty() and swimming)
+	var jump := (active and Input.is_action_just_pressed("jump")) or (not GameState.autopilot.is_empty() and swimming)
 	if swimming:
 		velocity.y = lerpf(velocity.y, (depth - SWIM_FLOAT_DEPTH) * 3.0, 1.0 - exp(-4.0 * delta))
 		if jump and stamina > SWIM_JUMP_COST:
@@ -438,7 +502,9 @@ func _local_physics(delta: float) -> void:
 		_try_board()
 	if GameState.autopilot == "stress":
 		_track_stress(delta)
+	_footsteps(delta, Vector2(velocity.x, velocity.z).length(), is_on_floor() and not swimming)
 	_update_focus()
+	_update_give_target()
 	_update_hold(delta)
 	_update_placement()
 	_finish_tick()
@@ -494,7 +560,30 @@ func _update_focus() -> void:
 		_focus_hold = target.hold_seconds(self)
 
 
-func _press_interact() -> void:
+## Finds a crewmate you're looking at, to hand them what you're holding.
+func _update_give_target() -> void:
+	give_peer = 0
+	give_text = ""
+	if held_id.is_empty() or camera == null or GameState.world == null or not focus_id.is_empty():
+		return
+	var from := camera.global_position
+	var forward := -camera.global_basis.z
+	var best := 0.96
+	for other: Player in GameState.world.players_root.get_children():
+		if other == self:
+			continue
+		var to := other.world_transform().origin + Vector3.UP * 1.1 - from
+		var distance := to.length()
+		if distance > GIVE_REACH or distance < 0.1:
+			continue
+		var facing := forward.dot(to / distance)
+		if facing > best:
+			best = facing
+			give_peer = other.peer_id
+			give_text = "%s Give %s to %s" % [Controls.tag("give"), ItemTable.display_name(held_id), other.display_name]
+
+
+func _press_interact(action: String) -> void:
 	if focus_id.ends_with(":ladder"):
 		var boat: Boat = GameState.find_boat(focus_id.split(":")[1])
 		if boat != null:
@@ -504,19 +593,52 @@ func _press_interact() -> void:
 		_hold_id = focus_id
 		_hold_time = 0.0
 		_hold_needed = _focus_hold
+		_hold_action = action
+		_swing_timer = 0.0
 		GameState.world.rpc_id(1, "begin_interact", focus_id)
 		return
 	GameState.world.rpc_id(1, "request_interact", focus_id, survivor.selected_slot)
 
 
+func _press_primary() -> void:
+	if is_placing():
+		_confirm_place()
+		return
+	var tool: String = ItemTable.get_item(held_id).get("tool", "")
+	if SWING_TOOLS.has(tool):
+		if focus_id.begins_with("res:"):
+			_press_interact("primary")
+		else:
+			_swing(tool)
+			if not GameState.hints_shown.has(held_id):
+				GameState.hints_shown[held_id] = true
+				survivor.notified.emit(ItemTable.get_item(held_id).get("hint", ""))
+		return
+	survivor.use_selected()
+
+
+func _swing(tool: String) -> void:
+	view_model.swing()
+	Sound.play("chop" if tool == "hatchet" and focus_id.begins_with("res:") else ("cut" if focus_id.begins_with("res:") else "swing"), -6.0)
+	Net.send_to_ready(self, "_net_swing")
+
+
 func _update_hold(delta: float) -> void:
 	if _hold_id.is_empty():
 		return
-	var holding := Input.is_action_pressed("interact") or not GameState.autopilot.is_empty()
+	var holding := Input.is_action_pressed(_hold_action) or not GameState.autopilot.is_empty()
 	if focus_id != _hold_id or not holding:
 		_hold_id = ""
 		return
 	_hold_time += delta
+	_swing_timer -= delta
+	if _swing_timer <= 0.0:
+		_swing_timer = SWING_SECONDS
+		var tool: String = ItemTable.get_item(held_id).get("tool", "")
+		if _hold_action == "primary" and SWING_TOOLS.has(tool):
+			_swing(tool)
+		else:
+			Sound.play("cloth", -10.0)
 	if _hold_time >= _hold_needed:
 		GameState.world.rpc_id(1, "request_interact", _hold_id, survivor.selected_slot)
 		_hold_id = ""
@@ -524,7 +646,7 @@ func _update_hold(delta: float) -> void:
 
 ## Shows a build preview while a structure kit is selected in the hotbar.
 func _update_placement() -> void:
-	var type: String = ItemTable.get_item(CampSystems.held_item(self)).get("places", "")
+	var type: String = ItemTable.get_item(held_id).get("places", "")
 	if GameState.ui_open or platform != null:
 		type = ""
 	if type != _ghost_type:
@@ -570,6 +692,7 @@ func _rebuild_ghost() -> void:
 
 func _confirm_place() -> void:
 	if not _ghost_valid:
+		Sound.play("error", -6.0)
 		survivor.notified.emit("You can't build there — find flat, dry ground.")
 		return
 	GameState.world.camp.rpc_id(1, "request_place", survivor.selected_slot, _ghost_position, _ghost_yaw)
@@ -615,7 +738,46 @@ func _send_state() -> void:
 	if platform != null:
 		boat_name = String(platform.name)
 		pos -= platform.proxy_xf.origin
-	Net.send_to_ready(self, "_net_state", [boat_name, pos, yaw, pitch, crouching, swimming, exertion])
+	Net.send_to_ready(self, "_net_state", [boat_name, pos, yaw, pitch, crouching, swimming, exertion, held_id])
+
+
+# --- sound -------------------------------------------------------------------
+
+func _footsteps(delta: float, horizontal_speed: float, grounded: bool) -> void:
+	if not grounded or horizontal_speed < 0.6:
+		return
+	_step_accum += horizontal_speed * delta
+	var stride := 1.7 if horizontal_speed < 5.0 else 2.2
+	if _step_accum < stride:
+		return
+	_step_accum = 0.0
+	var surface := _surface()
+	if is_local:
+		Sound.play(surface, -12.0 if crouching else -8.0)
+	else:
+		Sound.play_at(surface, world_transform().origin, -4.0)
+
+
+func _surface() -> String:
+	if platform != null or GameState.world == null:
+		return "step_wood"
+	var p := world_transform().origin
+	var ground: float = GameState.world.ground_height(p.x, p.z)
+	if ground == -INF or p.y - ground > 0.6:
+		return "step_wood"
+	return "step_sand" if ground < 2.6 else "step_grass"
+
+
+## The sea is loud at the shore and on deck, quiet inland and below deck.
+func _update_ambience(at: Vector3) -> void:
+	var level := 1.0
+	if platform is Sailboat and global_position.y - platform.proxy_xf.origin.y < Sailboat.DECK_Y - 0.2:
+		level = 0.35
+	elif platform == null and GameState.world != null:
+		var ground: float = GameState.world.ground_height(at.x, at.z)
+		if ground != -INF:
+			level = lerpf(1.0, 0.3, clampf((ground - 2.0) / 18.0, 0.0, 1.0))
+	Sound.set_ambience_level(level)
 
 
 # --- test drivers (--autopilot=board | stress | gather) ----------------------
@@ -678,8 +840,8 @@ func _gather_input(delta: float) -> Vector2:
 	var best: ResourceNode = null
 	var best_distance := INF
 	for node: ResourceNode in field.nodes.values():
-		var info: Dictionary = ResourceTable.KINDS.get(node.kind, {})
-		if node.depleted or info.get("yields", []).is_empty() or _gather_skip.has(node.interact_id):
+		if node.depleted or ResourceTable.harvest_seconds(node.kind, survivor.inventory.tool_types()) < 0.0 \
+				or ResourceTable.KINDS.get(node.kind, {}).get("yields", []).is_empty() or _gather_skip.has(node.interact_id):
 			continue
 		var distance := here.distance_to(node.global_position)
 		if distance < best_distance:
@@ -702,7 +864,7 @@ func _gather_input(delta: float) -> Vector2:
 	pitch = -atan2(EYE_HEIGHT - to.y - 0.4, flat)
 	if focus_id == best.interact_id and _hold_id.is_empty() and _auto_timer > 1.0:
 		_auto_timer = 0.0
-		_press_interact()
+		_press_interact("interact")
 		return Vector2.ZERO
 	return Vector2(0.0, -1.0) if flat > 1.6 else Vector2.ZERO
 
@@ -735,21 +897,31 @@ func _track_stress(delta: float) -> void:
 # --- remote copy -----------------------------------------------------------
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func _net_state(boat_name: String, pos: Vector3, p_yaw: float, p_pitch: float, p_crouching: bool, p_swimming: bool, p_exertion: float) -> void:
+func _net_state(boat_name: String, pos: Vector3, p_yaw: float, p_pitch: float, p_crouching: bool, p_swimming: bool, p_exertion: float, p_held: String) -> void:
 	var boat: Boat = GameState.find_boat(boat_name)
 	var target := pos if boat == null else boat.proxy_xf.origin + pos
 	if boat != platform or not _has_target:
 		platform = boat
 		global_position = target
+		_last_remote_pos = target
 		yaw = p_yaw
 		reset_physics_interpolation()
 	_target_pos = target
 	_target_yaw = p_yaw
 	pitch = p_pitch
 	crouching = p_crouching
+	if p_swimming and not swimming:
+		Sound.play_at("splash", world_transform().origin, -2.0)
 	swimming = p_swimming
 	exertion = p_exertion
+	held_id = p_held
+	model.set_held(p_held)
 	_has_target = true
+
+
+@rpc("authority", "call_remote", "unreliable")
+func _net_swing() -> void:
+	model.swing()
 
 
 func _remote_physics(delta: float) -> void:
@@ -759,51 +931,8 @@ func _remote_physics(delta: float) -> void:
 	global_position = global_position.lerp(_target_pos, blend)
 	yaw = lerp_angle(yaw, _target_yaw, blend)
 	rotation.y = yaw
-
-
-func _build_visual() -> Node3D:
-	var root := Node3D.new()
-	root.name = "Visual"
-	var body_material := StandardMaterial3D.new()
-	body_material.albedo_color = Color.from_hsv(fposmod(peer_id * 0.618034, 1.0), 0.65, 0.9)
-
-	var body := MeshInstance3D.new()
-	var capsule := CapsuleMesh.new()
-	capsule.radius = 0.33
-	capsule.height = 1.45
-	body.mesh = capsule
-	body.position.y = 0.72
-	body.material_override = body_material
-	root.add_child(body)
-
-	_head = Node3D.new()
-	_head.position.y = EYE_HEIGHT
-	root.add_child(_head)
-	var head_mesh := MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.22
-	sphere.height = 0.44
-	head_mesh.mesh = sphere
-	var skin := StandardMaterial3D.new()
-	skin.albedo_color = Color(0.86, 0.70, 0.55)
-	head_mesh.material_override = skin
-	_head.add_child(head_mesh)
-	var visor := MeshInstance3D.new()
-	var visor_mesh := BoxMesh.new()
-	visor_mesh.size = Vector3(0.3, 0.08, 0.1)
-	visor.mesh = visor_mesh
-	visor.position = Vector3(0.0, 0.03, -0.2)
-	var dark := StandardMaterial3D.new()
-	dark.albedo_color = Color(0.1, 0.1, 0.12)
-	visor.material_override = dark
-	_head.add_child(visor)
-
-	var label := Label3D.new()
-	label.text = display_name
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.position.y = 2.15
-	label.font_size = 40
-	label.pixel_size = 0.006
-	label.outline_size = 8
-	root.add_child(label)
-	return root
+	var moved := global_position - _last_remote_pos
+	_last_remote_pos = global_position
+	var speed := Vector2(moved.x, moved.z).length() / maxf(delta, 0.001)
+	_remote_speed = lerpf(_remote_speed, speed, 1.0 - exp(-10.0 * delta))
+	_footsteps(delta, _remote_speed, not swimming)

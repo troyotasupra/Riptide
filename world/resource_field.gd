@@ -6,6 +6,7 @@ extends Node3D
 
 const BUILD_PER_FRAME := 60
 const REGROW_CHECK_SECONDS := 1.0
+const HARVEST_SOUNDS := {"tree": "tree_fall", "palm": "thud", "stone": "stone", "flint": "stone", "fiber": "cut", "berry_bush": "cut", "red_berry_bush": "cut"}
 
 ## id -> ResourceNode
 var nodes := {}
@@ -48,6 +49,10 @@ func harvest(survivor: Survivor, id: String) -> void:
 	if depleted.has(id):
 		survivor.notify(info.get("depleted_label", "Nothing left here yet."))
 		return
+	var required: String = info.get("requires", "")
+	if not required.is_empty() and not survivor.inventory.tool_types().has(required):
+		survivor.notify(info.get("needs", "You need a tool for that."))
+		return
 	var yields: Array = info.get("yields", [])
 	if yields.is_empty():
 		survivor.notify(info.get("needs", "You can't gather that yet."))
@@ -67,6 +72,7 @@ func harvest(survivor: Survivor, id: String) -> void:
 	var regrow_at: float = Ocean.time + float(info.get("respawn", 600.0))
 	_apply(id, regrow_at)
 	Net.send_to_ready(self, "_sync_one", [id, regrow_at])
+	GameState.world.sfx_at(HARVEST_SOUNDS.get(node.kind, "pickup"), node.global_position)
 	survivor.notify("  ".join(gained))
 	survivor.push_inventory()
 

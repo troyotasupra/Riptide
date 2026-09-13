@@ -35,6 +35,7 @@ var parts := {}
 var mooring: Array[Dictionary] = []
 var _ropes: Array[MeshInstance3D] = []
 var _stove_glow: OmniLight3D
+var _flag: Node3D
 
 
 ## Where the boat sits in the cove and where its lines run.
@@ -314,3 +315,40 @@ func _build_rig() -> void:
 	# What's left of the mainsail: a torn scrap flapping from the mast.
 	_block(Vector3(0.02, 4.0, 1.6), Vector3(0.05, DECK_Y + 5.0, -2.8), "torn_sail", Color(0.82, 0.80, 0.74), Vector3(0.0, 0.25, 0.08), false)
 	_block(Vector3(0.02, 1.8, 0.9), Vector3(0.05, DECK_Y + 2.6, -2.2), "torn_sail", Color(0.82, 0.80, 0.74), Vector3(0.1, -0.35, -0.2), false)
+	# Flag pole on the stern for the crew's colours.
+	_block(Vector3(0.04, 2.2, 0.04), Vector3(1.3, DECK_Y + 1.1, LENGTH * 0.5 - 0.35), "rail", Color(0.75, 0.76, 0.78), Vector3.ZERO, false)
+
+
+## Flies the crew's colour and emblem from the stern.
+func set_crew_flag(crew_color: int, emblem: int) -> void:
+	if _flag != null:
+		_flag.queue_free()
+	_flag = Node3D.new()
+	_flag.position = Vector3(1.3, DECK_Y + 1.95, LENGTH * 0.5 - 0.35 + 0.45)
+	add_child(_flag)
+	var color := AppearanceTable.crew_color(crew_color)
+	var cloth := QuadMesh.new()
+	cloth.size = Vector2(0.9, 0.6)
+	var cloth_material := StandardMaterial3D.new()
+	cloth_material.albedo_color = color
+	cloth_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var flag := MeshInstance3D.new()
+	flag.mesh = cloth
+	flag.material_override = cloth_material
+	flag.rotation.y = PI / 2.0
+	_flag.add_child(flag)
+	if emblem <= 0:
+		return
+	var badge := QuadMesh.new()
+	badge.size = Vector2(0.45, 0.45)
+	var badge_material := StandardMaterial3D.new()
+	badge_material.albedo_texture = Emblem.texture(emblem, Emblem.contrast(color))
+	badge_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	badge_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	for side: float in [-1.0, 1.0]:
+		var mark := MeshInstance3D.new()
+		mark.mesh = badge
+		mark.material_override = badge_material
+		mark.position.x = side * 0.004
+		mark.rotation.y = PI / 2.0
+		_flag.add_child(mark)

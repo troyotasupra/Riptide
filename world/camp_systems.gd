@@ -1,15 +1,19 @@
 class_name CampSystems
 extends Node3D
 ## The crew's shared camp, owned by the host: containers (sea chest, lockers,
-## crates), cooking and drying stations, placed structures, one-off pickups,
-## recipes the crew knows, the sea chart, where each crew member respawns, and
-## who is asleep. Clients keep mirrors and send requests.
+## crates, dropped bags), cooking and drying stations, placed structures,
+## one-off pickups, recipes the crew knows, the sea chart, where each crew
+## member respawns, and the vote to sleep through the night. Clients keep
+## mirrors and send requests.
 
 signal container_opened(id: String, title: String)
 signal container_changed(id: String)
+signal container_closed(id: String)
 signal recipes_changed
 signal chart_changed
 signal sleeping_changed(asleep: bool)
+## seconds_left < 0 means no countdown is running.
+signal sleep_status_changed(seconds_left: float, asleep: int, needed: int)
 
 const STATION_TICK := 1.0
 const SPOIL_CHECK := 5.0
@@ -18,6 +22,8 @@ const STRUCTURE_REACH := 7.0
 const SLEEP_HUNGER := 15.0
 const SLEEP_THIRST := 20.0
 const SLEEP_HEAL := 30.0
+const BAG_SIZE := 24
+const BAG_MERGE_RANGE := 1.5
 
 const PICKUPS := {
 	"machete": {"item": "machete", "count": 1, "label": "Take the machete"},
@@ -36,8 +42,9 @@ const PICKUP_SPOTS := {
 }
 
 const STASH := [["survival_book", 1], ["knife", 1], ["canteen", 1], ["lighter", 1], ["tarp", 1], ["paracord", 2],
-	["logbook", 1], ["sea_chart", 1], ["fishing_rod", 1], ["lure", 3], ["flare_gun", 1], ["flare", 2], ["bandage", 4]]
-const COMPARTMENT_CONTENTS := [["pistol", 1], ["pistol_ammo", 15]]
+	["logbook", 1], ["sea_chart", 1], ["fishing_rod", 1], ["lure", 3], ["flare_gun", 1], ["flare", 2], ["bandage", 4], ["sun_hat", 1]]
+const LOCKER_CONTENTS := [["rain_jacket", 1], ["cargo_pants", 1], ["hiking_boots", 1], ["wool_beanie", 1], ["wool_sweater", 1], ["daypack", 1]]
+const COMPARTMENT_CONTENTS := [["pistol", 1], ["pistol_ammo", 15], ["plate_carrier", 1], ["combat_helmet", 1]]
 
 var world: Node3D
 ## id -> Inventory (the host's are the truth; clients mirror what they open)
@@ -48,21 +55,27 @@ var stations := {}
 ## id -> {"type", "pos", "yaw"}
 var structures := {}
 var structure_nodes := {}
+## id -> {"pos", "title"}
+var bags := {}
+var bag_nodes := {}
 var pickup_nodes := {}
 var picked := {}
 var known_recipes := {}
 var chart_read := false
 var unlocked := {}
-## player name -> {"kind": "boat", "boat", "local"} or {"kind": "structure", "id"}
+## player id -> {"kind": "boat", "boat", "local"} or {"kind": "structure", "id"}
 var respawns := {}
 ## peer id -> true (host)
 var sleeping := {}
 ## Owner-side mirrors for the local player's UI.
 var local_asleep := false
 var open_container := ""
+var sleep_status := {"left": -1.0, "asleep": 0, "needed": 0}
 
 var _viewers := {}
 var _next_structure := 1
+var _next_bag := 1
+var _skip_at := 0.0
 var _station_accum := 0.0
 var _spoil_accum := 0.0
 var _autosave_accum := 0.0
@@ -76,11 +89,13 @@ func _ready() -> void:
 
 ## Host, fresh world: stock the abandoned sailboat.
 func setup_new_world() -> void:
-	var chest := _make_container("boat:Sailboat:chest", 12, "Sea chest")
+	var chest := _make_container("boat:Sailboat:chest", 16, "Sea chest")
 	for entry: Array in STASH:
 		chest.add(entry[0], entry[1], Ocean.time)
-	_make_container("boat:Sailboat:lockers", 16, "Crew lockers")
-	var compartment := _make_container("boat:Sailboat:compartment", 4, "Locked compartment")
+	var lockers := _make_container("boat:Sailboat:lockers", 16, "Crew lockers")
+	for entry: Array in LOCKER_CONTENTS:
+		lockers.add(entry[0], entry[1], Ocean.time)
+	var compartment := _make_container("boat:Sailboat:compartment", 6, "Locked compartment")
 	for entry: Array in COMPARTMENT_CONTENTS:
 		compartment.add(entry[0], entry[1], Ocean.time)
 	stations["boat:Sailboat:stove"] = CookStation.new("cook")
@@ -109,6 +124,7 @@ func sync_to(peer_id: int) -> void:
 		station_data[id] = (stations[id] as CookStation).to_dict(now)
 	_full_sync.rpc_id(peer_id, {
 		"structures": structures,
+		"bags": bags,
 		"stations": station_data,
 		"picked": picked.keys(),
 		"recipes": known_recipes.keys(),
@@ -131,6 +147,8 @@ func to_save(now: float) -> Dictionary:
 	return {
 		"structures": structures.duplicate(true),
 		"next_structure": _next_structure,
+		"bags": bags.duplicate(true),
+		"next_bag": _next_bag,
 		"stations": saved_stations,
 		"containers": saved_containers,
 		"picked": picked.keys(),
@@ -153,6 +171,11 @@ func from_save(data: Dictionary, now: float) -> void:
 		var inventory := _make_container(id, entry.size, entry.title)
 		inventory.from_dict(entry.data)
 		inventory.shift_times(now)
+	var saved_bags: Dictionary = data.get("bags", {})
+	for id: String in saved_bags:
+		if containers.has("bag:" + id):
+			_spawn_bag(id, saved_bags[id].pos, saved_bags[id].title)
+	_next_bag = data.get("next_bag", _next_bag)
 	var saved_stations: Dictionary = data.get("stations", {})
 	for id: String in saved_stations:
 		var station := CookStation.new()
@@ -181,6 +204,8 @@ func _full_sync(data: Dictionary) -> void:
 	for id: String in data.structures:
 		var entry: Dictionary = data.structures[id]
 		_spawn_structure(id, entry.type, entry.pos, entry.yaw)
+	for id: String in data.bags:
+		_spawn_bag(id, data.bags[id].pos, data.bags[id].title)
 	for id: String in data.stations:
 		_station_state(id, data.stations[id])
 	for id: String in data.picked:
@@ -251,7 +276,7 @@ func part_prompt(boat: Sailboat, part_name: String, player: Node) -> String:
 	var container_id := "boat:%s:%s" % [boat.name, part_name]
 	match part_name:
 		"bunk":
-			return "" if local_asleep else "Sleep in the bunk"
+			return "" if local_asleep else "Sleep in the bunk (sets your respawn)"
 		"chest":
 			return "Open the sea chest"
 		"lockers":
@@ -261,7 +286,7 @@ func part_prompt(boat: Sailboat, part_name: String, player: Node) -> String:
 				return "Open the compartment"
 			if player != null and player.survivor != null and player.survivor.inventory.count_of("compartment_key") > 0:
 				return "Unlock the compartment with the brass key"
-			return "Locked compartment"
+			return "Locked compartment — someone must have the key"
 		"stove":
 			return station_prompt(container_id, "Galley stove", player)
 		"chart":
@@ -279,7 +304,7 @@ func structure_prompt(id: String, player: Node) -> String:
 	if info.has("container"):
 		return "Open the %s" % String(info.name).to_lower()
 	if info.get("sleep", false):
-		return "" if local_asleep else "Sleep in the %s" % String(info.name).to_lower()
+		return "" if local_asleep else "Sleep in the %s (sets your respawn)" % String(info.name).to_lower()
 	return ""
 
 
@@ -300,7 +325,7 @@ func station_prompt(id: String, title: String, player: Node) -> String:
 		var verb := "Dry" if station.mode == "dry" else ("Boil" if item.has("boils_to") else "Cook")
 		return "%s — %s %s" % [title, verb.to_lower(), String(item.name).to_lower()]
 	if station.needs_fire() and not station.lit:
-		return "%s — %s" % [title, "light it" if station.fuel > 0.0 else "needs driftwood"]
+		return "%s — %s" % [title, "light it" if station.fuel > 0.0 else "hold wood and press to fuel it"]
 	if station.needs_fire():
 		return "%s — burning, %ds of fuel%s" % [title, int(station.fuel), " · cooking" if station.is_busy() else ""]
 	return "%s — %s" % [title, "drying" if station.is_busy() else "hold raw food to dry it"]
@@ -317,10 +342,12 @@ static func held_item(player: Node) -> String:
 
 func interact_boat_part(survivor: Survivor, boat: Sailboat, part_name: String, slot: int) -> void:
 	var id := "boat:%s:%s" % [boat.name, part_name]
+	var at: Vector3 = (boat.parts[part_name] as Node3D).global_position if boat.parts.has(part_name) else boat.global_position
 	match part_name:
 		"bunk":
 			request_sleep_at(survivor, {"kind": "boat", "boat": String(boat.name), "local": Sailboat.BUNK_SPAWN})
 		"chest", "lockers":
+			world.sfx_at("chest", at)
 			open_container_for(survivor, id)
 		"compartment":
 			if not unlocked.has(id):
@@ -329,10 +356,11 @@ func interact_boat_part(survivor: Survivor, boat: Sailboat, part_name: String, s
 					return
 				unlocked[id] = true
 				Net.send_to_ready(self, "_set_unlocked", [id])
+				world.sfx_at("latch", at)
 				survivor.notify("The brass key turns.")
 			open_container_for(survivor, id)
 		"stove":
-			_use_station(survivor, id, slot)
+			_use_station(survivor, id, slot, at)
 		"chart":
 			read_chart(survivor)
 
@@ -343,8 +371,9 @@ func interact_structure(survivor: Survivor, id: String, slot: int) -> void:
 		return
 	var info := StructureTable.get_type(entry.type)
 	if info.has("station"):
-		_use_station(survivor, "struct:" + id, slot)
+		_use_station(survivor, "struct:" + id, slot, entry.pos)
 	elif info.has("container"):
+		world.sfx_at("chest", entry.pos)
 		open_container_for(survivor, "struct:" + id)
 	elif info.get("sleep", false):
 		request_sleep_at(survivor, {"kind": "structure", "id": id})
@@ -357,6 +386,9 @@ func pickup(survivor: Survivor, id: String) -> void:
 	if survivor.inventory.add(entry.item, entry.count, Ocean.time) > 0:
 		survivor.notify("Your pack is full.")
 		return
+	var node: Node3D = pickup_nodes.get(id)
+	if node != null:
+		world.sfx_at("pickup", node.global_position)
 	_apply_picked(id)
 	Net.send_to_ready(self, "_set_picked", [id])
 	survivor.notify("+%d %s" % [entry.count, ItemTable.display_name(entry.item)])
@@ -374,7 +406,7 @@ func learn(recipe_ids: Array, survivor: Survivor) -> void:
 		return
 	Net.send_to_ready(self, "_set_recipes", [known_recipes.keys()])
 	recipes_changed.emit()
-	_notify_crew("%s learned how to make: %s  (B to craft)" % [survivor.player.display_name, ", ".join(fresh)])
+	_notify_crew("%s learned how to make: %s  (open the book to craft)" % [survivor.player.display_name, ", ".join(fresh)])
 
 
 func read_chart(survivor: Survivor) -> void:
@@ -388,7 +420,7 @@ func read_chart(survivor: Survivor) -> void:
 
 
 func request_sleep_at(survivor: Survivor, spot: Dictionary) -> void:
-	respawns[survivor.player.display_name] = spot
+	respawns[survivor.player.player_id] = spot
 	if DayNight.is_day(GameState.time_of_day()):
 		survivor.notify("Respawn point set here. You can sleep once night falls.")
 		return
@@ -397,8 +429,8 @@ func request_sleep_at(survivor: Survivor, spot: Dictionary) -> void:
 	survivor.notify("Respawn point set. You settle in to sleep...")
 
 
-func respawn_spot(player_name: String) -> Dictionary:
-	var spot: Dictionary = respawns.get(player_name, {})
+func respawn_spot(player_id: String) -> Dictionary:
+	var spot: Dictionary = respawns.get(player_id, {})
 	match spot.get("kind", ""):
 		"boat":
 			if world.find_boat(spot.boat) != null:
@@ -439,7 +471,47 @@ func forget_peer(peer_id: int) -> void:
 		_viewers[id].erase(peer_id)
 
 
-func _use_station(survivor: Survivor, id: String, slot: int) -> void:
+## Host: leaves stacks in the world near `player`. Aboard the sailboat they go
+## into the crew lockers instead, so nothing is left hanging over the water.
+func drop_items(player: Player, stacks: Array, title: String) -> void:
+	var left: Array = []
+	if player.platform is Sailboat:
+		var lockers: Inventory = containers.get("boat:%s:lockers" % player.platform.name)
+		for stack: Dictionary in stacks:
+			var remaining := lockers.add_stack(stack) if lockers != null else int(stack.count)
+			if remaining > 0:
+				var rest := stack.duplicate()
+				rest.count = remaining
+				left.append(rest)
+		if left.size() < stacks.size():
+			_push_container("boat:%s:lockers" % player.platform.name)
+			player.survivor.notify("Stowed in the crew lockers.")
+		if left.is_empty():
+			return
+	else:
+		left = stacks
+	var at := player.world_transform().origin
+	var ground: float = world.ground_height(at.x, at.z)
+	var pos := Vector3(at.x, 0.15, at.z) if ground == -INF or at.y < 0.0 else Vector3(at.x, maxf(at.y, ground) + 0.05, at.z)
+	var target_id := ""
+	for id: String in bags:
+		if Vector3(bags[id].pos).distance_to(pos) < BAG_MERGE_RANGE:
+			target_id = id
+			break
+	if target_id.is_empty():
+		target_id = "b%d" % _next_bag
+		_next_bag += 1
+		_make_container("bag:" + target_id, BAG_SIZE, title)
+		_spawn_bag(target_id, pos, title)
+		Net.send_to_ready(self, "_spawn_bag", [target_id, pos, title])
+	var bag: Inventory = containers["bag:" + target_id]
+	for stack: Dictionary in left:
+		bag.add_stack(stack)
+	world.sfx_at("drop", pos)
+	_push_container("bag:" + target_id)
+
+
+func _use_station(survivor: Survivor, id: String, slot: int, at: Vector3) -> void:
 	var station: CookStation = stations.get(id)
 	if station == null:
 		return
@@ -454,6 +526,7 @@ func _use_station(survivor: Survivor, id: String, slot: int) -> void:
 				names.append(ItemTable.display_name(result))
 		if not names.is_empty():
 			survivor.notify("Took " + ", ".join(names))
+			world.sfx_at("pot", at)
 		survivor.push_inventory()
 		_broadcast_station(id)
 		return
@@ -464,6 +537,7 @@ func _use_station(survivor: Survivor, id: String, slot: int) -> void:
 		if station.add_fuel(item.fuel):
 			inventory.take_from_slot(slot, 1)
 			survivor.notify("Added %s — %ds of fuel" % [String(item.name).to_lower(), int(station.fuel)])
+			world.sfx_at("thud", at)
 			survivor.push_inventory()
 			_broadcast_station(id)
 		else:
@@ -475,6 +549,7 @@ func _use_station(survivor: Survivor, id: String, slot: int) -> void:
 		elif station.start(held_id, now):
 			inventory.take_from_slot(slot, 1)
 			survivor.notify("%s the %s..." % ["Drying" if station.mode == "dry" else "Heating", String(item.name).to_lower()])
+			world.sfx_at("pot", at)
 			survivor.push_inventory()
 			_broadcast_station(id)
 		else:
@@ -482,7 +557,7 @@ func _use_station(survivor: Survivor, id: String, slot: int) -> void:
 		return
 	if station.needs_fire() and not station.lit:
 		if station.fuel <= 0.0:
-			survivor.notify("Hold driftwood and press E to add fuel.")
+			survivor.notify("Hold driftwood or a log and press on it to add fuel.")
 			return
 		var lighter_slot := inventory.first_slot_of("lighter")
 		if lighter_slot == -1:
@@ -496,21 +571,38 @@ func _use_station(survivor: Survivor, id: String, slot: int) -> void:
 			survivor.notify("The fire catches — and the lighter sputters out for good.")
 		else:
 			survivor.notify("The fire catches. (Lighter: %d uses left)" % lighter.uses)
+		world.sfx_at("stone", at)
 		survivor.push_inventory()
 		_broadcast_station(id)
 		return
-	survivor.notify("Hold food to cook, water to boil, or driftwood to burn — then press E.")
+	survivor.notify("Hold food to cook, water to boil, or wood to burn — then press on it.")
 
 
 func _check_sleep() -> void:
-	if sleeping.is_empty():
+	var day := DayNight.is_day(GameState.time_of_day())
+	if day or sleeping.is_empty():
+		if not sleeping.is_empty():
+			_wake_everyone()
+		if _skip_at > 0.0 or sleep_status.left >= 0.0 or sleep_status.asleep > 0:
+			_skip_at = 0.0
+			_send_sleep_status(-1.0, 0, 0)
 		return
-	if DayNight.is_day(GameState.time_of_day()):
-		_wake_everyone()
-		return
+	var crew := 0
 	for id: int in Net.roster:
-		if Net.roster[id].get("ready", false) and not sleeping.has(id):
-			return
+		if Net.roster[id].get("ready", false):
+			crew += 1
+	var needed := SleepVote.needed(crew)
+	if not SleepVote.enough(sleeping.size(), crew):
+		_skip_at = 0.0
+		_send_sleep_status(-1.0, sleeping.size(), needed)
+		return
+	if _skip_at <= 0.0:
+		_skip_at = Ocean.time + (1.5 if crew == 1 else SleepVote.COUNTDOWN)
+	var left: float = _skip_at - Ocean.time
+	_send_sleep_status(maxf(0.0, left), sleeping.size(), needed)
+	if left > 0.0:
+		return
+	_skip_at = 0.0
 	var advance := fposmod(DayNight.SUNRISE + 0.005 - GameState.time_of_day(), 1.0)
 	GameState.day_offset += advance
 	Net.send_to_ready(self, "_set_day_offset", [GameState.day_offset])
@@ -518,16 +610,30 @@ func _check_sleep() -> void:
 		var s := player.survivor
 		s.survival.hunger = maxf(0.0, s.survival.hunger - SLEEP_HUNGER)
 		s.survival.thirst = maxf(0.0, s.survival.thirst - SLEEP_THIRST)
-		s.survival.heal(SLEEP_HEAL)
-		s.notify("The crew sleeps through the night. You wake at dawn, hungry and thirsty.")
+		if sleeping.has(player.peer_id):
+			s.survival.heal(SLEEP_HEAL)
+			s.notify("The crew sleeps through the night. You wake at dawn, rested but hungry.")
+		else:
+			s.notify("The night passes while the crew sleeps. Dawn breaks.")
 		s.push_survival()
 	_wake_everyone()
+	_send_sleep_status(-1.0, 0, needed)
 
 
 func _wake_everyone() -> void:
 	for id: int in sleeping.keys():
 		_set_sleeping_for(id, false)
 	sleeping.clear()
+
+
+func _send_sleep_status(left: float, asleep: int, needed: int) -> void:
+	_apply_sleep_status(left, asleep, needed)
+	Net.send_to_ready(self, "_sleep_status", [left, asleep, needed])
+
+
+func _apply_sleep_status(left: float, asleep: int, needed: int) -> void:
+	sleep_status = {"left": left, "asleep": asleep, "needed": needed}
+	sleep_status_changed.emit(left, asleep, needed)
 
 
 func _set_sleeping_for(peer_id: int, asleep: bool) -> void:
@@ -593,6 +699,20 @@ func _send_container(id: String, peer: int, opening: bool) -> void:
 		_container_contents.rpc_id(peer, id, container_titles.get(id, "Storage"), containers[id].to_dict(), opening)
 
 
+## Host: an emptied bag vanishes for everyone, closing it on anyone looking inside.
+func _remove_bag_if_empty(id: String) -> void:
+	if not id.begins_with("bag:") or not (containers[id] as Inventory).is_empty():
+		return
+	for peer: int in _viewers.get(id, {}):
+		if peer == multiplayer.get_unique_id():
+			_close_container(id)
+		else:
+			_container_gone.rpc_id(peer, id)
+	_viewers.erase(id)
+	_remove_bag(id.substr(4))
+	Net.send_to_ready(self, "_remove_bag", [id.substr(4)])
+
+
 func _sender_player() -> Player:
 	var sender := multiplayer.get_remote_sender_id()
 	if sender == 0:
@@ -623,6 +743,7 @@ func request_transfer(id: String, from_container: bool, slot: int) -> void:
 		player.survivor.notify("No room for all of it.")
 	player.survivor.push_inventory()
 	_push_container(id)
+	_remove_bag_if_empty(id)
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -642,14 +763,17 @@ func request_craft(recipe_id: String) -> void:
 	if player == null or not known_recipes.has(recipe_id):
 		return
 	var survivor := player.survivor
+	var tool := RecipeTable.missing_tool(survivor.inventory, recipe_id)
+	if not tool.is_empty():
+		survivor.notify("You need a %s to make that." % tool)
+		return
 	if not RecipeTable.can_craft(survivor.inventory, recipe_id):
 		survivor.notify("You don't have everything for that.")
 		return
 	var recipe: Dictionary = RecipeTable.RECIPES[recipe_id]
 	var trial := Inventory.new(survivor.inventory.slots.size())
 	trial.from_dict(survivor.inventory.to_dict())
-	for item: String in recipe.needs:
-		trial.remove(item, recipe.needs[item])
+	RecipeTable.consume(trial, recipe_id)
 	if trial.add(recipe.makes, recipe.count, Ocean.time) > 0:
 		survivor.notify("No room in your pack for that.")
 		return
@@ -690,6 +814,7 @@ func request_place(slot: int, pos: Vector3, yaw: float) -> void:
 	_next_structure += 1
 	_spawn_structure(id, type, pos, yaw)
 	Net.send_to_ready(self, "_spawn_structure", [id, type, pos, yaw])
+	world.sfx_at("thud", pos)
 	survivor.notify("Built a %s." % String(StructureTable.get_type(type).name).to_lower())
 	survivor.push_inventory()
 
@@ -721,6 +846,27 @@ func _spawn_structure(id: String, type: String, pos: Vector3, yaw: float) -> voi
 		_make_container("struct:" + id, info.container, info.name)
 
 
+@rpc("authority", "call_remote", "reliable")
+func _spawn_bag(id: String, pos: Vector3, title: String) -> void:
+	if bag_nodes.has(id):
+		return
+	bags[id] = {"pos": pos, "title": title}
+	var node := BagNode.new()
+	node.setup(id, title, pos)
+	add_child(node)
+	bag_nodes[id] = node
+
+
+@rpc("authority", "call_remote", "reliable")
+func _remove_bag(id: String) -> void:
+	bags.erase(id)
+	containers.erase("bag:" + id)
+	var node: Node = bag_nodes.get(id)
+	if node != null:
+		node.queue_free()
+	bag_nodes.erase(id)
+
+
 @rpc("authority", "call_remote", "unreliable_ordered")
 func _station_state(id: String, data: Dictionary) -> void:
 	var station: CookStation = stations.get(id)
@@ -745,6 +891,17 @@ func _container_contents(id: String, title: String, data: Dictionary, opening: b
 		container_opened.emit(id, title)
 	else:
 		container_changed.emit(id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _container_gone(id: String) -> void:
+	_close_container(id)
+
+
+func _close_container(id: String) -> void:
+	if open_container == id:
+		open_container = ""
+	container_closed.emit(id)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -778,3 +935,8 @@ func _set_day_offset(offset: float) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _set_sleeping(asleep: bool) -> void:
 	_apply_sleeping(asleep)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func _sleep_status(left: float, asleep: int, needed: int) -> void:
+	_apply_sleep_status(left, asleep, needed)

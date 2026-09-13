@@ -14,7 +14,7 @@ func test_recipes_reference_real_items() -> void:
 		var recipe: Dictionary = Recipes.RECIPES[id]
 		check(Items.exists(recipe.makes), "%s makes a real item" % id)
 		for need: String in recipe.needs:
-			check(Items.exists(need), "%s needs real item %s" % [id, need])
+			check(Items.exists(need) or Items.GROUPS.has(need), "%s needs real item or group %s" % [id, need])
 	for id: String in Recipes.STARTING:
 		check(Recipes.RECIPES.has(id), "starting recipe %s exists" % id)
 
@@ -40,7 +40,38 @@ func test_can_craft_only_with_everything() -> void:
 	check(Recipes.missing(inv, "rope") == {"fiber": 1}, "one fiber short")
 	inv.add("fiber", 1)
 	check(Recipes.can_craft(inv, "rope"), "6 fiber makes rope")
-	check(Recipes.missing(inv, "campfire_kit") == {"stone": 6, "driftwood": 3}, "campfire needs stones and driftwood")
+	check(Recipes.missing(inv, "campfire_kit") == {"stone": 6, "wood": 3}, "campfire needs stones and wood")
+
+
+func test_any_wood_counts_and_driftwood_goes_first() -> void:
+	var inv = InventoryScript.new()
+	inv.add("stone", 6)
+	inv.add("driftwood", 1)
+	inv.add("log", 3)
+	check(Recipes.can_craft(inv, "campfire_kit"), "driftwood and logs together make 3 wood")
+	Recipes.consume(inv, "campfire_kit")
+	check(inv.count_of("driftwood") == 0 and inv.count_of("log") == 1 and inv.count_of("stone") == 0, "used the driftwood before the logs")
+
+
+func test_tool_recipes_need_the_tool() -> void:
+	var inv = InventoryScript.new()
+	inv.add("log", 3)
+	inv.add("rope", 2)
+	check(not Recipes.can_craft(inv, "storage_crate_kit") and Recipes.missing_tool(inv, "storage_crate_kit") == "hatchet", "a crate needs a hatchet")
+	inv.add("stone_hatchet", 1)
+	check(Recipes.can_craft(inv, "storage_crate_kit"), "with a hatchet you can build a crate")
+
+
+func test_trees_need_a_hatchet() -> void:
+	near(Resources.harvest_seconds("tree", ["knife", "machete"]), -1.0, 0.001, "no hatchet, no chopping")
+	check(Resources.harvest_seconds("tree", ["hatchet"]) > 0.0, "a hatchet chops")
+
+
+func test_every_item_explains_itself() -> void:
+	var handled := ["food", "drink", "medical", "page", "book", "note", "chart", "placeable", "wearable"]
+	for id: String in Items.ITEMS:
+		var item: Dictionary = Items.ITEMS[id]
+		check(handled.has(item.category) or item.has("hint"), "%s needs a left-click action or a hint" % id)
 
 
 func test_fiber_is_slow_by_hand_and_fast_with_a_machete() -> void:

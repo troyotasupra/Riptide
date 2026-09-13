@@ -97,12 +97,16 @@ static func _tree() -> Dictionary:
 		m.radial_segments = 6
 		m.rings = 1
 		return m)
-	_instance(root, trunk_mesh, material("tree_trunk", Color(0.36, 0.26, 0.17)), Vector3(0.0, 2.25, 0.0))
-	_instance(root, _sphere_mesh("tree_canopy", 2.3, 7, 4), material("tree_canopy", Color(0.16, 0.38, 0.14)), Vector3(0.0, 5.6, 0.0), Vector3.ZERO, Vector3(1.0, 0.85, 1.0))
+	var bark := material("tree_trunk", Color(0.36, 0.26, 0.17))
+	_instance(root, trunk_mesh, bark, Vector3(0.0, 0.25, 0.0), Vector3.ZERO, Vector3(1.05, 0.11, 1.05))
+	var standing := Node3D.new()
+	root.add_child(standing)
+	_instance(standing, trunk_mesh, bark, Vector3(0.0, 2.25, 0.0))
+	_instance(standing, _sphere_mesh("tree_canopy", 2.3, 7, 4), material("tree_canopy", Color(0.16, 0.38, 0.14)), Vector3(0.0, 5.6, 0.0), Vector3.ZERO, Vector3(1.0, 0.85, 1.0))
 	var shape := CylinderShape3D.new()
 	shape.radius = 0.45
 	shape.height = 4.5
-	return _result(root, [], shape, Vector3(0.0, 2.25, 0.0), true, false, 450.0)
+	return _result(root, [standing], shape, Vector3(0.0, 2.25, 0.0), true, false, 450.0)
 
 
 static func _bush(berry_color: Color) -> Dictionary:

@@ -138,6 +138,50 @@ func move(from: int, to: int) -> void:
 		slots[to] = source
 
 
+## Moves half of a stack into the first empty slot. False if it can't.
+func split(index: int) -> bool:
+	if index < 0 or index >= slots.size() or slots[index] == null or slots[index].count < 2:
+		return false
+	var empty := slots.find(null)
+	if empty == -1:
+		return false
+	var slot: Dictionary = slots[index]
+	var piece := slot.duplicate()
+	piece.count = slot.count / 2
+	slot.count -= piece.count
+	slots[empty] = piece
+	return true
+
+
+## Pack only: sends a stack from the hotbar to the backpack or back, merging
+## with matching stacks first. True if anything moved.
+func quick_move(index: int) -> bool:
+	if slots.size() != SIZE or index < 0 or index >= SIZE or slots[index] == null:
+		return false
+	var to_backpack := index < HOTBAR_SIZE
+	var first := HOTBAR_SIZE if to_backpack else 0
+	var last := SIZE if to_backpack else HOTBAR_SIZE
+	var stack: Dictionary = slots[index]
+	var start_count: int = stack.count
+	var stack_max: int = ItemTable.get_item(stack.id).get("stack", 1)
+	if not stack.has("uses"):
+		for i in range(first, last):
+			var target = slots[i]
+			if stack.count > 0 and target != null and target.id == stack.id and not target.has("uses") and target.count < stack_max:
+				var moved := mini(stack.count, stack_max - target.count)
+				target.count += moved
+				stack.count -= moved
+	if stack.count <= 0:
+		slots[index] = null
+		return true
+	for i in range(first, last):
+		if slots[i] == null:
+			slots[i] = stack
+			slots[index] = null
+			return true
+	return stack.count != start_count
+
+
 ## Turns anything past its spoil time into spoiled food. Returns true if anything rotted.
 func spoil_expired(now: float) -> bool:
 	var changed := false

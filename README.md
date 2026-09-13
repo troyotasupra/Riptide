@@ -4,39 +4,53 @@ Co-op (1–6 players) survival on a hostile modern sea. Start on an island with 
 raft, push out to procedurally generated islands, find better boats and
 Delta Force-style gear, and hold on to it when modern pirates come for it.
 
-Built in **Godot 4.7** (GDScript). Low-poly, generated-in-code art.
+Built in **Godot 4.7** (GDScript). Low-poly art, characters and sound effects are
+generated in code or come from CC0 packs (see Credits).
 
-## Run it
+## Play
 
-- Open the project in Godot 4.7 and press Play, or:
-  `C:\Tools\Godot\Godot_v4.7.2-stable_win64.exe --path C:\src\riptide`
-- **Host crew** on one machine. Friends use **Join crew** with your IP (shown
-  on the host's HUD). Default port **24570** (UDP). For play over the internet,
-  forward that port or use Tailscale/ZeroTier.
-- Quick local co-op test (host + client windows): `powershell -File tools\coop_test.ps1`
+- **From source:** `C:\Tools\Godot\Godot_v4.7.2-stable_win64.exe --path C:\src\riptide`
+- **Standalone build:** `powershell -File tools\build.ps1` makes `build\Riptide.exe`.
+  That single file is the whole game — send it to friends.
 
-## Controls (prototype)
+On the menu, set your name, open **Character** to make your crew member (and pick
+the crew colour and emblem you fly when you host), then **Host new world** or
+**Continue saved world**. The host autosaves every 2 minutes and when leaving.
 
-| Key | Action |
-| --- | --- |
-| WASD | Move |
-| Shift | Sprint (uses stamina) |
-| Space | Jump · climb out of water |
-| C / Ctrl | Crouch |
-| E | Interact · hold to gather (faster with a knife or machete) |
-| Left click | Use the selected hotbar item (eat, drink, read) · place a structure kit |
-| R | Rotate the structure you're placing |
-| 1–8 / wheel | Select hotbar slot |
-| I | Backpack |
-| B | Survival book (crafting) |
-| F | Paddle while on a raft (WASD steers, Shift pulls hard for stamina) |
-| Esc | Free the mouse (click to recapture) |
-| F10 | Leave session |
+## Playing with friends over the internet (Tailscale)
 
-The camp island is ~650 m from the start beach — steer for the smoke. An abandoned
-sailboat is moored in its cove: swim to the stern ladder and climb aboard.
+1. Everyone installs [Tailscale](https://tailscale.com/download) and signs in.
+2. The host invites friends to their tailnet (Tailscale admin console → *Share* or *Users → Invite*).
+3. The host opens the game, hosts, and reads their **100.x.x.x** address from the
+   Tailscale tray icon (the pause menu also lists addresses).
+4. Friends type that 100.x.x.x address on the menu and press **Join crew** (port 24570).
 
-Saves: the host autosaves every 2 minutes and on leaving; **Continue saved world** on the menu.
+No router port forwarding is needed. On the same Wi-Fi you can skip Tailscale and
+use the host's LAN address instead. If Windows Firewall asks, allow Riptide on
+private networks.
+
+## Controls
+
+| Keyboard / mouse | Controller | Action |
+| --- | --- | --- |
+| WASD / mouse | Left / right stick | Move / look |
+| Space | A | Jump · climb out of water |
+| C | B | Crouch |
+| Shift | L3 | Sprint · pull hard while paddling |
+| E (hold) | X (hold) | Interact · gather |
+| Left click | RT | Use item · swing a tool · build |
+| R | D-pad → | Rotate the structure you're placing |
+| 1–8 / wheel | LB / RB | Hotbar |
+| Q | D-pad ↓ | Drop the held item |
+| G | D-pad ↑ | Give the held item to the crewmate you're looking at |
+| F | Y | Paddle a raft |
+| I / Tab | View | Backpack (what you wear + your pack) |
+| B | D-pad ← | Survival book (crafting) |
+| Esc | Menu | Pause · settings · save and leave |
+| F3 | — | Debug info |
+
+In the backpack: right-click (X) splits a stack, shift-click (Y) moves between
+hotbar and pack, Q (LT) drops. Click an item, then a "Wearing" slot to put it on.
 
 ## Tests
 
@@ -44,12 +58,22 @@ Saves: the host autosaves every 2 minutes and on leaving; **Continue saved world
 C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe --headless --path C:\src\riptide --script res://tests/run_tests.gd
 ```
 
+Scripted in-world checks: `-- --host --profile=testhost --spawn=boat --scenario=camp`
+(host) and `-- --join=127.0.0.1 --profile=testcrew --scenario=client` (second copy).
+Test runs use their own save file and profiles, never your real ones.
+
 ## Layout
 
-- `autoload/` — `Net` (sessions, roster), `Ocean` (shared clock), `GameState`, `Controls`
+- `autoload/` — `Net` (sessions, roster), `Settings`, `Profile` (id, name, look), `Sound`, `SaveGame`, `Ocean`, `GameState`, `Controls` (keyboard + controller)
+- `data/` — items, recipes, resources, structures, notes, character appearance options
 - `ocean/` — Gerstner waves (`waves.gd` and `water.gdshader` must match)
-- `boats/` — buoyant boats and the deck-proxy trick for walking on moving decks
-- `player/` — first-person controller, survival rules, loadout math
-- `world/` — island generator and the world scene
-- `ui/` — menu and HUD
+- `boats/` — buoyant boats, the deck-proxy trick for walking on moving decks, the moored sailboat
+- `player/` — first-person controller, code-built character model and view model, survival, inventory, equipment
+- `world/` — islands, props, camp systems (containers, fires, structures, bags, sleep), objectives
+- `ui/` — menu, character creator, HUD, panels, pause and settings
 - `tests/` — headless logic tests
+
+## Credits
+
+- Sound effects: [Kenney](https://kenney.nl) — Impact Sounds, RPG Audio, Interface Sounds (CC0)
+- Ocean ambience: "Sea and river wave sounds" on [OpenGameArt](https://opengameart.org/content/sea-and-river-wave-sounds) (CC0)

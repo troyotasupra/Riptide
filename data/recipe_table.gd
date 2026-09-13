@@ -2,33 +2,66 @@ class_name RecipeTable
 extends RefCounted
 ## What the survival book teaches. Reading the book teaches STARTING to the whole
 ## crew; book pages found around the island teach the rest.
+## A need can name an item or a group from ItemTable.GROUPS ("wood" = driftwood or logs).
+## `tool`: a tool type that must be carried (not used up).
 
 const STARTING := ["rope", "campfire_kit", "lean_to_kit", "spear", "bandage", "torch"]
 
 const RECIPES := {
 	"rope": {"name": "Rope", "needs": {"fiber": 6}, "makes": "rope", "count": 1},
-	"campfire_kit": {"name": "Campfire", "needs": {"stone": 6, "driftwood": 3}, "makes": "campfire_kit", "count": 1},
-	"lean_to_kit": {"name": "Lean-to", "needs": {"tarp": 1, "paracord": 1, "driftwood": 2}, "makes": "lean_to_kit", "count": 1},
-	"spear": {"name": "Spear", "needs": {"driftwood": 1, "flint": 1, "fiber": 2}, "makes": "spear", "count": 1},
+	"campfire_kit": {"name": "Campfire", "needs": {"stone": 6, "wood": 3}, "makes": "campfire_kit", "count": 1},
+	"lean_to_kit": {"name": "Lean-to", "needs": {"tarp": 1, "paracord": 1, "wood": 2}, "makes": "lean_to_kit", "count": 1},
+	"spear": {"name": "Spear", "needs": {"wood": 1, "flint": 1, "fiber": 2}, "makes": "spear", "count": 1},
 	"bandage": {"name": "Bandage", "needs": {"fiber": 4}, "makes": "bandage", "count": 1},
-	"torch": {"name": "Torch", "needs": {"driftwood": 1, "fiber": 2}, "makes": "torch", "count": 1},
-	"tent_kit": {"name": "Tent", "needs": {"tarp": 1, "rope": 4, "driftwood": 4}, "makes": "tent_kit", "count": 1},
-	"drying_rack_kit": {"name": "Drying rack", "needs": {"driftwood": 6, "rope": 3}, "makes": "drying_rack_kit", "count": 1},
-	"storage_crate_kit": {"name": "Storage crate", "needs": {"driftwood": 10, "rope": 2}, "makes": "storage_crate_kit", "count": 1},
-	"stone_hatchet": {"name": "Stone hatchet", "needs": {"driftwood": 1, "flint": 2, "rope": 1}, "makes": "stone_hatchet", "count": 1},
+	"torch": {"name": "Torch", "needs": {"wood": 1, "fiber": 2}, "makes": "torch", "count": 1},
+	"tent_kit": {"name": "Tent", "needs": {"tarp": 1, "rope": 4, "wood": 4}, "makes": "tent_kit", "count": 1},
+	"drying_rack_kit": {"name": "Drying rack", "needs": {"wood": 6, "rope": 3}, "makes": "drying_rack_kit", "count": 1},
+	"storage_crate_kit": {"name": "Storage crate", "needs": {"log": 3, "rope": 2}, "makes": "storage_crate_kit", "count": 1, "tool": "hatchet"},
+	"stone_hatchet": {"name": "Stone hatchet", "needs": {"wood": 1, "flint": 2, "rope": 1}, "makes": "stone_hatchet", "count": 1},
 }
 
 
-## Items still needed to craft `id` from `inventory`: {item_id: how many short}.
+static func have(inventory: Inventory, need: String) -> int:
+	if ItemTable.GROUPS.has(need):
+		var total := 0
+		for id: String in ItemTable.GROUPS[need]:
+			total += inventory.count_of(id)
+		return total
+	return inventory.count_of(need)
+
+
+static func need_label(need: String) -> String:
+	return String(ItemTable.GROUP_NAMES[need]) if ItemTable.GROUP_NAMES.has(need) else ItemTable.display_name(need)
+
+
+## Items still needed to craft `id` from `inventory`: {need: how many short}.
 static func missing(inventory: Inventory, id: String) -> Dictionary:
 	var short := {}
 	var needs: Dictionary = RECIPES.get(id, {}).get("needs", {})
-	for item: String in needs:
-		var lacking: int = int(needs[item]) - inventory.count_of(item)
+	for need: String in needs:
+		var lacking: int = int(needs[need]) - have(inventory, need)
 		if lacking > 0:
-			short[item] = lacking
+			short[need] = lacking
 	return short
 
 
+static func missing_tool(inventory: Inventory, id: String) -> String:
+	var tool: String = RECIPES.get(id, {}).get("tool", "")
+	return "" if tool.is_empty() or inventory.tool_types().has(tool) else tool
+
+
 static func can_craft(inventory: Inventory, id: String) -> bool:
-	return RECIPES.has(id) and missing(inventory, id).is_empty()
+	return RECIPES.has(id) and missing(inventory, id).is_empty() and missing_tool(inventory, id).is_empty()
+
+
+## Removes the ingredients (groups use their first listed item first). Call after can_craft.
+static func consume(inventory: Inventory, id: String) -> void:
+	var needs: Dictionary = RECIPES[id].needs
+	for need: String in needs:
+		var left: int = needs[need]
+		var options: Array = ItemTable.GROUPS.get(need, [need])
+		for item: String in options:
+			var take := mini(left, inventory.count_of(item))
+			if take > 0:
+				inventory.remove(item, take)
+				left -= take

@@ -1,10 +1,10 @@
 class_name Survivor
 extends Node
-## A crew member's survival state and belongings.
+## A crew member's survival state, belongings and clothing.
 ##
 ## The host owns the truth: it ticks hunger, thirst and body temperature,
-## applies eating, drinking and harvesting, and pushes snapshots to the owning
-## peer. The owner only displays them and sends requests ("use slot 3").
+## applies eating, wearing, dropping and giving, and pushes snapshots to the
+## owning peer. The owner only displays them and sends requests ("use slot 3").
 
 signal inventory_changed
 signal survival_changed
@@ -19,10 +19,12 @@ const SPOIL_CHECK_SECONDS := 5.0
 const DRY_OFF_SECONDS := 120.0
 ## Near a fire or in shelter you dry off this many times faster.
 const WARM_DRYING := 4.0
+const GIVE_RANGE := 4.5
 
 var player: Player
 var survival := Survival.new()
 var inventory := Inventory.new()
+var equipment := Equipment.new()
 var wetness := 0.0
 ## Air temperature this crew member feels, for the HUD.
 var air_temp := 0.0
@@ -50,6 +52,10 @@ func _log_inventory() -> void:
 		player.display_name, ", ".join(parts), survival.hunger, survival.thirst, survival.health])
 
 
+func total_weight() -> float:
+	return inventory.total_weight() + equipment.weight()
+
+
 ## Host only: advance survival for this crew member.
 func host_tick(delta: float) -> void:
 	_tick_accum += delta
@@ -65,7 +71,7 @@ func host_tick(delta: float) -> void:
 		var drying := WARM_DRYING if warmth >= 5.0 else 1.0
 		wetness = maxf(0.0, wetness - dt * drying / DRY_OFF_SECONDS)
 	air_temp = EnvironmentTemp.felt_temp(DayNight.daylight(GameState.time_of_day()), wetness, player.swimming, warmth)
-	survival.tick(dt, air_temp, LoadoutMath.combined_insulation([]), player.exertion)
+	survival.tick(dt, air_temp, equipment.insulation(), player.exertion)
 	_spoil_accum += dt
 	if _spoil_accum >= SPOIL_CHECK_SECONDS:
 		_spoil_accum = 0.0
@@ -89,12 +95,16 @@ func push_survival() -> void:
 	_set_survival.rpc_id(player.peer_id, data)
 
 
+## Host: send belongings to the owner, and what they're wearing to everyone.
 func push_inventory() -> void:
-	player.carried_weight_kg = inventory.total_weight()
+	player.carried_weight_kg = total_weight()
+	var ids := equipment.ids()
+	player.apply_worn(ids)
+	Net.send_to_ready(player, "_set_worn", [ids])
 	if player.is_local:
 		inventory_changed.emit()
 	else:
-		_set_inventory.rpc_id(player.peer_id, inventory.to_dict())
+		_set_inventory.rpc_id(player.peer_id, {"inventory": inventory.to_dict(), "worn": equipment.to_dict()})
 
 
 ## Host → owner: a short message on their screen.
@@ -105,19 +115,26 @@ func notify(message: String) -> void:
 		_notify.rpc_id(player.peer_id, message)
 
 
+## Host: dress a brand-new crew member.
+func give_starting_outfit() -> void:
+	for id: String in Equipment.STARTING_OUTFIT:
+		equipment.wear({"id": id, "count": 1, "spoils_at": 0.0})
+
+
 ## Spoil times are stored relative to the clock so they survive a restart.
 func to_save(now: float) -> Dictionary:
 	var copy := Inventory.new()
 	copy.from_dict(inventory.to_dict())
 	copy.shift_times(-now)
-	return {"inventory": copy.to_dict(), "survival": survival.to_dict()}
+	return {"inventory": copy.to_dict(), "survival": survival.to_dict(), "worn": equipment.to_dict(), "name": player.display_name}
 
 
 func from_save(data: Dictionary, now: float) -> void:
 	inventory.from_dict(data.get("inventory", {}))
 	inventory.shift_times(now)
 	survival.from_dict(data.get("survival", {}))
-	player.carried_weight_kg = inventory.total_weight()
+	equipment.from_dict(data.get("worn", {}))
+	player.carried_weight_kg = total_weight()
 
 
 # --- owner side ------------------------------------------------------------
@@ -127,6 +144,11 @@ func select_slot(index: int) -> void:
 	inventory_changed.emit()
 
 
+func selected_id() -> String:
+	var slot = inventory.slots[selected_slot]
+	return "" if slot == null else slot.id
+
+
 func use_selected() -> void:
 	var slot = inventory.slots[selected_slot]
 	if slot == null:
@@ -134,17 +156,67 @@ func use_selected() -> void:
 	var item := ItemTable.get_item(slot.id)
 	match item.get("category", ""):
 		"note":
+			Sound.play("book_open")
 			note_requested.emit(item.note)
 			return
 		"placeable":
 			return  # placing is handled by the player's build preview
 		"book":
+			Sound.play("book_open")
 			book_requested.emit()
+		"wearable":
+			Sound.play("cloth")
+		"food", "drink", "medical", "page", "chart":
+			pass
+		_:
+			if item.has("hint"):
+				notified.emit(item.hint)
+			return
 	_request_use.rpc_id(1, selected_slot)
 
 
 func move_item(from: int, to: int) -> void:
 	_request_move.rpc_id(1, from, to)
+
+
+func request_wear(slot: int) -> void:
+	Sound.play("cloth")
+	_request_wear.rpc_id(1, slot)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _request_wear(slot: int) -> void:
+	if not multiplayer.is_server() or not _sender_owns_me():
+		return
+	if slot < 0 or slot >= Inventory.SIZE or inventory.slots[slot] == null or ItemTable.category(inventory.slots[slot].id) != "wearable":
+		return
+	var previous := equipment.wear(inventory.slots[slot])
+	inventory.slots[slot] = null if previous.is_empty() else previous
+	push_inventory()
+
+
+func request_take_off(slot: String) -> void:
+	Sound.play("cloth")
+	_request_take_off.rpc_id(1, slot)
+
+
+func request_drop(slot: int) -> void:
+	if slot >= 0 and slot < Inventory.SIZE and inventory.slots[slot] != null:
+		Sound.play("drop")
+		_request_drop.rpc_id(1, slot)
+
+
+func request_split(slot: int) -> void:
+	_request_split.rpc_id(1, slot)
+
+
+func request_quick_move(slot: int) -> void:
+	_request_quick_move.rpc_id(1, slot)
+
+
+func request_give(slot: int, target_peer: int) -> void:
+	if inventory.slots[slot] != null:
+		_request_give.rpc_id(1, slot, target_peer)
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
@@ -162,8 +234,9 @@ func _set_survival(data: Dictionary) -> void:
 func _set_inventory(data: Dictionary) -> void:
 	if multiplayer.get_remote_sender_id() != 1:
 		return
-	inventory.from_dict(data)
-	player.carried_weight_kg = inventory.total_weight()
+	inventory.from_dict(data.get("inventory", {}))
+	equipment.from_dict(data.get("worn", {}))
+	player.carried_weight_kg = total_weight()
 	inventory_changed.emit()
 
 
@@ -183,7 +256,6 @@ func _request_use(slot: int) -> void:
 		return
 	var id: String = inventory.slots[slot].id
 	var item := ItemTable.get_item(id)
-	var item_name := String(item.get("name", id)).to_lower()
 	var camp: CampSystems = GameState.world.camp
 	match item.get("category", ""):
 		"food", "drink":
@@ -205,10 +277,11 @@ func _request_use(slot: int) -> void:
 			camp.learn(RecipeTable.STARTING, self)
 		"chart":
 			camp.read_chart(self)
-		"note", "placeable":
-			pass
-		_:
-			notify("You can't use the %s yet." % item_name)
+		"wearable":
+			var previous := equipment.wear(inventory.slots[slot])
+			inventory.slots[slot] = null if previous.is_empty() else previous
+			notify("Now wearing: %s" % item.name)
+			push_inventory()
 
 
 func _consume(slot: int, item: Dictionary) -> void:
@@ -235,6 +308,69 @@ func _request_move(from: int, to: int) -> void:
 		return
 	inventory.move(from, to)
 	push_inventory()
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _request_take_off(slot: String) -> void:
+	if not multiplayer.is_server() or not _sender_owns_me() or not equipment.is_wearing(slot):
+		return
+	var stack := equipment.take_off(slot)
+	if inventory.add_stack(stack) > 0:
+		equipment.wear(stack)
+		notify("No room in your pack to take that off.")
+		return
+	push_inventory()
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _request_drop(slot: int) -> void:
+	if not multiplayer.is_server() or not _sender_owns_me():
+		return
+	if slot < 0 or slot >= Inventory.SIZE or inventory.slots[slot] == null:
+		return
+	var stack := inventory.take_from_slot(slot, inventory.slots[slot].count)
+	GameState.world.camp.drop_items(player, [stack], "%s's dropped items" % player.display_name)
+	push_inventory()
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _request_split(slot: int) -> void:
+	if multiplayer.is_server() and _sender_owns_me() and inventory.split(slot):
+		push_inventory()
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _request_quick_move(slot: int) -> void:
+	if multiplayer.is_server() and _sender_owns_me() and inventory.quick_move(slot):
+		push_inventory()
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _request_give(slot: int, target_peer: int) -> void:
+	if not multiplayer.is_server() or not _sender_owns_me():
+		return
+	if slot < 0 or slot >= Inventory.SIZE or inventory.slots[slot] == null:
+		return
+	var target := GameState.world.players_root.get_node_or_null(str(target_peer)) as Player
+	if target == null or target == player:
+		return
+	if target.world_transform().origin.distance_to(player.world_transform().origin) > GIVE_RANGE:
+		notify("Get closer to hand that over.")
+		return
+	var stack := inventory.take_from_slot(slot, inventory.slots[slot].count)
+	var given: int = stack.count
+	var left := target.survivor.inventory.add_stack(stack)
+	if left > 0:
+		stack.count = left
+		inventory.add_stack(stack)
+		given -= left
+	if given <= 0:
+		notify("%s's pack is full." % target.display_name)
+		return
+	notify("Gave %s ×%d to %s" % [ItemTable.display_name(stack.id), given, target.display_name])
+	target.survivor.notify("%s gave you %s ×%d" % [player.display_name, ItemTable.display_name(stack.id), given])
+	push_inventory()
+	target.survivor.push_inventory()
 
 
 func _sender_owns_me() -> bool:

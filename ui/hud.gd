@@ -1,8 +1,9 @@
 class_name Hud
 extends CanvasLayer
-## Prototype HUD: survival bars, clock and compass, hotbar, the interaction
-## prompt (with hold progress), messages, the crew roster, the sleep screen,
-## and the backpack, storage, survival book and note panels.
+## The in-game screen: survival bars, clock and compass, hotbar, the interaction
+## prompt (with hold progress and controller-aware button names), objectives,
+## messages, the sleep countdown, the F3 debug overlay, and every panel —
+## backpack, storage, survival book, notes, pause menu and settings.
 
 const MESSAGE_SECONDS := 5.0
 const CARDINALS := ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
@@ -11,6 +12,7 @@ var _info: Label
 var _clock: Label
 var _markers: Label
 var _prompt: Label
+var _sleep_line: Label
 var _messages: Label
 var _temperature: Label
 var _bars := {}
@@ -20,11 +22,15 @@ var _inventory: InventoryPanel
 var _storage: ContainerPanel
 var _book: BookPanel
 var _note: NotePanel
+var _pause: PauseMenu
+var _settings: SettingsPanel
 var _sleep_overlay: ColorRect
 var _message_log: Array = []
 var _lan_addresses := ""
 var _bound: Survivor = null
 var _camp: CampSystems
+var _objective_accum := 1.0
+var _objectives: PackedStringArray = []
 
 
 func _ready() -> void:
@@ -35,7 +41,7 @@ func _ready() -> void:
 	add_child(crosshair)
 	crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 
-	_info = _label(13)
+	_info = _label(14)
 	_info.position = Vector2(16.0, 10.0)
 
 	_clock = _label(20)
@@ -55,19 +61,15 @@ func _ready() -> void:
 	_prompt.offset_top += 42.0
 	_prompt.offset_bottom += 42.0
 
-	var help := _label(12)
-	help.text = "WASD move · Shift sprint/paddle hard · Space jump · C crouch · F paddle\nE interact (hold to gather) · LMB use/build · R rotate · 1–8 hotbar · I backpack · B book · F10 leave"
-	help.modulate = Color(1.0, 1.0, 1.0, 0.7)
-	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	help.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_KEEP_SIZE, 12)
-	help.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_sleep_line = _label(16)
+	_sleep_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_sleep_line.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_KEEP_SIZE, 64)
+	_sleep_line.grow_horizontal = Control.GROW_DIRECTION_BOTH
 
 	_messages = _label(15)
 	_messages.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_messages.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_KEEP_SIZE, 16)
 	_messages.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_messages.offset_top += 44.0
-	_messages.offset_bottom += 44.0
 
 	_build_bars()
 	_build_hotbar()
@@ -79,7 +81,7 @@ func _ready() -> void:
 	add_child(_sleep_overlay)
 	_sleep_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var sleep_label := Label.new()
-	sleep_label.text = "Sleeping... waiting for the rest of the crew to turn in.\nPress any key to get up."
+	sleep_label.text = "Sleeping... the night passes once most of the crew turns in.\nPress any button to get up."
 	sleep_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sleep_overlay.add_child(sleep_label)
 	sleep_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -90,6 +92,16 @@ func _ready() -> void:
 	_storage = _panel(ContainerPanel.new())
 	_book = _panel(BookPanel.new())
 	_note = _panel(NotePanel.new())
+	_pause = _panel(PauseMenu.new())
+	_settings = _panel(SettingsPanel.new())
+	_note.close_requested.connect(func() -> void: _close_all())
+	_pause.resume_requested.connect(func() -> void: _close_all())
+	_pause.settings_requested.connect(func() -> void:
+		_pause.visible = false
+		_settings.visible = true)
+	_settings.closed.connect(func() -> void:
+		_pause.visible = true
+		_sync_ui_state())
 
 	var addresses: PackedStringArray = []
 	for address in IP.get_local_addresses():
@@ -102,6 +114,11 @@ func _ready() -> void:
 	_book.camp = _camp
 	_camp.container_opened.connect(_on_container_opened)
 	_camp.container_changed.connect(func(_id: String) -> void: _storage.refresh())
+	_camp.container_closed.connect(func(id: String) -> void:
+		if _storage.container_id == id:
+			_storage.container_id = ""
+			_storage.visible = false
+			_sync_ui_state())
 	_camp.recipes_changed.connect(func() -> void: _book.refresh())
 	_camp.sleeping_changed.connect(func(asleep: bool) -> void: _sleep_overlay.visible = asleep)
 
@@ -188,15 +205,47 @@ func _build_hotbar() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if GameState.local_player == null or _bound == null:
 		return
+	var cancel := event.is_action_pressed("ui_cancel") or event.is_action_pressed("pause")
 	var handled := true
-	if _storage.visible and (event.is_action_pressed("pause") or event.is_action_pressed("interact") or event.is_action_pressed("inventory")):
-		_storage.close()
-	elif _note.visible and event.is_action_pressed("pause"):
-		_note.visible = false
-	elif event.is_action_pressed("inventory") or (_inventory.visible and event.is_action_pressed("pause")):
-		_show_only(null if _inventory.visible else _inventory)
-	elif event.is_action_pressed("book") or (_book.visible and event.is_action_pressed("pause")):
-		_show_only(null if _book.visible else _book)
+	if event.is_action_pressed("debug"):
+		Settings.show_debug = not Settings.show_debug
+	elif _settings.visible:
+		if cancel:
+			_settings.close()
+		else:
+			handled = false
+	elif _pause.visible:
+		if cancel:
+			_close_all()
+		else:
+			handled = false
+	elif _storage.visible:
+		if cancel or event.is_action_pressed("inventory") or (event is InputEventKey and event.is_action_pressed("interact")):
+			_storage.close()
+		else:
+			handled = false
+	elif _note.visible:
+		if cancel:
+			_close_all()
+		else:
+			handled = false
+	elif _inventory.visible or _book.visible:
+		if cancel or (_inventory.visible and event.is_action_pressed("inventory")) or (_book.visible and event.is_action_pressed("book")):
+			_close_all()
+		elif event.is_action_pressed("inventory"):
+			_show_only(_inventory)
+		elif event.is_action_pressed("book"):
+			_show_only(_book)
+		else:
+			handled = false
+	elif event.is_action_pressed("inventory"):
+		Sound.play("open", -8.0)
+		_show_only(_inventory)
+	elif event.is_action_pressed("book"):
+		Sound.play("book_open", -6.0)
+		_show_only(_book)
+	elif event.is_action_pressed("pause"):
+		_show_only(_pause)
 	else:
 		handled = false
 	if handled:
@@ -205,18 +254,23 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _show_only(panel: PanelContainer) -> void:
-	for other: PanelContainer in [_inventory, _book, _note]:
+	for other: PanelContainer in [_inventory, _book, _note, _pause, _settings]:
 		other.visible = other == panel
 	if _storage.visible and panel != null:
 		_storage.close()
 	if panel == _inventory:
-		_inventory.refresh()
-	elif panel == _book:
-		_book.refresh()
+		UiKit.focus_first(_inventory)
+
+
+func _close_all() -> void:
+	_show_only(null)
+	if _storage.visible:
+		_storage.close()
+	_sync_ui_state()
 
 
 func _sync_ui_state() -> void:
-	var open := _inventory.visible or _storage.visible or _book.visible or _note.visible
+	var open := _inventory.visible or _storage.visible or _book.visible or _note.visible or _pause.visible or _settings.visible
 	if open == GameState.ui_open:
 		return
 	GameState.ui_open = open
@@ -262,6 +316,8 @@ func _on_book_requested() -> void:
 
 
 func _on_message(message: String) -> void:
+	if message.is_empty():
+		return
 	_message_log.append({"text": message, "until": Time.get_ticks_msec() / 1000.0 + MESSAGE_SECONDS})
 	if _message_log.size() > 5:
 		_message_log.pop_front()
@@ -281,15 +337,20 @@ func _refresh_items() -> void:
 
 # --- per frame -------------------------------------------------------------------
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	var player := GameState.local_player as Player
 	if player != null and player.survivor != _bound:
 		_bind(player.survivor)
-	_update_info(player)
 
 	var now := Time.get_ticks_msec() / 1000.0
 	_message_log = _message_log.filter(func(m: Dictionary) -> bool: return m.until > now)
 	_messages.text = "\n".join(PackedStringArray(_message_log.map(func(m: Dictionary) -> String: return m.text)))
+
+	_objective_accum += delta
+	if player != null and _objective_accum >= 0.5:
+		_objective_accum = 0.0
+		_objectives = Objectives.upcoming(GameState.world, player)
+	_update_info(player)
 
 	if player == null or _bound == null:
 		return
@@ -322,15 +383,32 @@ func _process(_delta: float) -> void:
 		heading = fposmod(rad_to_deg(atan2(forward.x, -forward.z)), 360.0)
 	_clock.text = "%s    %s %03d°" % [DayNight.clock_text(GameState.time_of_day()), CARDINALS[int(round(heading / 45.0)) % 8], int(heading)]
 	_markers.text = _chart_markers(here) if _camp.chart_read else ""
+	_prompt.text = _prompt_text(player)
 
-	var prompt := "" if player.focus_text.is_empty() else "[E]  " + player.focus_text
-	var progress := player.hold_fraction()
-	if progress > 0.0:
-		var filled := int(round(progress * 10.0))
-		prompt += "   " + "▰".repeat(filled) + "▱".repeat(10 - filled)
-	elif player.is_placing():
-		prompt = "[LMB] Build here   [R] Rotate   (select another slot to cancel)"
-	_prompt.text = prompt
+	var status: Dictionary = _camp.sleep_status
+	if float(status.left) >= 0.0:
+		_sleep_line.text = "Night skips in %ds — %d of the crew in bed" % [ceili(float(status.left)), int(status.asleep)]
+	elif int(status.asleep) > 0:
+		_sleep_line.text = "%d in bed — %d of the crew need to sleep to skip the night" % [int(status.asleep), int(status.needed)]
+	else:
+		_sleep_line.text = ""
+
+
+func _prompt_text(player: Player) -> String:
+	if player.is_placing():
+		return "%s Build here   %s Rotate   (pick another hotbar slot to cancel)" % [Controls.tag("primary"), Controls.tag("rotate")]
+	if not player.focus_text.is_empty():
+		var tool: String = ItemTable.get_item(player.held_id).get("tool", "")
+		var keys := Controls.tag("interact")
+		if Player.SWING_TOOLS.has(tool) and player.focus_id.begins_with("res:"):
+			keys = "%s / %s" % [Controls.tag("primary"), keys]
+		var text := "%s  %s" % [keys, player.focus_text]
+		var progress := player.hold_fraction()
+		if progress > 0.0:
+			var filled := int(round(progress * 10.0))
+			text += "   " + "▰".repeat(filled) + "▱".repeat(10 - filled)
+		return text
+	return player.give_text
 
 
 func _chart_markers(here: Vector3) -> String:
@@ -351,22 +429,24 @@ static func _bearing(from: Vector3, to: Vector2) -> int:
 
 func _update_info(player: Player) -> void:
 	var lines: PackedStringArray = []
-	lines.append("RIPTIDE · M1b · %s" % ("HOST" if multiplayer.is_server() else "CREW"))
-	if multiplayer.is_server():
-		lines.append("Friends join at: %s  (port %d)" % [_lan_addresses, Net.port])
-	var names: PackedStringArray = []
-	for id: int in Net.roster:
-		names.append(Net.roster[id]["name"])
-	lines.append("Crew %d/%d: %s" % [Net.roster.size(), Net.MAX_PLAYERS, ", ".join(names)])
-	if player == null:
-		lines.append("Waiting for the host...")
-	else:
-		if player.platform != null:
-			var status := ""
-			if player.platform.can_paddle:
-				status = " — PADDLING (WASD, Shift to pull hard, F to stop)" if player.paddling else " — F to paddle"
-			lines.append("Aboard the %s%s" % [player.platform.name, status])
-		elif player.swimming:
-			lines.append("Swimming")
+	if not _objectives.is_empty():
+		lines.append("NEXT")
+		for objective in _objectives:
+			lines.append("  • " + objective)
+	if Net.roster.size() > 1:
+		var names: PackedStringArray = []
+		for id: int in Net.roster:
+			names.append(Net.roster[id]["name"])
+		lines.append("Crew: " + ", ".join(names))
+	if player != null and player.platform != null and player.platform.can_paddle:
+		lines.append("%s paddle%s" % [Controls.tag("paddle"), " — WASD steers, %s pulls hard" % Controls.tag("sprint") if player.paddling else ""])
+	if Settings.show_debug:
+		lines.append("")
+		lines.append("RIPTIDE M1b.5 · %s · peer %d" % ["HOST" if multiplayer.is_server() else "CREW", multiplayer.get_unique_id()])
+		if multiplayer.is_server():
+			lines.append("Join: %s port %d" % [_lan_addresses, Net.port])
 		lines.append("FPS %d" % Engine.get_frames_per_second())
+		if player != null:
+			var p := player.world_transform().origin
+			lines.append("Pos %.0f, %.0f, %.0f · %.1f kg" % [p.x, p.y, p.z, player.carried_weight_kg])
 	_info.text = "\n".join(lines)

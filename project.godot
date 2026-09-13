@@ -13,6 +13,9 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 [autoload]
 
 Controls="*res://autoload/controls.gd"
+Settings="*res://autoload/settings.gd"
+Profile="*res://autoload/profile.gd"
+Sound="*res://autoload/sound.gd"
 Ocean="*res://autoload/ocean_clock.gd"
 GameState="*res://autoload/game_state.gd"
 Net="*res://autoload/net.gd"

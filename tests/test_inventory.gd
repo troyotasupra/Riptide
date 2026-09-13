@@ -98,6 +98,23 @@ func test_tool_types_lists_what_you_carry() -> void:
 	check(tools.has("knife") and tools.has("machete") and tools.size() == 2, "knife and machete (got %s)" % [tools])
 
 
+func test_split_halves_a_stack() -> void:
+	var inv = InventoryScript.new()
+	inv.add("fiber", 9)
+	check(inv.split(0) and inv.slots[0].count == 5 and inv.slots[1].count == 4, "9 fiber splits into 5 and 4")
+	inv.slots[2] = {"id": "knife", "count": 1, "spoils_at": 0.0}
+	check(not inv.split(2), "a single item can't split")
+
+
+func test_quick_move_between_hotbar_and_backpack() -> void:
+	var inv = InventoryScript.new()
+	inv.slots[0] = {"id": "stone", "count": 5, "spoils_at": 0.0}
+	inv.slots[10] = {"id": "stone", "count": 18, "spoils_at": 0.0}
+	check(inv.quick_move(0), "moved")
+	check(inv.slots[10].count == 20 and inv.slots[8].count == 3 and inv.slots[0] == null, "tops up the backpack stack, rest goes to the first free backpack slot")
+	check(inv.quick_move(8) and inv.slots[0].count == 3, "and back to the hotbar")
+
+
 func test_round_trips_through_dict() -> void:
 	var inv = InventoryScript.new()
 	inv.add("flint", 3)

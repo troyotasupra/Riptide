@@ -47,7 +47,7 @@ func interact_text(_player: Node) -> String:
 func hold_seconds(player: Node) -> float:
 	if depleted or player == null or player.survivor == null:
 		return 0.0
-	return ResourceTable.harvest_seconds(kind, player.survivor.inventory.tool_types())
+	return maxf(0.0, ResourceTable.harvest_seconds(kind, player.survivor.inventory.tool_types()))
 
 
 func set_depleted(value: bool) -> void:
