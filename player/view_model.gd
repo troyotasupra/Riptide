@@ -41,12 +41,15 @@ func refresh(held_id: String, torso_item: String, skin: Color, crew_color_index:
 		forearm.radial_segments = 8
 		forearm.rings = 1
 		_part(_arm, forearm, Vector3(0.0, -0.13, 0.0), sleeve_color)
-		var palm := BoxMesh.new()
-		palm.size = Vector3(0.075, 0.09, 0.05)
+		var palm := SphereMesh.new()
+		palm.radius = 0.5
+		palm.height = 1.0
+		palm.radial_segments = 16
+		palm.rings = 8
 		_hand = Node3D.new()
 		_hand.position = Vector3(0.0, -0.32, 0.0)
 		_arm.add_child(_hand)
-		_part(_hand, palm, Vector3.ZERO, skin)
+		_part(_hand, palm, Vector3.ZERO, skin).scale = Vector3(0.075, 0.1, 0.055)
 		_held_id = "?"
 	visible = not held_id.is_empty()
 	if held_id == _held_id:
@@ -75,10 +78,11 @@ func animate(delta: float, speed: float) -> void:
 	_arm.rotation.x = REST_PITCH + arc * 0.7 - (1.0 - _swing_t) * arc * 1.4
 
 
-func _part(parent: Node3D, mesh: Mesh, pos: Vector3, color: Color) -> void:
+func _part(parent: Node3D, mesh: Mesh, pos: Vector3, color: Color) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	instance.mesh = mesh
 	instance.material_override = Props.material("body_" + color.to_html(false), color)
 	instance.position = pos
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(instance)
+	return instance

@@ -180,9 +180,16 @@ func _lineup() -> void:
 	]
 	var outfits: Array = CharacterCreator.OUTFITS.values()
 	var poses := ["idle", "walk", "crouch", "idle", "swing"]
+	# --face=portrait puts the row close enough to judge faces.
+	var portrait := GameState.face == "portrait"
+	var distance := 1.25 if portrait else 4.5
+	var spacing := 0.62 if portrait else 1.3
+	var turn := 0.12 if portrait else 0.25
+	if portrait:
+		player.pitch = -0.02
+		player.survivor.inventory.slots[0] = null
 	var at := player.world_transform()
-	var forward := -(at.basis * Vector3.FORWARD * -1.0)
-	forward = Vector3(-sin(player.yaw), 0.0, -cos(player.yaw))
+	var forward := Vector3(-sin(player.yaw), 0.0, -cos(player.yaw))
 	var right := Vector3(cos(player.yaw), 0.0, -sin(player.yaw))
 	var animator := LineupAnimator.new()
 	add_child(animator)
@@ -190,11 +197,11 @@ func _lineup() -> void:
 		var model := CharacterModel.new()
 		world.add_child(model)
 		model.setup(looks[i], outfits[i % outfits.size()], GameState.crew_color, GameState.emblem)
-		var p: Vector3 = at.origin + forward * 4.5 + right * (i - 2) * 1.3
+		var p: Vector3 = at.origin + forward * distance + right * (i - 2) * spacing
 		var ground: float = world.ground_height(p.x, p.z)
 		p.y = ground if ground != -INF else at.origin.y
 		model.global_position = p
-		model.rotation.y = player.yaw + PI + (i - 2) * 0.25
+		model.rotation.y = player.yaw + PI + (i - 2) * turn
 		if poses[i] == "swing":
 			model.set_held("stone_hatchet")
 		animator.models.append([model, poses[i]])

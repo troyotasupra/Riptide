@@ -1,7 +1,8 @@
 class_name CharacterModel
 extends Node3D
-## A crew member's visible body, built in code to match the low-poly world:
-## a jointed figure with a face, hair and facial hair from the player's look,
+## A crew member's visible body, built in code: a jointed figure with a smooth
+## lofted torso (hips → waist → chest → sloped shoulders), rounded limbs,
+## natural proportions, a face, hair and facial hair from the player's look,
 ## and every worn clothing and gear piece shown on it. Animated procedurally
 ## (walk, run, crouch, swim, tool swings) so no animation files are needed.
 ##
@@ -13,6 +14,15 @@ const SHIN := 0.42
 const TORSO := 0.46
 const UPPER_ARM := 0.3
 const FOREARM := 0.28
+## Smoothness of the rounded shapes.
+const SEGMENTS := 18
+const RINGS := 10
+const TORSO_SEGMENTS := 24
+## Where trousers end and the shirt begins, in pelvis space.
+const WAIST_SPLIT := 0.11
+## Beards are the lower half of an ellipsoid around the jaw, tipped back by this
+## much so their front edge sits just under the nose and the back tucks under the ears.
+const BEARD_TILT := -0.25
 
 const CLOTHING_COLORS := {
 	"rain_jacket": Color(0.93, 0.72, 0.14),
@@ -27,6 +37,11 @@ const CLOTHING_COLORS := {
 	"daypack": Color(0.22, 0.25, 0.30),
 }
 const UNDERWEAR := Color(0.18, 0.18, 0.20)
+
+static var _sphere: SphereMesh
+static var _hemisphere: SphereMesh
+static var _torso_cache := {}
+static var _vertex_material: StandardMaterial3D
 
 var look := AppearanceTable.DEFAULT_LOOK.duplicate()
 var worn := {}
@@ -95,11 +110,11 @@ func rebuild() -> void:
 	var feminine := int(look.body) == 1
 	var build: float = [0.88, 1.0, 1.16][int(look.build)]
 	var skin: Color = AppearanceTable.SKIN[int(look.skin)]
-	var shoulder_w := (0.35 if feminine else 0.40) * build
-	var hip_w := (0.35 if feminine else 0.32) * build
-	var depth := 0.22 * build
-	var arm_r := (0.04 if feminine else 0.046) * build
-	var leg_r := 0.064 * build
+	var shoulder_w := (0.37 if feminine else 0.43) * build
+	var hip_w := (0.37 if feminine else 0.33) * build
+	var depth := 0.23 * build
+	var arm_r := (0.047 if feminine else 0.055) * build
+	var leg_r := (0.08 if feminine else 0.077) * build
 
 	var torso_item: String = worn.get("torso", "")
 	var legs_item: String = worn.get("legs", "")
@@ -108,155 +123,285 @@ func rebuild() -> void:
 	var long_sleeves := torso_item in ["rain_jacket", "wool_sweater"]
 	var pants := clothing_color(legs_item) if not legs_item.is_empty() else UNDERWEAR
 	var long_legs := legs_item == "cargo_pants"
+	var bulk := 1.05 if long_sleeves else 1.0
 
 	_pelvis = Node3D.new()
 	_pelvis.name = "Pelvis"
 	_pelvis.position.y = HIP_Y
 	add_child(_pelvis)
-	_box(_pelvis, Vector3(hip_w, 0.18, depth * 0.95), Vector3(0.0, 0.02, 0.0), pants)
+	var profile := _torso_profile(hip_w, shoulder_w, depth, bulk, feminine)
+	var torso := MeshInstance3D.new()
+	torso.name = "Torso"
+	torso.mesh = _torso_mesh(profile, WAIST_SPLIT, pants, shirt)
+	torso.material_override = _vertex_color_material()
+	_pelvis.add_child(torso)
 
 	for side: float in [-1.0, 1.0]:
 		var key := "l" if side < 0.0 else "r"
-		var hip := _joint(_pelvis, "Hip_" + key, Vector3(side * (hip_w * 0.5 - leg_r), -0.02, 0.0))
-		_capsule(hip, leg_r, THIGH, Vector3(0.0, -THIGH * 0.5, 0.0), skin if legs_item.is_empty() else (pants if long_legs else skin))
+		var hip := _joint(_pelvis, "Hip_" + key, Vector3(side * (hip_w * 0.5 - leg_r * 0.85), -0.04, 0.0))
+		var thigh_color := pants if long_legs else skin
+		_capsule(hip, leg_r, THIGH, Vector3(0.0, -THIGH * 0.5, 0.0), thigh_color)
 		if legs_item == "shorts":
-			_capsule(hip, leg_r + 0.012, THIGH * 0.55, Vector3(0.0, -THIGH * 0.26, 0.0), pants)
+			_capsule(hip, leg_r * 1.14, THIGH * 0.5, Vector3(0.0, -THIGH * 0.2, 0.0), pants)
 		var knee := _joint(hip, "Knee_" + key, Vector3(0.0, -THIGH, 0.0))
-		_capsule(knee, leg_r * 0.85, SHIN, Vector3(0.0, -SHIN * 0.5, 0.0), pants if long_legs else skin)
+		var shin_color := pants if long_legs else skin
+		_ellipsoid(knee, Vector3.ONE * leg_r * 1.8, Vector3.ZERO, shin_color)
+		_capsule(knee, leg_r * 0.8, SHIN, Vector3(0.0, -SHIN * 0.5, 0.0), shin_color)
 		var foot_color := skin
+		var foot_size := Vector3(0.1, 0.075, 0.25) * Vector3(build, 1.0, 1.0)
 		if feet_item == "hiking_boots":
 			foot_color = clothing_color(feet_item)
-			_capsule(knee, leg_r * 0.95, 0.14, Vector3(0.0, -SHIN + 0.06, 0.0), foot_color)
-		_box(knee, Vector3(0.1 * build, 0.08, 0.25), Vector3(0.0, -SHIN - 0.04, -0.05), foot_color)
+			foot_size *= Vector3(1.2, 1.35, 1.1)
+			_capsule(knee, leg_r * 0.95, 0.16, Vector3(0.0, -SHIN + 0.06, 0.0), foot_color)
+		_ellipsoid(knee, foot_size, Vector3(0.0, -SHIN - 0.035, -0.05), foot_color)
 		if feet_item == "sandals":
-			_box(knee, Vector3(0.11 * build, 0.02, 0.27), Vector3(0.0, -SHIN - 0.075, -0.05), clothing_color(feet_item))
+			_cylinder(knee, 0.07 * build, 0.02, Vector3(0.0, -SHIN - 0.07, -0.05), clothing_color(feet_item), Vector3(1.0, 1.0, 2.1))
 		_legs[key] = {"hip": hip, "knee": knee}
 
+	# The spine carries the arms, neck and chest gear; the torso shape itself
+	# lives on the pelvis so it bends with the body as one smooth piece.
 	_spine = _joint(_pelvis, "Spine", Vector3(0.0, 0.08, 0.0))
-	var bulk := 1.06 if long_sleeves else 1.0
-	var waist_w := lerpf(hip_w, shoulder_w, 0.35)
-	_box(_spine, Vector3(waist_w * bulk, 0.22, depth * bulk), Vector3(0.0, 0.11, 0.0), shirt)
-	_box(_spine, Vector3(shoulder_w * bulk, 0.26, depth * 1.05 * bulk), Vector3(0.0, 0.33, 0.0), shirt)
-	if feminine:
-		var top := shirt if not torso_item.is_empty() else UNDERWEAR
-		_box(_spine, Vector3(shoulder_w * 0.72, 0.1, 0.07), Vector3(0.0, 0.32, -depth * 0.5 - 0.02), top)
 	if torso_item == "tshirt" and emblem_index > 0:
-		_decal(_spine, Emblem.texture(emblem_index, Emblem.contrast(shirt)), 0.13, Vector3(0.0, 0.34, -depth * 0.55 - (0.075 if feminine else 0.01)))
+		var badge := Vector2(-shoulder_w * 0.2, 0.37)
+		var z := _front_z(profile, badge.x, badge.y + 0.08) - 0.006
+		_decal(_spine, Emblem.texture(emblem_index, Emblem.contrast(shirt)), 0.1, Vector3(badge.x, badge.y, z))
 
 	for side: float in [-1.0, 1.0]:
 		var key := "l" if side < 0.0 else "r"
-		var shoulder := _joint(_spine, "Shoulder_" + key, Vector3(side * (shoulder_w * 0.5 + arm_r * 0.8), TORSO - 0.06, 0.0))
+		var shoulder := _joint(_spine, "Shoulder_" + key, Vector3(side * (shoulder_w * 0.43 + arm_r * 0.35), TORSO - 0.08, 0.0))
+		var sleeve := shirt if (long_sleeves or torso_item == "tshirt") else skin
+		_ellipsoid(shoulder, Vector3(arm_r * 2.6, arm_r * 2.4, arm_r * 2.5), Vector3(0.0, -0.005, 0.0), sleeve)
 		_capsule(shoulder, arm_r, UPPER_ARM, Vector3(0.0, -UPPER_ARM * 0.5, 0.0), shirt if long_sleeves else skin)
 		if torso_item == "tshirt":
-			_capsule(shoulder, arm_r + 0.013, UPPER_ARM * 0.5, Vector3(0.0, -UPPER_ARM * 0.2, 0.0), shirt)
+			_capsule(shoulder, arm_r * 1.22, UPPER_ARM * 0.45, Vector3(0.0, -UPPER_ARM * 0.2, 0.0), shirt)
 		var elbow := _joint(shoulder, "Elbow_" + key, Vector3(0.0, -UPPER_ARM, 0.0))
-		_capsule(elbow, arm_r * 0.9, FOREARM, Vector3(0.0, -FOREARM * 0.5, 0.0), shirt if long_sleeves else skin)
+		var forearm_color := shirt if long_sleeves else skin
+		_ellipsoid(elbow, Vector3.ONE * arm_r * 1.8, Vector3.ZERO, forearm_color)
+		_capsule(elbow, arm_r * 0.9, FOREARM, Vector3(0.0, -FOREARM * 0.5, 0.0), forearm_color)
 		var hand := _joint(elbow, "Hand_" + key, Vector3(0.0, -FOREARM - 0.03, 0.0))
-		_box(hand, Vector3(0.07, 0.09, 0.05) * build, Vector3(0.0, -0.03, 0.0), skin)
+		_ellipsoid(hand, Vector3(0.075, 0.105, 0.048) * build, Vector3(0.0, -0.03, 0.0), skin)
+		_ellipsoid(hand, Vector3(0.024, 0.052, 0.024) * build, Vector3(-side * 0.032, -0.01, -0.02), skin, Vector3(0.0, 0.0, -side * 0.5))
 		_arms[key] = {"shoulder": shoulder, "elbow": elbow, "hand": hand}
 
-	_build_gear(shoulder_w, depth, feminine)
+	_build_gear(profile, shoulder_w, depth, feminine)
 
 	var neck := _joint(_spine, "Neck", Vector3(0.0, TORSO, 0.0))
-	_capsule(neck, 0.05 * build, 0.08, Vector3(0.0, 0.02, 0.0), skin)
+	_capsule(neck, (0.052 if feminine else 0.06) * build, 0.12, Vector3(0.0, 0.01, 0.0), skin)
 	_head = _joint(neck, "Head", Vector3(0.0, 0.16, 0.0))
 	_build_head(skin, feminine)
 	_rebuild_held()
 
 
-func _build_gear(shoulder_w: float, depth: float, feminine: bool) -> void:
+## Rings of [height, half-width, half-depth] up the torso, in pelvis space.
+static func _torso_profile(hip_w: float, shoulder_w: float, depth: float, bulk: float, feminine: bool) -> Array:
+	var waist := lerpf(hip_w, shoulder_w, 0.2) * (0.9 if feminine else 1.0)
+	var chest := lerpf(waist, shoulder_w, 0.65)
+	return [
+		[-0.14, 0.0, 0.0],
+		[-0.13, hip_w * 0.3, depth * 0.28],
+		[-0.08, hip_w * 0.5, depth * 0.43],
+		[0.01, hip_w * 0.56, depth * 0.47],
+		[0.1, hip_w * 0.51, depth * 0.45],
+		[0.2, waist * 0.47 * bulk, depth * 0.42 * bulk],
+		[0.3, chest * 0.5 * bulk, depth * (0.5 if feminine else 0.47) * bulk],
+		[0.4, shoulder_w * 0.5 * bulk, depth * (0.57 if feminine else 0.52) * bulk],
+		[0.47, shoulder_w * 0.5 * bulk, depth * 0.5 * bulk],
+		[0.52, shoulder_w * 0.43 * bulk, depth * 0.42 * bulk],
+		[0.555, shoulder_w * 0.22, depth * 0.26],
+		[0.565, 0.0, 0.0],
+	]
+
+
+## Front surface (-Z) of the torso at pelvis-space (x, y).
+static func _front_z(profile: Array, x: float, y: float) -> float:
+	for i in range(1, profile.size()):
+		var a: Array = profile[i - 1]
+		var b: Array = profile[i]
+		if y <= float(b[0]):
+			var t := clampf((y - float(a[0])) / maxf(float(b[0]) - float(a[0]), 0.0001), 0.0, 1.0)
+			var rx := lerpf(a[1], b[1], t)
+			var rz := lerpf(a[2], b[2], t)
+			var nx := x / maxf(rx, 0.0001)
+			return -rz * sqrt(maxf(0.0, 1.0 - nx * nx))
+	return 0.0
+
+
+## A smooth, closed torso lofted through the profile rings, coloured below and
+## above the waist. Cached, since crews share builds and outfits.
+static func _torso_mesh(profile: Array, split_y: float, lower: Color, upper: Color) -> ArrayMesh:
+	var key := "%s|%.3f|%s|%s" % [str(profile), split_y, lower.to_html(false), upper.to_html(false)]
+	if _torso_cache.has(key):
+		return _torso_cache[key]
+	var rings: Array = []
+	for i in profile.size():
+		var row: Array = profile[i]
+		if i > 0:
+			var prev: Array = profile[i - 1]
+			if float(prev[0]) < split_y and float(row[0]) >= split_y:
+				var t := (split_y - float(prev[0])) / (float(row[0]) - float(prev[0]))
+				var rx := lerpf(prev[1], row[1], t)
+				var rz := lerpf(prev[2], row[2], t)
+				rings.append([split_y, rx, rz, lower])
+				rings.append([split_y, rx, rz, upper])
+		rings.append([row[0], row[1], row[2], lower if float(row[0]) < split_y else upper])
+
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
+	var last := rings.size() - 1
+	for r in rings.size():
+		var ring: Array = rings[r]
+		var below := r
+		while below > 0 and is_equal_approx(float(rings[below][0]), float(ring[0])):
+			below -= 1
+		var above := r
+		while above < last and is_equal_approx(float(rings[above][0]), float(ring[0])):
+			above += 1
+		var d_y := float(rings[above][0]) - float(rings[below][0])
+		var d_rx := float(rings[above][1]) - float(rings[below][1])
+		var d_rz := float(rings[above][2]) - float(rings[below][2])
+		for j in TORSO_SEGMENTS + 1:
+			var a := TAU * j / TORSO_SEGMENTS
+			var rx := float(ring[1])
+			var rz := float(ring[2])
+			vertices.append(Vector3(rx * cos(a), ring[0], rz * sin(a)))
+			var along_a := Vector3(-rx * sin(a), 0.0, rz * cos(a))
+			var along_y := Vector3(d_rx * cos(a), d_y, d_rz * sin(a))
+			var normal := along_y.cross(along_a)
+			if normal.length_squared() < 0.0000001:
+				normal = Vector3.DOWN if r == 0 else Vector3.UP
+			normals.append(normal.normalized())
+			colors.append(ring[3])
+	var row_size := TORSO_SEGMENTS + 1
+	for r in last:
+		for j in TORSO_SEGMENTS:
+			var v00 := r * row_size + j
+			var v01 := v00 + 1
+			var v10 := v00 + row_size
+			var v11 := v10 + 1
+			indices.append_array([v00, v01, v10, v01, v11, v10])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_torso_cache[key] = mesh
+	return mesh
+
+
+static func _vertex_color_material() -> StandardMaterial3D:
+	if _vertex_material == null:
+		_vertex_material = StandardMaterial3D.new()
+		_vertex_material.vertex_color_use_as_albedo = true
+		_vertex_material.vertex_color_is_srgb = true
+		_vertex_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return _vertex_material
+
+
+func _build_gear(profile: Array, shoulder_w: float, depth: float, feminine: bool) -> void:
 	var vest: String = worn.get("vest", "")
+	var chest_front := _front_z(profile, 0.0, 0.4)
+	var chest_back := -chest_front
 	if vest == "plate_carrier":
 		var color := clothing_color(vest)
-		var front_z := -depth * 0.5 - (0.075 if feminine else 0.03)
-		_box(_spine, Vector3(shoulder_w * 0.92, 0.32, 0.05), Vector3(0.0, 0.29, front_z), color)
-		_box(_spine, Vector3(shoulder_w * 0.92, 0.32, 0.05), Vector3(0.0, 0.29, depth * 0.5 + 0.03), color)
+		var front_z := chest_front - 0.015
+		_rounded_plate(_spine, Vector3(shoulder_w * 0.84, 0.3, 0.05), Vector3(0.0, 0.26, front_z), color)
+		_rounded_plate(_spine, Vector3(shoulder_w * 0.84, 0.3, 0.05), Vector3(0.0, 0.26, chest_back + 0.015), color)
 		for side: float in [-1.0, 1.0]:
-			_box(_spine, Vector3(0.05, 0.03, depth + 0.12), Vector3(side * shoulder_w * 0.3, 0.46, 0.0), color.darkened(0.15))
-			_box(_spine, Vector3(0.04, 0.16, depth + 0.02), Vector3(side * shoulder_w * 0.5, 0.22, 0.0), color.darkened(0.1))
+			_ellipsoid(_spine, Vector3(0.07, 0.035, depth * 1.08), Vector3(side * shoulder_w * 0.27, 0.45, 0.0), color.darkened(0.15))
+			_ellipsoid(_spine, Vector3(0.05, 0.17, depth * 0.9), Vector3(side * shoulder_w * 0.45, 0.19, 0.0), color.darkened(0.1))
 		for x: float in [-0.09, 0.0, 0.09]:
-			_box(_spine, Vector3(0.075, 0.09, 0.045), Vector3(x * shoulder_w / 0.4, 0.2, front_z - 0.045), color.darkened(0.25))
+			_rounded_plate(_spine, Vector3(0.075, 0.09, 0.045), Vector3(x * shoulder_w / 0.43, 0.17, front_z - 0.045), color.darkened(0.25))
 		if emblem_index > 0:
-			_decal(_spine, Emblem.texture(emblem_index, Emblem.contrast(color)), 0.08, Vector3(-shoulder_w * 0.22, 0.38, front_z - 0.027))
+			_decal(_spine, Emblem.texture(emblem_index, Emblem.contrast(color)), 0.08, Vector3(-shoulder_w * 0.2, 0.34, front_z - 0.034))
 	if worn.get("back", "") == "daypack":
 		var pack := clothing_color("daypack")
-		_box(_spine, Vector3(shoulder_w * 0.7, 0.34, 0.14), Vector3(0.0, 0.26, depth * 0.5 + (0.13 if vest == "plate_carrier" else 0.08)), pack)
-		_box(_spine, Vector3(shoulder_w * 0.72, 0.1, 0.15), Vector3(0.0, 0.4, depth * 0.5 + (0.13 if vest == "plate_carrier" else 0.08)), pack.darkened(0.2))
+		var back_z := chest_back + (0.11 if vest == "plate_carrier" else 0.07)
+		_ellipsoid(_spine, Vector3(shoulder_w * 0.72, 0.38, 0.16), Vector3(0.0, 0.25, back_z), pack)
+		_ellipsoid(_spine, Vector3(shoulder_w * 0.6, 0.12, 0.1), Vector3(0.0, 0.13, back_z + 0.06), pack.darkened(0.2))
 
 
 func _build_head(skin: Color, feminine: bool) -> void:
 	var face := int(look.face)
-	var w: float = [0.23, 0.25, 0.21][face] * (0.94 if feminine else 1.0)
+	var w: float = [0.21, 0.225, 0.19][face] * (0.95 if feminine else 1.0)
 	var h: float = [0.26, 0.26, 0.28][face]
-	var d := 0.245
-	var front := -d * 0.5
+	var d := 0.24
+	var skull := Vector3(w, h, d)
 	var hair_color: Color = AppearanceTable.HAIR_COLORS[int(look.hair_color)]
-	_box(_head, Vector3(w, h, d), Vector3.ZERO, skin)
-	if face == 1:
-		_box(_head, Vector3(w + 0.01, 0.08, d * 0.9), Vector3(0.0, -h * 0.5 + 0.04, 0.0), skin)
-	for side: float in [-1.0, 1.0]:
-		_box(_head, Vector3(0.02, 0.06, 0.04), Vector3(side * (w * 0.5 + 0.008), -0.01, 0.01), skin.darkened(0.05))
-		_box(_head, Vector3(0.046, 0.032, 0.01), Vector3(side * 0.055, 0.02, front - 0.002), Color(0.95, 0.95, 0.93))
-		_box(_head, Vector3(0.02, 0.026, 0.01), Vector3(side * 0.055, 0.02, front - 0.006), AppearanceTable.EYE_COLORS[int(look.eyes)])
-		_box(_head, Vector3(0.062, 0.015, 0.012), Vector3(side * 0.055, 0.056, front - 0.004), hair_color)
-	_box(_head, Vector3(0.034, 0.06, 0.04), Vector3(0.0, -0.02, front - 0.016), skin.darkened(0.08))
-	_box(_head, Vector3(0.07, 0.013, 0.01), Vector3(0.0, -0.075, front - 0.003), Color(0.45, 0.22, 0.20))
+	var beard := int(look.beard)
 
-	match int(look.beard):
+	_ellipsoid(_head, skull, Vector3.ZERO, skin)
+	var jaw_w: float = [0.78, 0.9, 0.7][face] * (0.9 if feminine else 1.0)
+	_ellipsoid(_head, Vector3(w * jaw_w, h * 0.52, d * 0.78), Vector3(0.0, -h * 0.2, -d * 0.06), skin)
+	for side: float in [-1.0, 1.0]:
+		_ellipsoid(_head, Vector3(0.024, 0.06, 0.042), Vector3(side * w * 0.49, -0.01, 0.01), skin.darkened(0.05))
+		var eye := Vector2(side * w * 0.24, 0.018)
+		var eye_z := _surface_z(skull, Vector3.ZERO, eye.x, eye.y)
+		_ellipsoid(_head, Vector3(0.042, 0.03, 0.02), Vector3(eye.x, eye.y, eye_z + 0.004), Color(0.95, 0.95, 0.93))
+		_ellipsoid(_head, Vector3(0.02, 0.022, 0.012), Vector3(eye.x, eye.y, eye_z - 0.004), AppearanceTable.EYE_COLORS[int(look.eyes)])
+		var brow_z := _surface_z(skull, Vector3.ZERO, eye.x, 0.05)
+		_ellipsoid(_head, Vector3(0.056, 0.014, 0.018), Vector3(eye.x, 0.05, brow_z), hair_color, Vector3(0.0, 0.0, side * -0.12))
+	var nose_z := _surface_z(skull, Vector3.ZERO, 0.0, -0.015)
+	_ellipsoid(_head, Vector3(0.034, 0.058, 0.05), Vector3(0.0, -0.015, nose_z - 0.006), skin.darkened(0.05))
+	var bearded := beard == 1 or beard == 3
+	var mouth_z := _surface_z(skull, Vector3.ZERO, 0.0, -0.07) - (0.016 if bearded else 0.002)
+	_ellipsoid(_head, Vector3(0.062, 0.014, 0.014), Vector3(0.0, -0.07, mouth_z), Color(0.50, 0.26, 0.24))
+
+	match beard:
 		1:
-			_box(_head, Vector3(w + 0.004, 0.09, d * 0.9), Vector3(0.0, -h * 0.5 + 0.045, 0.01), skin.lerp(hair_color, 0.4))
+			_hemisphere_part(_head, Vector3(w * 1.03, h * 0.94, d * 1.04), Vector3(0.0, -0.014, 0.0), skin.darkened(0.2).lerp(hair_color, 0.35), Vector3(PI + BEARD_TILT, 0.0, 0.0))
 		2:
-			_box(_head, Vector3(0.06, 0.065, 0.03), Vector3(0.0, -0.11, front - 0.008), hair_color)
+			_ellipsoid(_head, Vector3(0.055, 0.065, 0.045), Vector3(0.0, -0.11, _surface_z(skull, Vector3.ZERO, 0.0, -0.1) + 0.01), hair_color)
 		3:
-			_box(_head, Vector3(w + 0.02, 0.12, d * 0.88), Vector3(0.0, -h * 0.5 + 0.05, 0.02), hair_color)
-			_box(_head, Vector3(w * 0.7, 0.07, 0.06), Vector3(0.0, -h * 0.5 - 0.01, front + 0.02), hair_color)
+			_hemisphere_part(_head, Vector3(w * 1.07, h * 0.96, d * 1.07), Vector3(0.0, -0.016, 0.0), hair_color, Vector3(PI + BEARD_TILT, 0.0, 0.0))
+			_ellipsoid(_head, Vector3(w * 0.5, 0.08, 0.08), Vector3(0.0, -h * 0.45, -d * 0.3), hair_color)
 		4:
-			_box(_head, Vector3(0.09, 0.022, 0.016), Vector3(0.0, -0.055, front - 0.008), hair_color)
+			_ellipsoid(_head, Vector3(0.09, 0.024, 0.03), Vector3(0.0, -0.048, mouth_z - 0.004), hair_color)
 
 	var head_item: String = worn.get("head", "")
 	var hatted := head_item in ["wool_beanie", "combat_helmet"]
-	var top := h * 0.5
-	match int(look.hair):
-		1:
-			if not hatted:
-				_box(_head, Vector3(w + 0.01, 0.03, d + 0.01), Vector3(0.0, top - 0.005, 0.0), hair_color)
-		2, 5, 7:
-			if not hatted:
-				_box(_head, Vector3(w + 0.02, 0.06, d + 0.02), Vector3(0.0, top + 0.01, 0.0), hair_color)
-			_box(_head, Vector3(w + 0.02, 0.14, 0.03), Vector3(0.0, top - 0.08, d * 0.5 + 0.005), hair_color)
-			if int(look.hair) == 5:
-				_box(_head, Vector3(0.05, 0.2, 0.05), Vector3(0.0, top - 0.13, d * 0.5 + 0.05), hair_color, Vector3(0.3, 0.0, 0.0))
-			elif int(look.hair) == 7 and not hatted:
-				_sphere(_head, 0.065, Vector3(0.0, top + 0.02, d * 0.5 - 0.02), hair_color)
+	var style := int(look.hair)
+	if style != 0 and style != 6 and not hatted:
+		var cap_scale: float = [1.0, 1.04, 1.08, 1.1, 1.08, 1.08, 1.0, 1.08][style]
+		_hemisphere_part(_head, skull * cap_scale, Vector3(0.0, -0.004, 0.004), hair_color, Vector3(0.48, 0.0, 0.0))
+	match style:
+		2, 5:
+			_ellipsoid(_head, Vector3(w * 1.02, h * 0.55, d * 0.42), Vector3(0.0, -0.035, d * 0.3), hair_color)
+			if style == 5:
+				_ellipsoid(_head, Vector3(0.07, 0.24, 0.07), Vector3(0.0, -0.08, d * 0.62), hair_color, Vector3(0.35, 0.0, 0.0))
 		3:
+			_ellipsoid(_head, Vector3(w * 1.02, h * 0.5, d * 0.42), Vector3(0.0, -0.03, d * 0.3), hair_color)
 			if not hatted:
-				_box(_head, Vector3(w + 0.02, 0.08, d + 0.02), Vector3(0.0, top + 0.02, 0.0), hair_color)
-				_box(_head, Vector3(w * 0.8, 0.05, 0.07), Vector3(0.0, top + 0.06, front + 0.04), hair_color)
-			_box(_head, Vector3(w + 0.02, 0.12, 0.03), Vector3(0.0, top - 0.07, d * 0.5 + 0.005), hair_color)
+				_ellipsoid(_head, Vector3(w * 0.8, 0.08, 0.13), Vector3(0.0, h * 0.47, -d * 0.24), hair_color, Vector3(-0.35, 0.0, 0.0))
 		4:
-			if not hatted:
-				_box(_head, Vector3(w + 0.02, 0.06, d + 0.02), Vector3(0.0, top + 0.01, 0.0), hair_color)
-			_box(_head, Vector3(w + 0.03, 0.36, 0.04), Vector3(0.0, top - 0.16, d * 0.5 + 0.01), hair_color)
+			_ellipsoid(_head, Vector3(w * 1.08, 0.44, 0.11), Vector3(0.0, -0.11, d * 0.42), hair_color)
 			for side: float in [-1.0, 1.0]:
-				_box(_head, Vector3(0.03, 0.26, d * 0.7), Vector3(side * (w * 0.5 + 0.014), top - 0.12, 0.03), hair_color)
+				_ellipsoid(_head, Vector3(0.05, 0.3, d * 0.6), Vector3(side * w * 0.5, -0.09, 0.03), hair_color)
 		6:
 			if not hatted:
-				_box(_head, Vector3(0.05, 0.09, d + 0.02), Vector3(0.0, top + 0.04, 0.0), hair_color)
+				_ellipsoid(_head, Vector3(0.05, 0.12, d * 1.02), Vector3(0.0, h * 0.44, 0.0), hair_color)
+		7:
+			if not hatted:
+				_ellipsoid(_head, Vector3.ONE * 0.12, Vector3(0.0, h * 0.44, d * 0.36), hair_color)
 
 	match head_item:
 		"wool_beanie":
 			var beanie := clothing_color(head_item)
-			_box(_head, Vector3(w + 0.04, 0.12, d + 0.04), Vector3(0.0, top, 0.0), beanie)
-			_box(_head, Vector3(w + 0.05, 0.035, d + 0.05), Vector3(0.0, top - 0.055, 0.0), beanie.darkened(0.2))
+			_hemisphere_part(_head, Vector3(w * 1.16, h * 1.35, d * 1.16), Vector3(0.0, 0.02, 0.004), beanie, Vector3(0.45, 0.0, 0.0))
+			_torus(_head, Vector3(w * 1.2, 1.5, d * 1.2), Vector3(0.0, 0.03, 0.004), beanie.darkened(0.2), Vector3(0.45, 0.0, 0.0))
 		"sun_hat":
 			var hat := clothing_color(head_item)
-			_cylinder(_head, 0.24, 0.015, Vector3(0.0, top - 0.01, 0.0), hat)
-			_cylinder(_head, 0.13, 0.1, Vector3(0.0, top + 0.05, 0.0), hat)
+			_cylinder(_head, 0.24, 0.012, Vector3(0.0, h * 0.3, 0.0), hat)
+			_hemisphere_part(_head, Vector3(w * 1.12, h * 0.9, d * 1.1), Vector3(0.0, h * 0.28, 0.0), hat)
 		"combat_helmet":
 			var helmet := clothing_color(head_item)
-			_box(_head, Vector3(w + 0.06, 0.15, d + 0.07), Vector3(0.0, top + 0.005, 0.005), helmet)
-			_box(_head, Vector3(w + 0.08, 0.03, d + 0.09), Vector3(0.0, top - 0.07, 0.005), helmet.darkened(0.15))
-			_box(_head, Vector3(0.05, 0.04, 0.03), Vector3(0.0, top - 0.01, front - 0.04), Color(0.12, 0.12, 0.13))
+			_hemisphere_part(_head, Vector3(w * 1.28, h * 1.4, d * 1.26), Vector3(0.0, 0.012, 0.008), helmet, Vector3(0.22, 0.0, 0.0))
+			_torus(_head, Vector3(w * 1.3, 1.2, d * 1.28), Vector3(0.0, 0.019, 0.008), helmet.darkened(0.15), Vector3(0.22, 0.0, 0.0))
+			_rounded_plate(_head, Vector3(0.05, 0.04, 0.03), Vector3(0.0, h * 0.36, -d * 0.6), Color(0.12, 0.12, 0.13))
 
 
 func _rebuild_held() -> void:
@@ -316,7 +461,7 @@ func animate(delta: float, speed: float, swimming: bool, crouching: bool, head_p
 
 	_pelvis.position.y = lerpf(_pelvis.position.y, pelvis_y, t)
 	_pelvis.rotation.x = lerp_angle(_pelvis.rotation.x, body_pitch, t)
-	_spine.rotation.x = sin(_breath) * 0.015
+	_spine.rotation.x = sin(_breath) * 0.012
 	for i in 2:
 		var key := "l" if i == 0 else "r"
 		_legs[key].hip.rotation.x = lerp_angle(_legs[key].hip.rotation.x, legs[i], t)
@@ -340,47 +485,98 @@ static func _material(color: Color) -> Material:
 	return Props.material("body_" + color.to_html(false), color)
 
 
-func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, rot: Vector3 = Vector3.ZERO) -> void:
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	_mesh(parent, mesh, pos, color, rot)
+## Front surface (-Z) of an ellipsoid of `size` centred at `center`, at (x, y).
+static func _surface_z(size: Vector3, center: Vector3, x: float, y: float) -> float:
+	var nx := (x - center.x) / (size.x * 0.5)
+	var ny := (y - center.y) / (size.y * 0.5)
+	return center.z - size.z * 0.5 * sqrt(maxf(0.0, 1.0 - nx * nx - ny * ny))
 
 
-func _capsule(parent: Node3D, radius: float, length: float, pos: Vector3, color: Color) -> void:
+static func _unit_sphere() -> SphereMesh:
+	if _sphere == null:
+		_sphere = SphereMesh.new()
+		_sphere.radius = 0.5
+		_sphere.height = 1.0
+		_sphere.radial_segments = SEGMENTS
+		_sphere.rings = RINGS
+	return _sphere
+
+
+static func _unit_hemisphere() -> SphereMesh:
+	if _hemisphere == null:
+		_hemisphere = SphereMesh.new()
+		_hemisphere.radius = 0.5
+		_hemisphere.height = 0.5
+		_hemisphere.is_hemisphere = true
+		_hemisphere.radial_segments = SEGMENTS
+		_hemisphere.rings = RINGS / 2
+	return _hemisphere
+
+
+## A smooth ellipsoid `size` across.
+func _ellipsoid(parent: Node3D, size: Vector3, pos: Vector3, color: Color, rot: Vector3 = Vector3.ZERO) -> void:
+	var instance := _mesh(parent, _unit_sphere(), pos, color, rot)
+	instance.scale = size
+
+
+## The top half of an ellipsoid `size` across (hair, hats); rotate by PI for a lower half (beards).
+func _hemisphere_part(parent: Node3D, size: Vector3, pos: Vector3, color: Color, rot: Vector3 = Vector3.ZERO) -> void:
+	var instance := _mesh(parent, _unit_hemisphere(), pos, color, rot)
+	instance.scale = size
+	instance.material_override = _two_sided(color)
+
+
+## A soft pad for rigid gear like armour plates and pouches.
+func _rounded_plate(parent: Node3D, size: Vector3, pos: Vector3, color: Color) -> void:
+	_ellipsoid(parent, size * Vector3(1.0, 1.0, 1.3), pos, color)
+
+
+func _capsule(parent: Node3D, radius: float, length: float, pos: Vector3, color: Color, rot: Vector3 = Vector3.ZERO) -> void:
 	var mesh := CapsuleMesh.new()
 	mesh.radius = radius
 	mesh.height = maxf(length + radius, radius * 2.0)
-	mesh.radial_segments = 8
-	mesh.rings = 1
-	_mesh(parent, mesh, pos, color)
+	mesh.radial_segments = 14
+	mesh.rings = 4
+	_mesh(parent, mesh, pos, color, rot)
 
 
-func _cylinder(parent: Node3D, radius: float, height: float, pos: Vector3, color: Color) -> void:
+func _cylinder(parent: Node3D, radius: float, height: float, pos: Vector3, color: Color, stretch: Vector3 = Vector3.ONE) -> void:
 	var mesh := CylinderMesh.new()
 	mesh.top_radius = radius
 	mesh.bottom_radius = radius
 	mesh.height = height
-	mesh.radial_segments = 10
+	mesh.radial_segments = 24
 	mesh.rings = 1
-	_mesh(parent, mesh, pos, color)
+	var instance := _mesh(parent, mesh, pos, color)
+	instance.scale = stretch
 
 
-func _sphere(parent: Node3D, radius: float, pos: Vector3, color: Color) -> void:
-	var mesh := SphereMesh.new()
-	mesh.radius = radius
-	mesh.height = radius * 2.0
-	mesh.radial_segments = 8
-	mesh.rings = 4
-	_mesh(parent, mesh, pos, color)
+## A ring (beanie cuff, helmet rim), scaled to fit around the head.
+func _torus(parent: Node3D, stretch: Vector3, pos: Vector3, color: Color, rot: Vector3 = Vector3.ZERO) -> void:
+	var mesh := TorusMesh.new()
+	mesh.inner_radius = 0.47
+	mesh.outer_radius = 0.53
+	mesh.rings = 24
+	mesh.ring_segments = 8
+	var instance := _mesh(parent, mesh, pos, color, rot)
+	instance.scale = stretch
 
 
-func _mesh(parent: Node3D, mesh: Mesh, pos: Vector3, color: Color, rot: Vector3 = Vector3.ZERO) -> void:
+func _mesh(parent: Node3D, mesh: Mesh, pos: Vector3, color: Color, rot: Vector3 = Vector3.ZERO) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	instance.mesh = mesh
 	instance.material_override = _material(color)
 	instance.position = pos
 	instance.rotation = rot
 	parent.add_child(instance)
+	return instance
+
+
+static func _two_sided(color: Color) -> Material:
+	var key := "body2_" + color.to_html(false)
+	var material := Props.material(key, color)
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return material
 
 
 ## A small picture (emblem) facing forward (-Z).
