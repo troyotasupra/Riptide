@@ -7,7 +7,7 @@ extends RefCounted
 const SLOTS := ["head", "torso", "vest", "legs", "feet", "back"]
 const SLOT_NAMES := {"head": "Head", "torso": "Torso", "vest": "Vest", "legs": "Legs", "feet": "Feet", "back": "Back"}
 ## Everyone washes up wearing this.
-const STARTING_OUTFIT := ["tshirt", "shorts", "sandals"]
+const STARTING_OUTFIT := ["tshirt", "shorts", "sandals", "satchel"]
 
 var worn := {}
 
@@ -24,6 +24,8 @@ func wear(stack: Dictionary) -> Dictionary:
 	var previous: Dictionary = worn.get(slot, {})
 	var one := stack.duplicate()
 	one.count = 1
+	if int(one.get("uid", 0)) == 0:
+		one.uid = ItemGrid.new_uid()  # so worn gear can be dragged like anything else
 	worn[slot] = one
 	return previous
 

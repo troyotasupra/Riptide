@@ -1,9 +1,10 @@
 class_name Hud
 extends CanvasLayer
-## The in-game screen: survival bars, clock and compass, hotbar, the interaction
-## prompt (with hold progress and controller-aware button names), objectives,
-## messages, the sleep countdown, the F3 debug overlay, and every panel —
-## backpack, storage, survival book, notes, pause menu and settings.
+## The in-game screen: survival bars, clock and compass, hotbar with item
+## pictures, the interaction prompt (with hold progress and controller-aware
+## button names), objectives, messages, the sleep countdown, the F3 debug
+## overlay, and every panel — the inventory screen, survival book, notes, pause
+## menu and settings.
 
 const MESSAGE_SECONDS := 5.0
 const CARDINALS := ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
@@ -16,10 +17,10 @@ var _sleep_line: Label
 var _messages: Label
 var _temperature: Label
 var _bars := {}
-var _hotbar_labels: Array[Label] = []
-var _hotbar_panels: Array[PanelContainer] = []
-var _inventory: InventoryPanel
-var _storage: ContainerPanel
+var _status: VBoxContainer
+var _hotbar: HBoxContainer
+var _hotbar_views: Array[SlotView] = []
+var _inventory: InventoryScreen
 var _book: BookPanel
 var _note: NotePanel
 var _pause: PauseMenu
@@ -88,8 +89,9 @@ func _ready() -> void:
 	sleep_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	sleep_label.grow_vertical = Control.GROW_DIRECTION_BOTH
 
-	_inventory = _panel(InventoryPanel.new())
-	_storage = _panel(ContainerPanel.new())
+	_inventory = InventoryScreen.new()
+	_inventory.visible = false
+	add_child(_inventory)
 	_book = _panel(BookPanel.new())
 	_note = _panel(NotePanel.new())
 	_pause = _panel(PauseMenu.new())
@@ -110,17 +112,21 @@ func _ready() -> void:
 	_lan_addresses = ", ".join(addresses)
 
 	_camp = GameState.world.camp
-	_storage.camp = _camp
+	_inventory.camp = _camp
 	_book.camp = _camp
 	_camp.container_opened.connect(_on_container_opened)
-	_camp.container_changed.connect(func(_id: String) -> void: _storage.refresh())
+	_camp.container_changed.connect(func(id: String) -> void:
+		if _inventory.container_id == id:
+			_inventory.refresh())
 	_camp.container_closed.connect(func(id: String) -> void:
-		if _storage.container_id == id:
-			_storage.container_id = ""
-			_storage.visible = false
-			_sync_ui_state())
+		if _inventory.container_id == id:
+			_inventory.container_id = ""
+			_inventory.refresh())
 	_camp.recipes_changed.connect(func() -> void: _book.refresh())
 	_camp.sleeping_changed.connect(func(asleep: bool) -> void: _sleep_overlay.visible = asleep)
+	Icons.icon_ready.connect(func(_id: String) -> void:
+		for view: SlotView in _hotbar_views:
+			view.refresh_icon())
 
 
 func _panel(panel: PanelContainer) -> Variant:
@@ -146,6 +152,7 @@ func _build_bars() -> void:
 	var bars := VBoxContainer.new()
 	bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bars)
+	_status = bars
 	for spec: Array in [
 			["health", "Health", Color(0.85, 0.25, 0.25)],
 			["hunger", "Food", Color(0.90, 0.60, 0.20)],
@@ -178,26 +185,18 @@ func _build_bars() -> void:
 
 
 func _build_hotbar() -> void:
-	var hotbar := HBoxContainer.new()
-	hotbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hotbar.add_theme_constant_override("separation", 4)
-	add_child(hotbar)
-	for i in Inventory.HOTBAR_SIZE:
-		var panel := PanelContainer.new()
-		panel.custom_minimum_size = Vector2(88.0, 50.0)
-		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var label := Label.new()
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		label.add_theme_font_size_override("font_size", 12)
-		panel.add_child(label)
-		hotbar.add_child(panel)
-		_hotbar_panels.append(panel)
-		_hotbar_labels.append(label)
-	hotbar.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 12)
-	hotbar.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	hotbar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_hotbar = HBoxContainer.new()
+	_hotbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hotbar.add_theme_constant_override("separation", 5)
+	add_child(_hotbar)
+	for i in Pack.HOTBAR_SIZE:
+		var view := SlotView.new()
+		view.setup("hotbar", i, "", "", 62.0)
+		_hotbar.add_child(view)
+		_hotbar_views.append(view)
+	_hotbar.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 12)
+	_hotbar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_hotbar.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 
 # --- panels --------------------------------------------------------------------
@@ -219,9 +218,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_close_all()
 		else:
 			handled = false
-	elif _storage.visible:
+	elif _inventory.visible:
 		if cancel or event.is_action_pressed("inventory") or (event is InputEventKey and event.is_action_pressed("interact")):
-			_storage.close()
+			_close_all()
 		else:
 			handled = false
 	elif _note.visible:
@@ -229,13 +228,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			_close_all()
 		else:
 			handled = false
-	elif _inventory.visible or _book.visible:
-		if cancel or (_inventory.visible and event.is_action_pressed("inventory")) or (_book.visible and event.is_action_pressed("book")):
+	elif _book.visible:
+		if cancel or event.is_action_pressed("book"):
 			_close_all()
 		elif event.is_action_pressed("inventory"):
 			_show_only(_inventory)
-		elif event.is_action_pressed("book"):
-			_show_only(_book)
 		else:
 			handled = false
 	elif event.is_action_pressed("inventory"):
@@ -253,24 +250,24 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-func _show_only(panel: PanelContainer) -> void:
-	for other: PanelContainer in [_inventory, _book, _note, _pause, _settings]:
+func _show_only(panel: Control) -> void:
+	for other: Control in [_inventory, _book, _note, _pause, _settings]:
 		other.visible = other == panel
-	if _storage.visible and panel != null:
-		_storage.close()
-	if panel == _inventory:
-		UiKit.focus_first(_inventory)
+	_hotbar.visible = panel == null
 
 
 func _close_all() -> void:
 	_show_only(null)
-	if _storage.visible:
-		_storage.close()
 	_sync_ui_state()
 
 
 func _sync_ui_state() -> void:
-	var open := _inventory.visible or _storage.visible or _book.visible or _note.visible or _pause.visible or _settings.visible
+	var open := _inventory.visible or _book.visible or _note.visible or _pause.visible or _settings.visible
+	_hotbar.visible = not open
+	# Full-screen panels get a clean backdrop: no compass, objectives or bars behind them.
+	for overlay: Control in [_info, _clock, _markers, _prompt, _status]:
+		if overlay != null:
+			overlay.visible = not open
 	if open == GameState.ui_open:
 		return
 	GameState.ui_open = open
@@ -281,8 +278,10 @@ func _sync_ui_state() -> void:
 
 
 func _on_container_opened(id: String, title: String) -> void:
-	_show_only(null)
-	_storage.open(id, title)
+	_inventory.container_id = id
+	_inventory.container_title = title
+	_show_only(_inventory)
+	_inventory.refresh()
 	_sync_ui_state()
 
 
@@ -299,7 +298,6 @@ func _bind(survivor: Survivor) -> void:
 		_bound.note_requested.connect(_on_note_requested)
 		_bound.book_requested.connect(_on_book_requested)
 	_inventory.survivor = _bound
-	_storage.survivor = _bound
 	_book.survivor = _bound
 	_refresh_items()
 
@@ -326,12 +324,11 @@ func _on_message(message: String) -> void:
 func _refresh_items() -> void:
 	if _bound == null:
 		return
-	for i in Inventory.HOTBAR_SIZE:
-		var slot = _bound.inventory.slots[i]
-		_hotbar_labels[i].text = "%d" % (i + 1) if slot == null else InventoryPanel.slot_text(slot)
-		_hotbar_panels[i].modulate = Color(1.0, 0.9, 0.5) if i == _bound.selected_slot else Color(1.0, 1.0, 1.0, 0.75)
-	_inventory.refresh()
-	_storage.refresh()
+	for i in Pack.HOTBAR_SIZE:
+		_hotbar_views[i].show_stack(_bound.inventory.hotbar[i])
+		_hotbar_views[i].set_state(i == _bound.selected_slot, false, Color.TRANSPARENT)
+	if _inventory.visible:
+		_inventory.refresh()
 	_book.refresh()
 
 
@@ -383,7 +380,7 @@ func _process(delta: float) -> void:
 		heading = fposmod(rad_to_deg(atan2(forward.x, -forward.z)), 360.0)
 	_clock.text = "%s    %s %03d°" % [DayNight.clock_text(GameState.time_of_day()), CARDINALS[int(round(heading / 45.0)) % 8], int(heading)]
 	_markers.text = _chart_markers(here) if _camp.chart_read else ""
-	_prompt.text = _prompt_text(player)
+	_prompt.text = "" if GameState.ui_open else _prompt_text(player)
 
 	var status: Dictionary = _camp.sleep_status
 	if float(status.left) >= 0.0:
@@ -442,7 +439,7 @@ func _update_info(player: Player) -> void:
 		lines.append("%s paddle%s" % [Controls.tag("paddle"), " — WASD steers, %s pulls hard" % Controls.tag("sprint") if player.paddling else ""])
 	if Settings.show_debug:
 		lines.append("")
-		lines.append("RIPTIDE M1b.5 · %s · peer %d" % ["HOST" if multiplayer.is_server() else "CREW", multiplayer.get_unique_id()])
+		lines.append("RIPTIDE M1c-pre · %s · peer %d" % ["HOST" if multiplayer.is_server() else "CREW", multiplayer.get_unique_id()])
 		if multiplayer.is_server():
 			lines.append("Join: %s port %d" % [_lan_addresses, Net.port])
 		lines.append("FPS %d" % Engine.get_frames_per_second())

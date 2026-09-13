@@ -44,7 +44,13 @@ private networks.
 | Q | D-pad ↓ | Drop the held item |
 | G | D-pad ↑ | Give the held item to the crewmate you're looking at |
 | F | Y | Paddle a raft |
-| I / Tab | View | Backpack (what you wear + your pack) |
+| Tab | View | Inventory (gear, pockets/rig/backpack grids, hotbar, open container) |
+
+Inventory: drag items between grids, the hotbar and containers · R (or RB) rotates
+while dragging · Shift-drag moves half a stack · Ctrl-click or double-click sends an
+item across (pack ⇄ container) · right-click for actions (use, wear, split, drop) ·
+drag outside the panels to drop. On a controller: A pick up/place, Y send across,
+X actions, B cancel.
 | B | D-pad ← | Survival book (crafting) |
 | Esc | Menu | Pause · settings · save and leave |
 | F3 | — | Debug info |

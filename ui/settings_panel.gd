@@ -21,6 +21,7 @@ func _ready() -> void:
 	_slider(box, "Effects volume", "sfx_volume", 0.0, 1.0, 0.05)
 	_slider(box, "Ocean volume", "ambience_volume", 0.0, 1.0, 0.05)
 	_check(box, "Fullscreen", "fullscreen")
+	_choice(box, "Graphics quality", "graphics", ["Low", "Medium", "High"])
 	UiKit.button(box, "Back", close)
 	visibility_changed.connect(func() -> void:
 		if visible:
@@ -54,6 +55,23 @@ func _slider(parent: Control, text: String, key: String, low: float, high: float
 		Settings.set(key, value)
 		Settings.apply()
 		show.call(value))
+
+
+func _choice(parent: Control, text: String, key: String, options: Array) -> void:
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+	var label := Label.new()
+	label.text = text
+	label.custom_minimum_size = Vector2(210.0, 0.0)
+	row.add_child(label)
+	var picker := OptionButton.new()
+	for option: String in options:
+		picker.add_item(option)
+	picker.selected = int(Settings.get(key))
+	picker.item_selected.connect(func(index: int) -> void:
+		Settings.set(key, index)
+		Settings.apply())
+	row.add_child(picker)
 
 
 func _check(parent: Control, text: String, key: String) -> void:

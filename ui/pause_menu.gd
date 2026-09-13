@@ -43,7 +43,7 @@ func _on_shown() -> void:
 	else:
 		_invite.text = "Crew: %d/%d" % [Net.roster.size(), Net.MAX_PLAYERS]
 	if Controls.using_gamepad:
-		_controls.text = "Left stick move · Right stick look · A jump · B crouch · L3 sprint\nX interact (hold to gather) · RT use / swing / build · LT drop in backpack\nY paddle · LB/RB hotbar · D-pad ↑ give · ↓ drop · ← book · → rotate\nView backpack · Menu pause"
+		_controls.text = "Left stick move · Right stick look · A jump · B crouch · L3 sprint\nX interact (hold to gather) · RT use / swing / build · LT drop in backpack\nY paddle · LB/RB hotbar · D-pad ↑ give · ↓ drop · ← book · → rotate\nView inventory · Menu pause"
 	else:
-		_controls.text = "WASD move · Mouse look · Space jump · C crouch · Shift sprint (and paddle hard)\nE interact (hold to gather) · Left click use / swing / build · R rotate build\nF paddle · 1–8 or wheel hotbar · Q drop · G give to crewmate\nI backpack · B survival book · F3 debug info · Esc pause"
+		_controls.text = "WASD move · Mouse look · Space jump · C crouch · Shift sprint (and paddle hard)\nE interact (hold to gather) · Left click use / swing / build · R rotate build\nF paddle · 1–8 or wheel hotbar · Q drop · G give to crewmate\nTab inventory · B survival book · F3 debug info · Esc pause"
 	UiKit.focus_first(self)

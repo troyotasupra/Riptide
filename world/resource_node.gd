@@ -15,7 +15,7 @@ func setup(spot: Dictionary) -> void:
 	interact_id = "res:" + String(spot.id)
 	position = spot.pos
 	rotation.y = spot.yaw
-	var built := Props.build(kind)
+	var built := Props.build(kind, hash(spot.id))
 	var visual: Node3D = built.root
 	visual.scale = Vector3.ONE * float(spot.scale)
 	add_child(visual)

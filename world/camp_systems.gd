@@ -1,10 +1,10 @@
 class_name CampSystems
 extends Node3D
-## The crew's shared camp, owned by the host: containers (sea chest, lockers,
-## crates, dropped bags), cooking and drying stations, placed structures,
-## one-off pickups, recipes the crew knows, the sea chart, where each crew
-## member respawns, and the vote to sleep through the night. Clients keep
-## mirrors and send requests.
+## The crew's shared camp, owned by the host: storage grids (sea chest,
+## lockers, crates, dropped bags), cooking and drying stations, placed
+## structures, one-off pickups, recipes the crew knows, the sea chart, where
+## each crew member respawns, and the vote to sleep through the night. It also
+## applies every drag-and-drop item move. Clients keep mirrors and send requests.
 
 signal container_opened(id: String, title: String)
 signal container_changed(id: String)
@@ -22,8 +22,15 @@ const STRUCTURE_REACH := 7.0
 const SLEEP_HUNGER := 15.0
 const SLEEP_THIRST := 20.0
 const SLEEP_HEAL := 30.0
-const BAG_SIZE := 24
+const BAG_SIZE := Vector2i(10, 8)
 const BAG_MERGE_RANGE := 1.5
+## How far from an open container a crew member can still move things in and out.
+const CONTAINER_RANGE := 6.0
+const BOAT_STORAGE := {
+	"chest": {"title": "Sea chest", "size": Vector2i(8, 6)},
+	"lockers": {"title": "Crew lockers", "size": Vector2i(8, 6)},
+	"compartment": {"title": "Locked compartment", "size": Vector2i(5, 4)},
+}
 
 const PICKUPS := {
 	"machete": {"item": "machete", "count": 1, "label": "Take the machete"},
@@ -47,7 +54,7 @@ const LOCKER_CONTENTS := [["rain_jacket", 1], ["cargo_pants", 1], ["hiking_boots
 const COMPARTMENT_CONTENTS := [["pistol", 1], ["pistol_ammo", 15], ["plate_carrier", 1], ["combat_helmet", 1]]
 
 var world: Node3D
-## id -> Inventory (the host's are the truth; clients mirror what they open)
+## id -> ItemGrid (the host's are the truth; clients mirror what they open)
 var containers := {}
 var container_titles := {}
 ## id -> CookStation
@@ -72,7 +79,10 @@ var local_asleep := false
 var open_container := ""
 var sleep_status := {"left": -1.0, "asleep": 0, "needed": 0}
 
+## container id -> {peer id: true}
 var _viewers := {}
+## peer id -> the container they have open
+var _open_by_peer := {}
 var _next_structure := 1
 var _next_bag := 1
 var _skip_at := 0.0
@@ -89,16 +99,27 @@ func _ready() -> void:
 
 ## Host, fresh world: stock the abandoned sailboat.
 func setup_new_world() -> void:
-	var chest := _make_container("boat:Sailboat:chest", 16, "Sea chest")
-	for entry: Array in STASH:
-		chest.add(entry[0], entry[1], Ocean.time)
-	var lockers := _make_container("boat:Sailboat:lockers", 16, "Crew lockers")
-	for entry: Array in LOCKER_CONTENTS:
-		lockers.add(entry[0], entry[1], Ocean.time)
-	var compartment := _make_container("boat:Sailboat:compartment", 6, "Locked compartment")
-	for entry: Array in COMPARTMENT_CONTENTS:
-		compartment.add(entry[0], entry[1], Ocean.time)
+	_stock_boat()
 	stations["boat:Sailboat:stove"] = CookStation.new("cook")
+
+
+func _stock_boat() -> void:
+	var contents := {"chest": STASH, "lockers": LOCKER_CONTENTS, "compartment": COMPARTMENT_CONTENTS}
+	for part: String in BOAT_STORAGE:
+		var info: Dictionary = BOAT_STORAGE[part]
+		var grid := _make_container("boat:Sailboat:" + part, info.size, info.title)
+		for entry: Array in contents[part]:
+			grid.add_stack(fresh_stack(entry[0], entry[1]))
+
+
+## A new stack of `id` with its spoil time and charges filled in.
+static func fresh_stack(id: String, count: int) -> Dictionary:
+	var item := ItemTable.get_item(id)
+	var spoil: float = item.get("spoil", 0.0)
+	var stack := {"id": id, "count": count, "spoils_at": Ocean.time + spoil if spoil > 0.0 else 0.0}
+	if item.has("uses"):
+		stack["uses"] = int(item.uses)
+	return stack
 
 
 func create_pickups(shape: CampIsland) -> void:
@@ -139,11 +160,10 @@ func to_save(now: float) -> Dictionary:
 		saved_stations[id] = (stations[id] as CookStation).to_dict(now)
 	var saved_containers := {}
 	for id: String in containers:
-		var inventory: Inventory = containers[id]
-		var copy := Inventory.new(inventory.slots.size())
-		copy.from_dict(inventory.to_dict())
+		var copy := ItemGrid.new()
+		copy.from_dict((containers[id] as ItemGrid).to_dict())
 		copy.shift_times(-now)
-		saved_containers[id] = {"size": inventory.slots.size(), "data": copy.to_dict(), "title": container_titles.get(id, "")}
+		saved_containers[id] = {"grid": copy.to_dict(), "title": container_titles.get(id, "")}
 	return {
 		"structures": structures.duplicate(true),
 		"next_structure": _next_structure,
@@ -168,9 +188,15 @@ func from_save(data: Dictionary, now: float) -> void:
 	var saved_containers: Dictionary = data.get("containers", {})
 	for id: String in saved_containers:
 		var entry: Dictionary = saved_containers[id]
-		var inventory := _make_container(id, entry.size, entry.title)
-		inventory.from_dict(entry.data)
-		inventory.shift_times(now)
+		if not entry.has("grid"):
+			continue  # saved before grid inventories; the stock is replaced below
+		var grid := ItemGrid.new()
+		grid.from_dict(entry.grid)
+		grid.shift_times(now)
+		containers[id] = grid
+		container_titles[id] = entry.get("title", "Storage")
+	if not containers.has("boat:Sailboat:chest"):
+		_stock_boat()
 	var saved_bags: Dictionary = data.get("bags", {})
 	for id: String in saved_bags:
 		if containers.has("bag:" + id):
@@ -182,6 +208,8 @@ func from_save(data: Dictionary, now: float) -> void:
 		station.from_dict(saved_stations[id], now)
 		stations[id] = station
 		_apply_station_visual(id)
+	if not stations.has("boat:Sailboat:stove"):
+		stations["boat:Sailboat:stove"] = CookStation.new("cook")
 	for id: String in data.get("picked", []):
 		_apply_picked(id)
 	for id: String in data.get("recipes", []):
@@ -192,11 +220,11 @@ func from_save(data: Dictionary, now: float) -> void:
 	respawns = data.get("respawns", {})
 
 
-func _make_container(id: String, size: int, title: String) -> Inventory:
-	var inventory := Inventory.new(size)
-	containers[id] = inventory
+func _make_container(id: String, size: Vector2i, title: String) -> ItemGrid:
+	var grid := ItemGrid.new(size.x, size.y)
+	containers[id] = grid
 	container_titles[id] = title
-	return inventory
+	return grid
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -239,7 +267,7 @@ func _physics_process(delta: float) -> void:
 	if _spoil_accum >= SPOIL_CHECK:
 		_spoil_accum = 0.0
 		for id: String in containers:
-			if (containers[id] as Inventory).spoil_expired(Ocean.time):
+			if (containers[id] as ItemGrid).spoil_expired(Ocean.time):
 				_push_container(id)
 	_autosave_accum += delta
 	if _autosave_accum >= AUTOSAVE_SECONDS:
@@ -291,6 +319,8 @@ func part_prompt(boat: Sailboat, part_name: String, player: Node) -> String:
 			return station_prompt(container_id, "Galley stove", player)
 		"chart":
 			return "Chart table — islands marked on your compass" if chart_read else "Study the chart table"
+		"helm":
+			return "Ship's wheel — she won't sail until the hull and sail are repaired"
 	return ""
 
 
@@ -334,7 +364,7 @@ func station_prompt(id: String, title: String, player: Node) -> String:
 static func held_item(player: Node) -> String:
 	if player == null or player.survivor == null:
 		return ""
-	var slot = player.survivor.inventory.slots[player.survivor.selected_slot]
+	var slot = player.survivor.inventory.hotbar[player.survivor.selected_slot]
 	return "" if slot == null else slot.id
 
 
@@ -363,6 +393,8 @@ func interact_boat_part(survivor: Survivor, boat: Sailboat, part_name: String, s
 			_use_station(survivor, id, slot, at)
 		"chart":
 			read_chart(survivor)
+		"helm":
+			survivor.notify("The sail is in tatters and she's taking on water. She needs repairs before she'll sail.")
 
 
 func interact_structure(survivor: Survivor, id: String, slot: int) -> void:
@@ -384,7 +416,7 @@ func pickup(survivor: Survivor, id: String) -> void:
 		return
 	var entry: Dictionary = PICKUPS[id]
 	if survivor.inventory.add(entry.item, entry.count, Ocean.time) > 0:
-		survivor.notify("Your pack is full.")
+		survivor.notify("You have no room for that.")
 		return
 	var node: Node3D = pickup_nodes.get(id)
 	if node != null:
@@ -459,14 +491,19 @@ func open_container_for(survivor: Survivor, id: String) -> void:
 	if not containers.has(id):
 		return
 	var peer := survivor.player.peer_id
+	var previous: String = _open_by_peer.get(peer, "")
+	if not previous.is_empty() and _viewers.has(previous):
+		_viewers[previous].erase(peer)
 	if not _viewers.has(id):
 		_viewers[id] = {}
 	_viewers[id][peer] = true
+	_open_by_peer[peer] = id
 	_send_container(id, peer, true)
 
 
 func forget_peer(peer_id: int) -> void:
 	sleeping.erase(peer_id)
+	_open_by_peer.erase(peer_id)
 	for id: String in _viewers:
 		_viewers[id].erase(peer_id)
 
@@ -476,15 +513,16 @@ func forget_peer(peer_id: int) -> void:
 func drop_items(player: Player, stacks: Array, title: String) -> void:
 	var left: Array = []
 	if player.platform is Sailboat:
-		var lockers: Inventory = containers.get("boat:%s:lockers" % player.platform.name)
+		var lockers_id := "boat:%s:lockers" % player.platform.name
+		var lockers: ItemGrid = containers.get(lockers_id)
 		for stack: Dictionary in stacks:
 			var remaining := lockers.add_stack(stack) if lockers != null else int(stack.count)
 			if remaining > 0:
 				var rest := stack.duplicate()
 				rest.count = remaining
 				left.append(rest)
-		if left.size() < stacks.size():
-			_push_container("boat:%s:lockers" % player.platform.name)
+		if left.size() < stacks.size() or _total(left) < _total(stacks):
+			_push_container(lockers_id)
 			player.survivor.notify("Stowed in the crew lockers.")
 		if left.is_empty():
 			return
@@ -493,22 +531,54 @@ func drop_items(player: Player, stacks: Array, title: String) -> void:
 	var at := player.world_transform().origin
 	var ground: float = world.ground_height(at.x, at.z)
 	var pos := Vector3(at.x, 0.15, at.z) if ground == -INF or at.y < 0.0 else Vector3(at.x, maxf(at.y, ground) + 0.05, at.z)
-	var target_id := ""
+	var pending: Array = left
 	for id: String in bags:
 		if Vector3(bags[id].pos).distance_to(pos) < BAG_MERGE_RANGE:
-			target_id = id
+			pending = _fill_bag(id, pending)
 			break
-	if target_id.is_empty():
-		target_id = "b%d" % _next_bag
+	# Whatever doesn't fit spills into more bags in a ring around the spot.
+	var spill := 0
+	while not pending.is_empty():
+		var id := "b%d" % _next_bag
 		_next_bag += 1
-		_make_container("bag:" + target_id, BAG_SIZE, title)
-		_spawn_bag(target_id, pos, title)
-		Net.send_to_ready(self, "_spawn_bag", [target_id, pos, title])
-	var bag: Inventory = containers["bag:" + target_id]
-	for stack: Dictionary in left:
-		bag.add_stack(stack)
+		var spot := pos
+		if spill > 0:
+			var angle := spill * 2.4
+			spot += Vector3(cos(angle), 0.0, sin(angle)) * (0.9 + 0.25 * spill)
+			var ground_here: float = world.ground_height(spot.x, spot.z)
+			if ground_here != -INF and pos.y > 0.2:
+				spot.y = maxf(pos.y - 0.5, ground_here) + 0.05
+		_make_container("bag:" + id, BAG_SIZE, title)
+		_spawn_bag(id, spot, title)
+		Net.send_to_ready(self, "_spawn_bag", [id, spot, title])
+		var before := _total(pending)
+		pending = _fill_bag(id, pending)
+		spill += 1
+		if _total(pending) == before:
+			push_warning("An item is too big for any bag: %s" % str(pending))
+			break
 	world.sfx_at("drop", pos)
-	_push_container("bag:" + target_id)
+
+
+## Puts `stacks` into bag `id`; returns what didn't fit.
+func _fill_bag(id: String, stacks: Array) -> Array:
+	var bag: ItemGrid = containers["bag:" + id]
+	var rest: Array = []
+	for stack: Dictionary in stacks:
+		var remaining := bag.add_stack(stack)
+		if remaining > 0:
+			var piece := stack.duplicate()
+			piece.count = remaining
+			rest.append(piece)
+	_push_container("bag:" + id)
+	return rest
+
+
+static func _total(stacks: Array) -> int:
+	var total := 0
+	for stack: Dictionary in stacks:
+		total += int(stack.count)
+	return total
 
 
 func _use_station(survivor: Survivor, id: String, slot: int, at: Vector3) -> void:
@@ -516,12 +586,12 @@ func _use_station(survivor: Survivor, id: String, slot: int, at: Vector3) -> voi
 	if station == null:
 		return
 	var now: float = Ocean.time
-	var inventory := survivor.inventory
+	var pack := survivor.inventory
 	if station.has_done(now):
 		var names: PackedStringArray = []
 		for result in station.take_done(now):
-			if inventory.add(result, 1, now) > 0:
-				survivor.notify("Your pack is full — the %s is ruined." % ItemTable.display_name(result).to_lower())
+			if pack.add(result, 1, now) > 0:
+				survivor.notify("You have no room — the %s is ruined." % ItemTable.display_name(result).to_lower())
 			else:
 				names.append(ItemTable.display_name(result))
 		if not names.is_empty():
@@ -530,12 +600,12 @@ func _use_station(survivor: Survivor, id: String, slot: int, at: Vector3) -> voi
 		survivor.push_inventory()
 		_broadcast_station(id)
 		return
-	var held = inventory.slots[slot]
+	var held = pack.hotbar[slot]
 	var held_id: String = "" if held == null else held.id
 	var item := ItemTable.get_item(held_id)
 	if station.needs_fire() and item.has("fuel"):
 		if station.add_fuel(item.fuel):
-			inventory.take_from_slot(slot, 1)
+			pack.take(int(held.uid), 1)
 			survivor.notify("Added %s — %ds of fuel" % [String(item.name).to_lower(), int(station.fuel)])
 			world.sfx_at("thud", at)
 			survivor.push_inventory()
@@ -547,7 +617,7 @@ func _use_station(survivor: Survivor, id: String, slot: int, at: Vector3) -> voi
 		if station.needs_fire() and not station.lit:
 			survivor.notify("Light the fire first.")
 		elif station.start(held_id, now):
-			inventory.take_from_slot(slot, 1)
+			pack.take(int(held.uid), 1)
 			survivor.notify("%s the %s..." % ["Drying" if station.mode == "dry" else "Heating", String(item.name).to_lower()])
 			world.sfx_at("pot", at)
 			survivor.push_inventory()
@@ -559,15 +629,14 @@ func _use_station(survivor: Survivor, id: String, slot: int, at: Vector3) -> voi
 		if station.fuel <= 0.0:
 			survivor.notify("Hold driftwood or a log and press on it to add fuel.")
 			return
-		var lighter_slot := inventory.first_slot_of("lighter")
-		if lighter_slot == -1:
+		var lighter := pack.find_first("lighter")
+		if lighter.is_empty():
 			survivor.notify("You need something to light it with.")
 			return
 		station.light()
-		var lighter: Dictionary = inventory.slots[lighter_slot]
 		lighter.uses = int(lighter.get("uses", 1)) - 1
 		if lighter.uses <= 0:
-			inventory.slots[lighter_slot] = null
+			pack.take(int(lighter.uid))
 			survivor.notify("The fire catches — and the lighter sputters out for good.")
 		else:
 			survivor.notify("The fire catches. (Lighter: %d uses left)" % lighter.uses)
@@ -696,14 +765,15 @@ func _send_container(id: String, peer: int, opening: bool) -> void:
 		else:
 			container_changed.emit(id)
 	else:
-		_container_contents.rpc_id(peer, id, container_titles.get(id, "Storage"), containers[id].to_dict(), opening)
+		_container_contents.rpc_id(peer, id, container_titles.get(id, "Storage"), (containers[id] as ItemGrid).to_dict(), opening)
 
 
 ## Host: an emptied bag vanishes for everyone, closing it on anyone looking inside.
 func _remove_bag_if_empty(id: String) -> void:
-	if not id.begins_with("bag:") or not (containers[id] as Inventory).is_empty():
+	if not id.begins_with("bag:") or not containers.has(id) or not (containers[id] as ItemGrid).is_empty():
 		return
 	for peer: int in _viewers.get(id, {}):
+		_open_by_peer.erase(peer)
 		if peer == multiplayer.get_unique_id():
 			_close_container(id)
 		else:
@@ -720,30 +790,193 @@ func _sender_player() -> Player:
 	return world.players_root.get_node_or_null(str(sender)) as Player
 
 
+## The pack, or a container this player has open and is still near. Null if not allowed.
+func _source_for(player: Player, container_id: String) -> Object:
+	if container_id.is_empty():
+		return player.survivor.inventory
+	if _may_use(player, container_id):
+		return containers[container_id]
+	return null
+
+
+## Has this player opened container `id`, and are they still within reach of it?
+func _may_use(player: Player, id: String) -> bool:
+	if not containers.has(id) or not _viewers.get(id, {}).has(player.peer_id):
+		return false
+	var bits := id.split(":")
+	var spot := Vector3.INF
+	match bits[0]:
+		"boat":
+			var boat := world.find_boat(bits[1]) as Sailboat
+			if boat != null and bits.size() > 2 and boat.parts.has(bits[2]):
+				spot = (boat.parts[bits[2]] as Node3D).global_position
+		"struct":
+			if structures.has(bits[1]):
+				spot = structures[bits[1]].pos
+		"bag":
+			if bags.has(bits[1]):
+				spot = bags[bits[1]].pos
+	return spot == Vector3.INF or player.world_transform().origin.distance_to(spot) <= CONTAINER_RANGE
+
+
+## Turns a UI drop target into an ItemMoves place. Empty if not allowed.
+## {"area": "hotbar", "index"} · {"area": "pockets"|"rig"|"backpack", "x", "y", "rot"}
+## · {"area": "container", "container", "x", "y", "rot"}
+func _place_for(player: Player, target: Dictionary) -> Dictionary:
+	var pack := player.survivor.inventory
+	var area: String = target.get("area", "")
+	if area == "hotbar":
+		return {"kind": "hotbar", "pack": pack, "index": int(target.get("index", -1))}
+	var grid: ItemGrid = null
+	if area == "container":
+		var id: String = target.get("container", "")
+		if _may_use(player, id):
+			grid = containers[id]
+	else:
+		grid = pack.grid(area)
+	if grid == null:
+		return {}
+	return {"kind": "grid", "grid": grid, "x": int(target.get("x", 0)), "y": int(target.get("y", 0)), "rot": bool(target.get("rot", false))}
+
+
+func _after_item_change(player: Player, container_ids: Array) -> void:
+	player.survivor.push_inventory()
+	for id in container_ids:
+		if not String(id).is_empty() and containers.has(id):
+			_push_container(id)
+			_remove_bag_if_empty(id)
+
+
 # --- requests from crew members (host validates) ------------------------------
 
+## Drag and drop: move `count` (0 = all) of item `uid` from the pack ("") or an
+## open container to `target`.
 @rpc("any_peer", "call_local", "reliable")
-func request_transfer(id: String, from_container: bool, slot: int) -> void:
+func request_move_item(source_container: String, uid: int, count: int, target: Dictionary) -> void:
 	if not multiplayer.is_server():
 		return
 	var player := _sender_player()
-	if player == null or not containers.has(id) or not _viewers.get(id, {}).has(player.peer_id):
+	if player == null:
 		return
-	var container: Inventory = containers[id]
+	var source := _source_for(player, source_container)
+	var place := _place_for(player, target)
+	if source == null or place.is_empty():
+		return
+	ItemMoves.move(source, uid, count, place)
+	_after_item_change(player, [source_container, target.get("container", "")])
+
+
+## Ctrl-click / controller Y: send an item across — pack ⇄ open container, or
+## hotbar ⇄ storage when nothing is open.
+@rpc("any_peer", "call_local", "reliable")
+func request_quick_move(source_container: String, uid: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var player := _sender_player()
+	if player == null:
+		return
 	var pack := player.survivor.inventory
-	var source := container if from_container else pack
-	var target := pack if from_container else container
-	if slot < 0 or slot >= source.slots.size() or source.slots[slot] == null:
+	var open: String = _open_by_peer.get(player.peer_id, "")
+	if not source_container.is_empty():
+		var source := _source_for(player, source_container)
+		if source != null:
+			ItemMoves.quick_move(source, uid, pack)
+		_after_item_change(player, [source_container])
 		return
-	var stack := source.take_from_slot(slot, source.slots[slot].count)
-	var left := target.add_stack(stack)
-	if left > 0:
-		stack.count = left
-		source.add_stack(stack)
-		player.survivor.notify("No room for all of it.")
-	player.survivor.push_inventory()
-	_push_container(id)
-	_remove_bag_if_empty(id)
+	if not open.is_empty() and containers.has(open):
+		ItemMoves.quick_move(pack, uid, containers[open])
+		_after_item_change(player, [open])
+		return
+	var where := pack.locate(uid)
+	if where.is_empty():
+		return
+	if where.area == "hotbar":
+		var piece := pack.take(uid)
+		var left := pack.add_to_storage(piece)
+		if left > 0:
+			var rest := piece.duplicate()
+			rest.count = left
+			pack.hotbar[where.index] = rest
+	else:
+		var index := pack.hotbar.find(null)
+		if index >= 0:
+			ItemMoves.move(pack, uid, 0, {"kind": "hotbar", "pack": pack, "index": index})
+	_after_item_change(player, [])
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_split_item(source_container: String, uid: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var player := _sender_player()
+	if player == null:
+		return
+	var source := _source_for(player, source_container)
+	if source is ItemGrid:
+		source.split(uid)
+	elif source is Pack:
+		var where: Dictionary = source.locate(uid)
+		if where.is_empty():
+			return
+		if where.area == "hotbar":
+			var stack: Dictionary = source.hotbar[where.index]
+			if int(stack.count) >= 2:
+				var half: Dictionary = source.take(uid, int(stack.count) / 2)
+				var left: int = source.add_to_storage(half)
+				if left > 0:
+					stack.count += left
+		else:
+			source.grid(where.area).split(uid)
+	_after_item_change(player, [source_container])
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_drop_item(source_container: String, uid: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var player := _sender_player()
+	if player == null:
+		return
+	var source := _source_for(player, source_container)
+	if source == null:
+		return
+	var stack: Dictionary = source.take(uid)
+	if stack.is_empty():
+		return
+	drop_items(player, [stack], "%s's dropped items" % player.display_name)
+	_after_item_change(player, [source_container])
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_wear_item(source_container: String, uid: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var player := _sender_player()
+	if player == null:
+		return
+	if not source_container.is_empty():
+		# Pull it into the pack first so wearing works the same from anywhere.
+		var source := _source_for(player, source_container)
+		if source == null:
+			return
+		var stack: Dictionary = source.take(uid)
+		if stack.is_empty() or ItemTable.category(stack.id) != "wearable":
+			if not stack.is_empty():
+				source.add_stack(stack)
+			return
+		var pack := player.survivor.inventory
+		var index := pack.hotbar.find(null)
+		if index >= 0:
+			pack.hotbar[index] = stack
+		elif pack.add_to_storage(stack) > 0:
+			source.add_stack(stack)
+			player.survivor.notify("Make some room in your pack to put that on.")
+			_after_item_change(player, [source_container])
+			return
+		uid = int(pack.find_first(stack.id).get("uid", 0)) if pack.get_stack(int(stack.uid)).is_empty() else int(stack.uid)
+		_push_container(source_container)
+	player.survivor.wear(uid)
+	_after_item_change(player, [source_container])
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -753,6 +986,8 @@ func request_close(id: String) -> void:
 	var player := _sender_player()
 	if player != null and _viewers.has(id):
 		_viewers[id].erase(player.peer_id)
+		if _open_by_peer.get(player.peer_id, "") == id:
+			_open_by_peer.erase(player.peer_id)
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -771,13 +1006,16 @@ func request_craft(recipe_id: String) -> void:
 		survivor.notify("You don't have everything for that.")
 		return
 	var recipe: Dictionary = RecipeTable.RECIPES[recipe_id]
-	var trial := Inventory.new(survivor.inventory.slots.size())
+	# Try it on a copy first, then do the same to the real pack (which the UI and
+	# everything else hold on to) only if the result fits.
+	var trial := Pack.new()
 	trial.from_dict(survivor.inventory.to_dict())
 	RecipeTable.consume(trial, recipe_id)
 	if trial.add(recipe.makes, recipe.count, Ocean.time) > 0:
-		survivor.notify("No room in your pack for that.")
+		survivor.notify("You have no room for that.")
 		return
-	survivor.inventory = trial
+	RecipeTable.consume(survivor.inventory, recipe_id)
+	survivor.inventory.add(recipe.makes, recipe.count, Ocean.time)
 	survivor.notify("Made: %s" % recipe.name)
 	survivor.push_inventory()
 
@@ -787,10 +1025,10 @@ func request_place(slot: int, pos: Vector3, yaw: float) -> void:
 	if not multiplayer.is_server():
 		return
 	var player := _sender_player()
-	if player == null or slot < 0 or slot >= Inventory.HOTBAR_SIZE:
+	if player == null or slot < 0 or slot >= Pack.HOTBAR_SIZE:
 		return
 	var survivor := player.survivor
-	var stack = survivor.inventory.slots[slot]
+	var stack = survivor.inventory.hotbar[slot]
 	if stack == null:
 		return
 	var type: String = ItemTable.get_item(stack.id).get("places", "")
@@ -809,7 +1047,7 @@ func request_place(slot: int, pos: Vector3, yaw: float) -> void:
 		if Vector2(other.pos.x, other.pos.z).distance_to(Vector2(pos.x, pos.z)) < clearance:
 			survivor.notify("Too close to something you've already built.")
 			return
-	survivor.inventory.take_from_slot(slot, 1)
+	survivor.inventory.take(int(stack.uid), 1)
 	var id := "s%d" % _next_structure
 	_next_structure += 1
 	_spawn_structure(id, type, pos, yaw)
@@ -843,7 +1081,7 @@ func _spawn_structure(id: String, type: String, pos: Vector3, yaw: float) -> voi
 	if info.has("station") and not stations.has("struct:" + id):
 		stations["struct:" + id] = CookStation.new(info.station)
 	if info.has("container") and not containers.has("struct:" + id):
-		_make_container("struct:" + id, info.container, info.name)
+		_make_container("struct:" + id, Vector2i(info.container[0], info.container[1]), info.name)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -879,10 +1117,9 @@ func _station_state(id: String, data: Dictionary) -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func _container_contents(id: String, title: String, data: Dictionary, opening: bool) -> void:
-	var slots: Array = data.get("slots", [])
-	var mirror: Inventory = containers.get(id)
-	if mirror == null or mirror.slots.size() != slots.size():
-		mirror = Inventory.new(slots.size())
+	var mirror: ItemGrid = containers.get(id)
+	if mirror == null:
+		mirror = ItemGrid.new()
 		containers[id] = mirror
 	mirror.from_dict(data)
 	container_titles[id] = title

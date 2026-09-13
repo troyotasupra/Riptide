@@ -15,7 +15,7 @@ const KEYS := {
 	"crouch": [KEY_C, KEY_CTRL],
 	"interact": [KEY_E],
 	"paddle": [KEY_F],
-	"inventory": [KEY_I, KEY_TAB],
+	"inventory": [KEY_TAB],
 	"book": [KEY_B],
 	"rotate": [KEY_R],
 	"drop": [KEY_Q],
@@ -72,7 +72,7 @@ const PAD_AXES := {
 
 const KEY_LABELS := {
 	"interact": "E", "primary": "LMB", "secondary": "RMB", "jump": "Space", "paddle": "F", "sprint": "Shift",
-	"crouch": "C", "rotate": "R", "inventory": "I", "book": "B", "drop": "Q", "give": "G", "pause": "Esc",
+	"crouch": "C", "rotate": "R", "inventory": "Tab", "book": "B", "drop": "Q", "give": "G", "pause": "Esc",
 	"hotbar": "1–8",
 }
 const PAD_LABELS := {
@@ -105,6 +105,10 @@ func _enter_tree() -> void:
 		event.axis = PAD_AXES[action][0] as JoyAxis
 		event.axis_value = PAD_AXES[action][1]
 		_bind(action, event)
+	# Tab opens the inventory; don't let Godot's focus navigation swallow it first.
+	for event: InputEvent in InputMap.action_get_events("ui_focus_next"):
+		if event is InputEventKey and (event.keycode == KEY_TAB or event.physical_keycode == KEY_TAB):
+			InputMap.action_erase_event("ui_focus_next", event)
 
 
 static func _bind(action: String, event: InputEvent) -> void:

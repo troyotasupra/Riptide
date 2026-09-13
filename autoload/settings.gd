@@ -15,6 +15,8 @@ var master_volume := 0.9
 var sfx_volume := 1.0
 var ambience_volume := 0.7
 var fullscreen := false
+## 0 low · 1 medium · 2 high: ambient occlusion, glow, shadow range, antialiasing.
+var graphics := 2
 ## Not saved: F3 debug overlay.
 var show_debug := false
 
@@ -61,4 +63,4 @@ func load_settings() -> void:
 
 
 static func _keys() -> Array[String]:
-	return ["mouse_sensitivity", "stick_sensitivity", "invert_y", "fov", "deadzone", "master_volume", "sfx_volume", "ambience_volume", "fullscreen"]
+	return ["mouse_sensitivity", "stick_sensitivity", "invert_y", "fov", "deadzone", "master_volume", "sfx_volume", "ambience_volume", "fullscreen", "graphics"]

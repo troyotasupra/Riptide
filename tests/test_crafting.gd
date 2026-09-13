@@ -1,6 +1,6 @@
 extends "res://tests/test_case.gd"
 
-const InventoryScript = preload("res://player/inventory.gd")
+const InventoryScript = preload("res://player/pack.gd")
 const StationScript = preload("res://crafting/cook_station.gd")
 const Recipes = preload("res://data/recipe_table.gd")
 const Items = preload("res://data/item_table.gd")

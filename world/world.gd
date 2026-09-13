@@ -203,7 +203,7 @@ func save_now() -> void:
 	for boat: Boat in boats_root.get_children():
 		boats[String(boat.name)] = boat.global_transform
 	var ok := SaveGame.write({
-		"version": 2,
+		"version": 3,
 		"seed": GameState.world_seed,
 		"crew_color": GameState.crew_color,
 		"emblem": GameState.emblem,
@@ -261,7 +261,7 @@ func request_interact(target_id: String, slot: int) -> void:
 	if player == null or player.survivor == null:
 		return
 	var survivor := player.survivor
-	slot = clampi(slot, 0, Inventory.HOTBAR_SIZE - 1)
+	slot = clampi(slot, 0, Pack.HOTBAR_SIZE - 1)
 	var at := player.world_transform().origin
 	var parts := target_id.split(":")
 	match parts[0]:
@@ -332,10 +332,12 @@ func _use_stream(survivor: Survivor, at: Vector3, slot: int) -> void:
 
 
 func _fill_canteen(survivor: Survivor, slot: int, filled: String) -> bool:
-	var stack = survivor.inventory.slots[slot]
+	var stack = survivor.inventory.hotbar[slot]
 	if stack == null or stack.id != "canteen":
 		return false
-	survivor.inventory.slots[slot] = {"id": filled, "count": 1, "spoils_at": 0.0}
+	stack.id = filled
+	stack.count = 1
+	stack.spoils_at = 0.0
 	sfx_at("splash", survivor.player.world_transform().origin)
 	survivor.push_inventory()
 	return true
@@ -346,13 +348,10 @@ func _fill_canteen(survivor: Survivor, slot: int, filled: String) -> bool:
 func _respawn(player: Player) -> void:
 	var s := player.survivor
 	var fell_at := player.world_transform().origin
-	var lost: Array = []
-	for i in s.inventory.slots.size():
-		if s.inventory.slots[i] != null:
-			lost.append(s.inventory.slots[i])
+	var lost := s.inventory.all_stacks()
 	if not lost.is_empty():
 		camp.drop_items(player, lost, "%s's pack" % player.display_name)
-		s.inventory = Inventory.new()
+		s.inventory.clear()
 	sfx_at("hit", fell_at)
 	s.survival.health = Survival.MAX
 	s.survival.hunger = maxf(s.survival.hunger, 50.0)
@@ -401,7 +400,7 @@ func _on_peer_ready(peer_id: int) -> void:
 	player.survivor.push_inventory()
 	player.survivor.push_survival()
 	if GameState.spawn_override == "boat":
-		player.teleport_aboard("Sailboat", Sailboat.BUNK_SPAWN + Vector3(0.0, 0.0, 1.0 + index * 0.8))
+		player.teleport_aboard("Sailboat", Sailboat.crew_spawn(index))
 	else:
 		camp.teleport_to_spot(player, camp.respawn_spot(player_id))
 
@@ -462,11 +461,15 @@ func _build_environment() -> SkyController:
 	environment.background_mode = Environment.BG_SKY
 	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	environment.tonemap_white = 1.6
+	environment.tonemap_mode = Environment.TONE_MAPPER_AGX
+	environment.tonemap_white = 2.0
+	environment.adjustment_enabled = true
+	environment.adjustment_saturation = 1.12
+	environment.adjustment_contrast = 1.05
 	environment.fog_enabled = true
 	environment.fog_density = 0.0015
 	environment.fog_sky_affect = 0.3
+	environment.fog_aerial_perspective = 0.35
 	var world_environment := WorldEnvironment.new()
 	world_environment.environment = environment
 	add_child(world_environment)
@@ -474,8 +477,24 @@ func _build_environment() -> SkyController:
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 120.0
+	sun.shadow_blur = 1.5
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	add_child(sun)
+
+	var apply_quality := func() -> void:
+		var level := Settings.graphics
+		environment.ssao_enabled = level >= 1
+		environment.ssao_radius = 1.2
+		environment.ssao_intensity = 1.6
+		environment.ssil_enabled = level >= 2
+		environment.glow_enabled = level >= 1
+		environment.glow_intensity = 0.35
+		environment.glow_bloom = 0.05
+		sun.directional_shadow_max_distance = [80.0, 150.0, 260.0][level]
+		get_viewport().msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][level]
+		get_viewport().screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if level >= 1 else Viewport.SCREEN_SPACE_AA_DISABLED
+	apply_quality.call()
+	Settings.changed.connect(apply_quality)
 
 	var controller := SkyController.new()
 	controller.name = "Sky"

@@ -21,7 +21,7 @@ const RECIPES := {
 }
 
 
-static func have(inventory: Inventory, need: String) -> int:
+static func have(inventory: Pack, need: String) -> int:
 	if ItemTable.GROUPS.has(need):
 		var total := 0
 		for id: String in ItemTable.GROUPS[need]:
@@ -35,7 +35,7 @@ static func need_label(need: String) -> String:
 
 
 ## Items still needed to craft `id` from `inventory`: {need: how many short}.
-static func missing(inventory: Inventory, id: String) -> Dictionary:
+static func missing(inventory: Pack, id: String) -> Dictionary:
 	var short := {}
 	var needs: Dictionary = RECIPES.get(id, {}).get("needs", {})
 	for need: String in needs:
@@ -45,17 +45,17 @@ static func missing(inventory: Inventory, id: String) -> Dictionary:
 	return short
 
 
-static func missing_tool(inventory: Inventory, id: String) -> String:
+static func missing_tool(inventory: Pack, id: String) -> String:
 	var tool: String = RECIPES.get(id, {}).get("tool", "")
 	return "" if tool.is_empty() or inventory.tool_types().has(tool) else tool
 
 
-static func can_craft(inventory: Inventory, id: String) -> bool:
+static func can_craft(inventory: Pack, id: String) -> bool:
 	return RECIPES.has(id) and missing(inventory, id).is_empty() and missing_tool(inventory, id).is_empty()
 
 
 ## Removes the ingredients (groups use their first listed item first). Call after can_craft.
-static func consume(inventory: Inventory, id: String) -> void:
+static func consume(inventory: Pack, id: String) -> void:
 	var needs: Dictionary = RECIPES[id].needs
 	for need: String in needs:
 		var left: int = needs[need]

@@ -11,7 +11,7 @@ const TYPES := {
 	"lean_to": {"name": "Lean-to", "shelter": 5.0, "warm_radius": 2.0, "footprint": 2.0},
 	"tent": {"name": "Tent", "shelter": 8.0, "warm_radius": 2.0, "sleep": true, "footprint": 2.2},
 	"drying_rack": {"name": "Drying rack", "station": "dry", "footprint": 1.2},
-	"storage_crate": {"name": "Storage crate", "container": 16, "footprint": 1.0},
+	"storage_crate": {"name": "Storage crate", "container": [8, 5], "footprint": 1.0},
 }
 
 

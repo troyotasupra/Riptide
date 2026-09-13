@@ -252,7 +252,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("rotate") and is_placing():
 		_ghost_yaw += PI / 8.0
 	elif event.is_action_pressed("drop"):
-		survivor.request_drop(survivor.selected_slot)
+		var held = survivor.inventory.hotbar[survivor.selected_slot]
+		if held != null:
+			Sound.play("drop", -4.0)
+			GameState.world.camp.rpc_id(1, "request_drop_item", "", int(held.uid))
 	elif event.is_action_pressed("give") and give_peer != 0:
 		survivor.request_give(survivor.selected_slot, give_peer)
 	elif event.is_action_pressed("hotbar_next"):
@@ -260,7 +263,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("hotbar_prev"):
 		survivor.select_slot(survivor.selected_slot - 1)
 	else:
-		for i in Inventory.HOTBAR_SIZE:
+		for i in Pack.HOTBAR_SIZE:
 			if event.is_action_pressed("hotbar_%d" % (i + 1)):
 				survivor.select_slot(i)
 				break
@@ -336,8 +339,8 @@ func board(boat: Boat, surface_y: float) -> void:
 
 
 ## Climbs a boarding ladder: straight onto the deck, facing forward.
-func climb_aboard(boat: Boat) -> void:
-	var landing := Sailboat.LADDER_LANDING if boat is Sailboat else Vector3(0.0, boat.deck_top + 0.02, 0.0)
+func climb_aboard(boat: Boat, ladder: String = "ladder") -> void:
+	var landing := Sailboat.ladder_landing(ladder) if boat is Sailboat else Vector3(0.0, boat.deck_top + 0.02, 0.0)
 	platform = boat
 	swimming = false
 	velocity = Vector3.ZERO
@@ -584,10 +587,11 @@ func _update_give_target() -> void:
 
 
 func _press_interact(action: String) -> void:
-	if focus_id.ends_with(":ladder"):
-		var boat: Boat = GameState.find_boat(focus_id.split(":")[1])
+	if focus_id.ends_with(":ladder") or focus_id.ends_with(":ladder_port"):
+		var bits := focus_id.split(":")
+		var boat: Boat = GameState.find_boat(bits[1])
 		if boat != null:
-			climb_aboard(boat)
+			climb_aboard(boat, bits[bits.size() - 1])
 		return
 	if _focus_hold > 0.0:
 		_hold_id = focus_id
@@ -830,11 +834,9 @@ func _gather_input(delta: float) -> Vector2:
 		return Vector2.ZERO
 	if _auto_heading > 8.0:
 		_auto_heading = 0.0
-		for i in Inventory.HOTBAR_SIZE:
-			var slot = survivor.inventory.slots[i]
-			if slot != null and ItemTable.get_item(slot.id).get("category", "") == "food":
-				survivor.select_slot(i)
-				survivor.use_selected()
+		for stack: Dictionary in survivor.inventory.all_stacks():
+			if ItemTable.category(stack.id) == "food":
+				survivor.use_item(int(stack.uid))
 				break
 	var here := world_transform().origin
 	var best: ResourceNode = null

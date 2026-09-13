@@ -91,7 +91,52 @@ const ITEMS := {
 	"combat_helmet": {"name": "Combat helmet", "category": "wearable", "slot": "head", "insulation": 0.05, "armor": 3, "weight": 1.5, "stack": 1},
 	"plate_carrier": {"name": "Plate carrier", "category": "wearable", "slot": "vest", "insulation": 0.08, "armor": 3, "weight": 7.5, "stack": 1, "tint": "crew"},
 	"daypack": {"name": "Daypack", "category": "wearable", "slot": "back", "insulation": 0.0, "weight": 0.8, "stack": 1},
+	"satchel": {"name": "Canvas satchel", "category": "wearable", "slot": "back", "insulation": 0.0, "weight": 0.4, "stack": 1},
 }
+
+## Grid footprint [width, height] in inventory cells. Anything missing is 1×1.
+const SIZES := {
+	"raw_fish": [2, 1], "cooked_fish": [2, 1], "canteen_clean": [1, 2], "canteen_dirty": [1, 2], "canteen": [1, 2],
+	"driftwood": [2, 1], "log": [3, 1], "tarp": [2, 2],
+	"knife": [1, 2], "machete": [1, 3], "stone_hatchet": [1, 3], "torch": [1, 3], "fishing_rod": [1, 4], "spear": [1, 4],
+	"pistol": [2, 1], "flare_gun": [2, 1],
+	"survival_book": [2, 2], "logbook": [2, 2], "sea_chart": [1, 2],
+	"campfire_kit": [2, 2], "lean_to_kit": [2, 3], "tent_kit": [3, 2], "drying_rack_kit": [2, 3], "storage_crate_kit": [3, 3],
+	"tshirt": [2, 2], "rain_jacket": [2, 3], "wool_sweater": [2, 2], "shorts": [2, 2], "cargo_pants": [2, 3],
+	"sandals": [2, 1], "hiking_boots": [2, 2], "sun_hat": [2, 2], "combat_helmet": [2, 2],
+	"plate_carrier": [3, 3], "daypack": [3, 3], "satchel": [2, 2],
+}
+
+## 0 common · 1 uncommon · 2 rare · 3 epic · 4 legendary · 5 exotic. Anything missing is common.
+const RARITY := {
+	"cooked_fish": 1, "cooked_meat": 1, "dried_fish": 1, "dried_meat": 1, "dried_berries": 1, "canteen_clean": 1,
+	"rope": 1, "flare": 1, "bandage": 1, "lighter": 1, "knife": 1, "stone_hatchet": 1, "fishing_rod": 1, "lure": 1,
+	"machete": 2, "flare_gun": 2, "pistol_ammo": 2, "survival_book": 2, "sea_chart": 2, "logbook": 2, "journal": 2,
+	"rain_jacket": 1, "wool_sweater": 1, "cargo_pants": 1, "hiking_boots": 1, "wool_beanie": 1, "daypack": 2,
+	"pistol": 3, "plate_carrier": 3, "combat_helmet": 3, "compartment_key": 3,
+	"tent_kit": 1, "storage_crate_kit": 1, "book_page_shelter": 2, "book_page_camp": 2,
+}
+const RARITY_NAMES := ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Exotic"]
+const RARITY_COLORS := [
+	Color(0.45, 0.47, 0.50), Color(0.30, 0.62, 0.34), Color(0.25, 0.48, 0.85),
+	Color(0.58, 0.34, 0.82), Color(0.90, 0.68, 0.20), Color(0.86, 0.26, 0.24),
+]
+
+## Gear that gives you storage: [width, height] of the grid it adds.
+const STORAGE := {"satchel": [4, 3], "daypack": [6, 5], "plate_carrier": [4, 2]}
+
+
+static func size_of(id: String) -> Vector2i:
+	var size: Array = SIZES.get(id, [1, 1])
+	return Vector2i(size[0], size[1])
+
+
+static func rarity(id: String) -> int:
+	return RARITY.get(id, 0)
+
+
+static func rarity_color(id: String) -> Color:
+	return RARITY_COLORS[rarity(id)]
 
 
 static func get_item(id: String) -> Dictionary:
