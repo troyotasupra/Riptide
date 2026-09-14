@@ -43,8 +43,12 @@ const REMOTE_SMOOTHING := 14.0
 const INTERACT_REACH := 3.5
 const BUILD_REACH := 7.0
 const GIVE_REACH := 3.5
-const SWING_TOOLS := ["knife", "machete", "hatchet"]
+const SWING_TOOLS := ["knife", "machete", "hatchet", "spear"]
 const SWING_SECONDS := 0.55
+const CRAWL_SPEED := 1.1
+const DOWNED_EYE_HEIGHT := 0.45
+## After running out of breath, hard strokes wait until stamina is back to this.
+const WINDED_RECOVER := 20.0
 
 var peer_id := 1
 var player_id := ""
@@ -82,6 +86,14 @@ var _row_boat: Boat = null
 var _row_sent := Vector3.ZERO
 ## 0..1 how hard this crew member is rowing right now (drives the arm animation).
 var rowing := 0.0
+var _row_resend := 0.0
+var _winded := false
+## Down at 0 health: crawling and bleeding out until a crewmate revives you.
+var downed := false
+var bleed_left := 0.0
+## Limbs lost to sharks, and the ones with a prosthetic fitted.
+var missing_limbs: Array = []
+var prosthetics: Array = []
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _has_target := false
@@ -199,6 +211,32 @@ func _set_worn(ids: Dictionary) -> void:
 		apply_worn(ids)
 
 
+func apply_limbs(missing: Array, fitted: Array) -> void:
+	missing_limbs = missing.duplicate()
+	prosthetics = fitted.duplicate()
+	if model != null:
+		model.set_limbs(missing_limbs, prosthetics)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _set_limbs(missing: Array, fitted: Array) -> void:
+	if multiplayer.get_remote_sender_id() == 1:
+		apply_limbs(missing, fitted)
+
+
+func set_downed(value: bool, seconds: float) -> void:
+	downed = value
+	bleed_left = seconds
+	if value:
+		paddling = false
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _set_downed(value: bool, seconds: float) -> void:
+	if multiplayer.get_remote_sender_id() == 1:
+		set_downed(value, seconds)
+
+
 func is_asleep() -> bool:
 	return is_local and GameState.world != null and GameState.world.camp != null and GameState.world.camp.local_asleep
 
@@ -243,6 +281,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if not _controls_active():
+		return
+	if downed:
+		return
+	# Aboard with an oar, Q or E just takes up the oars — it never drops the oar overboard.
+	if not paddling and platform != null and platform.can_paddle and focus_id.is_empty() \
+			and (event.is_action_pressed("row_left") or event.is_action_pressed("row_right")) \
+			and survivor.inventory.tool_types().has("oar"):
+		paddling = true
+		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("paddle") and platform != null and platform.can_paddle:
 		if paddling:
@@ -292,7 +339,9 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
-	var target_eye := CROUCH_EYE_HEIGHT if crouching else EYE_HEIGHT
+	var target_eye := DOWNED_EYE_HEIGHT if downed else (CROUCH_EYE_HEIGHT if crouching else EYE_HEIGHT)
+	if downed:
+		bleed_left = maxf(0.0, bleed_left - delta)
 	_eye_height = lerpf(_eye_height, target_eye, 1.0 - exp(-10.0 * delta))
 
 	var base := Transform3D.IDENTITY
@@ -319,6 +368,8 @@ func _process(delta: float) -> void:
 		_update_ambience(world.origin)
 	else:
 		model.global_transform = Transform3D(world.basis, world.origin)
+		if downed:
+			model.global_transform *= Transform3D(Basis(Vector3.RIGHT, -1.35), Vector3(0.0, 0.28, 0.25))
 		model.animate(delta, _remote_speed, swimming, crouching, pitch)
 		_label.global_position = world.origin + Vector3.UP * 2.2
 
@@ -437,6 +488,8 @@ func _apply_teleport_aboard(boat_name: String, local: Vector3) -> void:
 func _local_physics(delta: float) -> void:
 	held_id = survivor.selected_id()
 	if platform == null and _hold_for_ground():
+		paddling = false
+		_update_row(Vector2.ZERO, false)
 		_finish_tick()
 		return
 	var active := _controls_active()
@@ -445,7 +498,7 @@ func _local_physics(delta: float) -> void:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	if not GameState.autopilot.is_empty():
 		input = _autopilot_input(delta)
-	if platform == null or not platform.can_paddle or not survivor.inventory.tool_types().has("oar"):
+	if downed or platform == null or not platform.can_paddle or not survivor.inventory.tool_types().has("oar"):
 		paddling = false
 	var strokes := Vector2.ZERO
 	if paddling and active:
@@ -453,7 +506,7 @@ func _local_physics(delta: float) -> void:
 		if Input.is_action_pressed("move_back"):
 			strokes = -strokes
 	var rowing_now := strokes != Vector2.ZERO
-	var power_stroke := rowing_now and Input.is_action_pressed("sprint") and stamina > 0.0
+	var power_stroke := rowing_now and Input.is_action_pressed("sprint") and stamina > 0.0 and not _winded
 	_update_row(strokes, power_stroke)
 	rowing = lerpf(rowing, (1.0 if power_stroke else 0.6) if rowing_now else 0.0, 1.0 - exp(-6.0 * delta))
 	if paddling:
@@ -473,8 +526,9 @@ func _local_physics(delta: float) -> void:
 	crouching = active and Input.is_action_pressed("crouch") and not swimming
 
 	var moving := input != Vector2.ZERO
+	var limb_speed := SharkMath.speed_factor(missing_limbs, prosthetics)
 	var sprinting := active and moving and input.y < 0.0 and Input.is_action_pressed("sprint") \
-		and not crouching and not swimming and stamina > 0.0
+		and not crouching and not swimming and stamina > 0.0 and not downed and limb_speed > 0.8
 	var speed := WALK_SPEED
 	if swimming:
 		speed = SWIM_SPEED
@@ -482,7 +536,9 @@ func _local_physics(delta: float) -> void:
 		speed = CROUCH_SPEED
 	elif sprinting:
 		speed = SPRINT_SPEED
-	speed *= LoadoutMath.speed_multiplier(carried_weight_kg)
+	speed *= LoadoutMath.speed_multiplier(carried_weight_kg) * limb_speed
+	if downed:
+		speed = CRAWL_SPEED * (0.6 if swimming else 1.0)
 
 	var drain := LoadoutMath.stamina_drain_multiplier(carried_weight_kg)
 	if sprinting:
@@ -496,6 +552,10 @@ func _local_physics(delta: float) -> void:
 	else:
 		stamina += STAMINA_REGEN * delta
 	stamina = clampf(stamina, 0.0, STAMINA_MAX)
+	if stamina <= 0.0:
+		_winded = true
+	elif stamina >= WINDED_RECOVER:
+		_winded = false
 	if sprinting or power_stroke or (swimming and moving):
 		exertion = 1.0
 	else:
@@ -508,7 +568,7 @@ func _local_physics(delta: float) -> void:
 	velocity.x = lerpf(velocity.x, wish.x, blend)
 	velocity.z = lerpf(velocity.z, wish.z, blend)
 
-	var jump := (active and Input.is_action_just_pressed("jump")) or (not GameState.autopilot.is_empty() and swimming)
+	var jump := (active and not downed and Input.is_action_just_pressed("jump")) or (not GameState.autopilot.is_empty() and swimming)
 	if swimming:
 		velocity.y = lerpf(velocity.y, (depth - SWIM_FLOAT_DEPTH) * 3.0, 1.0 - exp(-4.0 * delta))
 		if jump and stamina > SWIM_JUMP_COST:
@@ -592,6 +652,17 @@ func _update_focus() -> void:
 func _update_give_target() -> void:
 	give_peer = 0
 	give_text = ""
+	# A downed crewmate in front of you can be revived by holding E.
+	if camera != null and GameState.world != null and focus_id.is_empty() and not downed:
+		for other: Player in GameState.world.players_root.get_children():
+			if other == self or not other.downed:
+				continue
+			var to := other.world_transform().origin + Vector3.UP * 0.3 - camera.global_position
+			if to.length() <= SharkMath.REVIVE_RANGE and (-camera.global_basis.z).dot(to.normalized()) > 0.6:
+				focus_id = "revive:%d" % other.peer_id
+				focus_text = "Revive %s (hold)" % other.display_name
+				_focus_hold = SharkMath.REVIVE_HOLD
+				return
 	if held_id.is_empty() or camera == null or GameState.world == null or not focus_id.is_empty():
 		return
 	var from := camera.global_position
@@ -635,7 +706,10 @@ func _press_primary() -> void:
 		return
 	var tool: String = ItemTable.get_item(held_id).get("tool", "")
 	if SWING_TOOLS.has(tool):
-		if focus_id.begins_with("res:"):
+		if focus_id.begins_with("shark:"):
+			_swing(tool)
+			GameState.world.sharks.rpc_id(1, "request_strike", focus_id.substr(6))
+		elif focus_id.begins_with("res:"):
 			_press_interact("primary")
 		else:
 			_swing(tool)
@@ -757,7 +831,10 @@ func _update_row(strokes: Vector2, power: bool) -> void:
 			_row_boat.set_row_input.rpc_id(1, 0.0, 0.0, false)
 		_row_boat = boat
 		_row_sent = Vector3.ZERO
-	if boat != null and state != _row_sent:
+	# Resend held strokes now and then, in case the host hadn't seen us aboard yet.
+	_row_resend += get_physics_process_delta_time()
+	if boat != null and (state != _row_sent or (state != Vector3.ZERO and _row_resend > 1.0)):
+		_row_resend = 0.0
 		boat.set_row_input.rpc_id(1, strokes.x, strokes.y, power)
 		_row_sent = state
 

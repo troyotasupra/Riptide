@@ -24,9 +24,10 @@ const PART_SIZES := {
 const SPAWN := Vector3(0.0, 0.05, 0.35)
 const DOCK_SIDE := 4.0
 const DOCK_WIDTH := 1.5
-const DOCK_Y := 1.05
+const DOCK_Y := 1.35
+const ROOF_TILT := 0.18
 
-const PLANKS := Color(0.56, 0.48, 0.38)
+const PLANKS := Color(0.64, 0.60, 0.53)
 const DARK_WOOD := Color(0.33, 0.26, 0.19)
 const TIN := Color(0.52, 0.53, 0.5)
 
@@ -52,7 +53,7 @@ static func layout(shape: CampIsland) -> Dictionary:
 	var dock_start := shape.cove - out * 2.5 + side * DOCK_SIDE
 	var dock_end := shape.cove + out * 14.0 + side * DOCK_SIDE
 	# Alongside the dock with room to bob without grinding against the pilings.
-	var boat_xz := shape.cove + out * 10.5 + side * (DOCK_SIDE + DOCK_WIDTH * 0.5 + JohnBoat.BEAM * 0.5 + 0.45)
+	var boat_xz := shape.cove + out * 10.5 + side * (DOCK_SIDE + DOCK_WIDTH * 0.5 + JohnBoat.BEAM * 0.5 + 0.8)
 	var boat_xf := Transform3D(basis, Vector3(boat_xz.x, 0.0, boat_xz.y))
 	var posts: Array[Vector3] = []
 	for along: float in [7.5, 13.5]:
@@ -153,16 +154,27 @@ static func _hut(shack: Dictionary) -> Node3D:
 	_box(node, Vector3(0.14, 2.05, 0.14), Vector3(-0.6, 1.02, -half.z), dark)
 	_box(node, Vector3(0.14, 2.05, 0.14), Vector3(0.6, 1.02, -half.z), dark)
 	for sx: float in [-1.0, 1.0]:
-		_box(node, Vector3(0.03, 0.7, 0.9), Vector3(sx * (half.x + 0.012), 1.5, -0.4), dark)
-		_box(node, Vector3(0.035, 0.56, 0.76), Vector3(sx * (half.x + 0.014), 1.5, -0.4), Materials.glow(Color(0.95, 0.78, 0.48), 0.35))
+		_box(node, Vector3(0.03, 0.72, 0.92), Vector3(sx * (half.x + 0.012), 1.5, -0.4), dark)
+		_box(node, Vector3(0.035, 0.56, 0.76), Vector3(sx * (half.x + 0.02), 1.5, -0.4), Materials.glow(Color(0.55, 0.62, 0.66), 0.08))
+		_box(node, Vector3(0.05, 0.56, 0.05), Vector3(sx * (half.x + 0.03), 1.5, -0.4), dark)
+		_box(node, Vector3(0.05, 0.05, 0.76), Vector3(sx * (half.x + 0.03), 1.5, -0.4), dark)
 
-	# A tin shed roof sloping down to the back, with a porch overhang at the door.
-	_box(node, Vector3(SIZE.x + 0.7, 0.05, SIZE.z + 1.3), Vector3(0.0, SIZE.y + 0.18, -0.35), tin, false, Vector3(0.1, 0.0, 0.0))
-	for i in 9:
-		var x := -half.x - 0.25 + i * (SIZE.x + 0.5) / 8.0
-		_box(node, Vector3(0.04, 0.035, SIZE.z + 1.3), Vector3(x, SIZE.y + 0.215, -0.35), tin, false, Vector3(0.1, 0.0, 0.0))
+	# A tin shed roof, high over the door and sloping down to the back, with a
+	# porch overhang; the walls rise to meet it.
+	var ridge := SIZE.y + 0.05 + half.z * ROOF_TILT
+	var roof_len := SIZE.z + 1.3
+	_box(node, Vector3(SIZE.x + 0.7, 0.1, roof_len), Vector3(0.0, ridge + 0.35 * ROOF_TILT, -0.35), tin, false, Vector3(ROOF_TILT, 0.0, 0.0))
+	for i in 10:
+		var x := -half.x - 0.3 + i * (SIZE.x + 0.6) / 9.0
+		_box(node, Vector3(0.05, 0.045, roof_len), Vector3(x, ridge + 0.35 * ROOF_TILT + 0.07, -0.35), tin, false, Vector3(ROOF_TILT, 0.0, 0.0))
+	_box(node, Vector3(SIZE.x + 0.72, 0.16, 0.05), Vector3(0.0, ridge + (roof_len * 0.5 + 0.35) * ROOF_TILT - 0.02, -0.35 - roof_len * 0.5), dark, false, Vector3(ROOF_TILT, 0.0, 0.0))
+	var gable := half.z * 2.0 * ROOF_TILT
+	_box(node, Vector3(SIZE.x, gable, 0.1), Vector3(0.0, SIZE.y + gable * 0.5, -half.z + 0.05), planks)
 	for sx: float in [-1.0, 1.0]:
-		_post(node, Vector3(sx * (half.x - 0.1), -0.05, -half.z - 0.55), Vector3(sx * (half.x - 0.1), SIZE.y + 0.32, -half.z - 0.55), 0.06, dark)
+		_box(node, Vector3(0.08, gable, SIZE.z), Vector3(sx * (half.x - 0.05), SIZE.y + gable * 0.25, 0.0), planks, false, Vector3(ROOF_TILT, 0.0, 0.0))
+		_post(node, Vector3(sx * (half.x - 0.1), -0.05, -half.z - 0.55), Vector3(sx * (half.x - 0.1), ridge + 0.9 * ROOF_TILT, -half.z - 0.55), 0.06, dark)
+	for z: float in [-1.2, 0.0, 1.2]:
+		_box(node, Vector3(SIZE.x - 0.2, 0.12, 0.1), Vector3(0.0, SIZE.y - 0.1, z), dark)
 
 	# Bunk.
 	_box(node, Vector3(1.9, 0.42, 0.9), Vector3(-1.35, 0.21, 1.45), dark, true)
@@ -198,21 +210,28 @@ static func _hut(shack: Dictionary) -> Node3D:
 		for lz: float in [-1.5, -0.9]:
 			_box(node, Vector3(0.05, 0.76, 0.05), Vector3(lx, 0.38, lz), dark)
 	_box(node, Vector3(0.62, 0.005, 0.46), Vector3(1.5, 0.805, -1.2), Materials.plain(Color(0.86, 0.8, 0.64)), false, Vector3(0.0, 0.12, 0.0))
-	# Buoys and a coil of net hanging by the door.
+	# Old buoys hung on a rope by the door.
+	var rope := Materials.cloth(Color(0.72, 0.62, 0.45))
 	for sx: float in [-1.0, 1.0]:
+		var hang := Vector3(sx * 1.35, 1.1, -half.z - 0.16)
+		_post(node, hang + Vector3(0.0, 0.18, 0.0), Vector3(sx * 1.35, 2.0, -half.z - 0.06), 0.012, rope)
 		var buoy := MeshInstance3D.new()
 		buoy.mesh = MeshKit.rock(90, 0.02, 1.0)
 		buoy.material_override = Materials.plain(Color(0.92, 0.42, 0.12), 0.5)
 		buoy.scale = Vector3(0.22, 0.3, 0.22)
-		buoy.position = Vector3(sx * 1.2, 1.7, -half.z - 0.14)
+		buoy.position = hang
 		node.add_child(buoy)
+		_box(node, Vector3(0.23, 0.05, 0.23), hang, Materials.plain(Color(0.92, 0.9, 0.86)))
 	# Lights: a lantern inside and one on the porch.
 	var lamp := OmniLight3D.new()
 	lamp.light_color = Color(1.0, 0.8, 0.52)
 	lamp.light_energy = 0.9
 	lamp.omni_range = 5.5
-	lamp.position = Vector3(0.0, 2.1, 0.2)
+	lamp.position = Vector3(0.0, 1.95, 0.2)
 	node.add_child(lamp)
+	_box(node, Vector3(0.16, 0.22, 0.16), Vector3(0.0, 2.05, 0.2), Materials.glow(Color(1.0, 0.78, 0.45), 2.2))
+	_box(node, Vector3(0.2, 0.05, 0.2), Vector3(0.0, 2.19, 0.2), iron)
+	_post(node, Vector3(0.0, 2.21, 0.2), Vector3(0.0, SIZE.y - 0.04, 0.2), 0.008, iron)
 	_box(node, Vector3(0.14, 0.2, 0.14), Vector3(0.95, 2.05, -half.z - 0.2), Materials.glow(Color(1.0, 0.75, 0.4), 2.5))
 
 	for part: String in PART_SPOTS:
@@ -258,15 +277,50 @@ static func _dock(shape: CampIsland, shack: Dictionary) -> Node3D:
 	body.add_child(collider)
 	node.add_child(body)
 	var plank := BoxMesh.new()
-	plank.size = Vector3(DOCK_WIDTH, 0.05, 0.27)
+	plank.size = Vector3(DOCK_WIDTH, 0.1, 0.27)
 	var count := int(length / 0.3)
 	for i in count:
 		var visual := MeshInstance3D.new()
 		visual.mesh = plank
 		visual.material_override = deck if i % 5 != 2 else dark
-		visual.transform = Transform3D(basis.rotated(Vector3.UP, 0.015 * sin(i * 2.7)), start + dir * (i + 0.5) * length / count - Vector3(0.0, 0.03, 0.0))
+		visual.transform = Transform3D(basis.rotated(Vector3.UP, 0.015 * sin(i * 2.7)), start + dir * (i + 0.5) * length / count - Vector3(0.0, 0.05, 0.0))
 		node.add_child(visual)
 	var right := basis * Vector3.RIGHT
+	# Stringers under the planks, and a fender along the boat side so a moored
+	# boat bumps against the dock instead of sliding under it.
+	var stringer := BoxMesh.new()
+	stringer.size = Vector3(0.12, 0.16, length)
+	for s: float in [-0.5, 0.5]:
+		var beam := MeshInstance3D.new()
+		beam.mesh = stringer
+		beam.material_override = dark
+		beam.transform = Transform3D(basis, (start + end) * 0.5 + right * s - Vector3(0.0, 0.18, 0.0))
+		node.add_child(beam)
+	var boat_side := signf(right.dot(Transform3D(shack.boat_xf).origin - start))
+	var fender := StaticBody3D.new()
+	fender.collision_layer = Layers.WORLD
+	fender.collision_mask = 0
+	fender.transform = Transform3D(basis, (start + end) * 0.5 + right * boat_side * (DOCK_WIDTH * 0.5 + 0.08) - Vector3(0.0, 0.75, 0.0))
+	var fender_shape := BoxShape3D.new()
+	fender_shape.size = Vector3(0.14, 1.7, length)
+	var fender_collider := CollisionShape3D.new()
+	fender_collider.shape = fender_shape
+	fender.add_child(fender_collider)
+	node.add_child(fender)
+	# A plank path up the beach from the dock to the shack's steps.
+	var door: Vector3 = Transform3D(shack.xf) * Vector3(0.0, 0.0, -SIZE.z * 0.5 - 1.0)
+	var path_from := Vector3(start.x, 0.0, start.z) - dir * 0.3
+	var path_dir := (Vector3(door.x, 0.0, door.z) - path_from).normalized()
+	var steps := int(Vector2(door.x - path_from.x, door.z - path_from.z).length() / 0.75)
+	for i in steps:
+		var p := path_from.lerp(Vector3(door.x, 0.0, door.z), (i + 0.5) / steps)
+		p.y = shape.height_at(p.x, p.z) + 0.04
+		var board := MeshInstance3D.new()
+		board.mesh = plank
+		board.material_override = deck
+		board.transform = Transform3D(Basis.looking_at(path_dir, Vector3.UP).rotated(Vector3.UP, 0.08 * sin(i * 3.3)), p)
+		board.scale = Vector3(0.7, 0.6, 1.0)
+		node.add_child(board)
 	var spacing := 3.0
 	var piles := int(length / spacing) + 1
 	for i in piles:

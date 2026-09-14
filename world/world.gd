@@ -28,6 +28,7 @@ var boats_root := Node3D.new()
 var saved_players := {}
 ## Boats the crew built (not part of the generated world): name -> {"kind", "index"}.
 var built_boats := {}
+var sharks: SharkField
 var _next_boat_index := FIRST_BUILT_BOAT_INDEX
 var _age := 0.0
 ## peer id -> {"id": target, "at": ocean clock} for hold-to-gather validation
@@ -70,6 +71,7 @@ func _ready() -> void:
 			camp.setup_new_world()
 		else:
 			_apply_save(save)
+		sharks.setup_host(camp_island)
 		Net.report_world_ready()
 	else:
 		Net.welcomed.connect(_on_welcomed, CONNECT_ONE_SHOT)
@@ -107,9 +109,37 @@ func _physics_process(delta: float) -> void:
 	for player: Player in players_root.get_children():
 		if player.survivor == null or player.is_queued_for_deletion():
 			continue
-		player.survivor.host_tick(delta)
-		if player.survivor.survival.is_dead():
-			_respawn(player)
+		var s := player.survivor
+		# Check before ticking, so a tick of health regen can't skip going down.
+		if not s.downed and s.survival.is_dead():
+			_down(player)
+		s.host_tick(delta)
+		if s.downed:
+			s.bleed_out -= delta
+			if s.bleed_out <= 0.0:
+				_set_downed_state(player, false)
+				_respawn(player)
+
+
+## Host: a crew member hits 0 health. They go down and bleed out unless a
+## crewmate reaches them in time (quickly, if there's nobody else to come).
+func _down(player: Player) -> void:
+	var s := player.survivor
+	var crew := players_root.get_child_count() - 1
+	s.bleed_out = SharkMath.DOWNED_SECONDS if crew > 0 else SharkMath.DOWNED_SOLO_SECONDS
+	_set_downed_state(player, true)
+	sfx_at("hit", player.world_transform().origin)
+	if crew > 0:
+		s.notify("You're down! Hang on — a crewmate can revive you.")
+		for other: Player in players_root.get_children():
+			if other != player:
+				other.survivor.notify("%s is down! Get to them and hold E to revive them." % player.display_name)
+
+
+func _set_downed_state(player: Player, value: bool) -> void:
+	player.survivor.downed = value
+	player.set_downed(value, player.survivor.bleed_out)
+	Net.send_to_ready(player, "_set_downed", [value, player.survivor.bleed_out])
 
 
 ## Terrain height at (x, z) from the island generators, or -INF over open sea.
@@ -137,10 +167,18 @@ func spawn_point(index: int) -> Vector3:
 
 
 func start_beach_point(index: int) -> Vector3:
-	var shore := island.find_shore_point(Vector2(0.0, 1.0))
-	var x := shore.x + (index - 2.5) * 1.5
-	var z := shore.z - 6.0
-	return Vector3(x, island.height_at(x, z) + 1.2, z)
+	var toward := start_direction()
+	var shore := island.find_shore_point(toward)
+	var p := Vector2(shore.x, shore.z) - toward * 6.0 + toward.orthogonal() * (index - 2.5) * 1.5
+	return Vector3(p.x, island.height_at(p.x, p.y) + 1.2, p.y)
+
+
+## The starter island's landing beach faces the camp island, so the goal (and
+## its smoke) is in sight and a raft built there launches toward it.
+func start_direction() -> Vector2:
+	if camp_island == null or camp_island.center.length() < 1.0:
+		return Vector2(0.0, 1.0)
+	return camp_island.center.normalized()
 
 
 func camp_beach_point(index: int) -> Vector3:
@@ -200,11 +238,15 @@ func _generate() -> void:
 	resources.populate_start(island)
 	camp_root.add_child(CampIslandPois.build(camp_island))
 	camp.shack_glow = camp_root.find_child("StoveGlow", true, false) as OmniLight3D
+	add_child(StarterWreckage.build(island, start_direction()))
 
 	var john_boat := JohnBoat.create(1)
 	john_boat.transform = camp.shack.boat_xf
 	boats_root.add_child(john_boat)
-	john_boat.moor(camp.shack.lines)
+	john_boat.moor(camp.shack.lines, camp.shack.boat_xf)
+	sharks = SharkField.new()
+	sharks.name = "Sharks"
+	add_child(sharks)
 
 	camp.create_pickups(camp_island)
 
@@ -254,7 +296,7 @@ func _apply_tied(boat_name: String, tied: bool) -> void:
 	if boat == null:
 		return
 	if tied and boat.kind == "john_boat":
-		boat.moor(camp.shack.lines)
+		boat.moor(camp.shack.lines, camp.shack.boat_xf)
 	elif not tied:
 		boat.untie()
 
@@ -313,6 +355,9 @@ func _apply_save(data: Dictionary) -> void:
 		boat.reset_physics_interpolation()
 		if not entry.get("tied", true):
 			boat.untie()
+		elif boat.kind == "john_boat":
+			# Lines are sized to the dock berth, so a boat saved a little way off is drawn back in gently.
+			boat.moor(camp.shack.lines, camp.shack.boat_xf)
 	camp.from_save(data.get("camp", {}), now)
 	saved_players = data.get("players", {})
 	print("[save] world loaded (%d crew members on record)" % saved_players.size())
@@ -379,6 +424,12 @@ func request_interact(target_id: String, slot: int) -> void:
 		"struct":
 			var structure: Node3D = camp.structure_nodes.get(parts[1]) if parts.size() > 1 else null
 			if structure != null and at.distance_to(structure.global_position) <= INTERACT_RANGE + 1.5:
+				var hold: float = (structure as StructureNode).hold_seconds(player)
+				if hold > 0.0:
+					var started: Dictionary = _interact_started.get(sender, {})
+					if started.get("id", "") != target_id or Ocean.time - float(started.get("at", 0.0)) < hold * 0.75:
+						return
+					_interact_started.erase(sender)
 				camp.interact_structure(survivor, parts[1], slot)
 		"boat":
 			if parts.size() < 3:
@@ -392,6 +443,21 @@ func request_interact(target_id: String, slot: int) -> void:
 				return
 			if at.distance_to(camp.shack.parts[parts[1]]) <= INTERACT_RANGE:
 				camp.interact_shack_part(survivor, parts[1], slot)
+		"revive":
+			var target := players_root.get_node_or_null(parts[1] if parts.size() > 1 else "") as Player
+			if target == null or target == player or not target.survivor.downed or survivor.downed:
+				return
+			if at.distance_to(target.world_transform().origin) > SharkMath.REVIVE_RANGE + 0.5:
+				return
+			var started: Dictionary = _interact_started.get(sender, {})
+			if started.get("id", "") != target_id or Ocean.time - float(started.get("at", 0.0)) < SharkMath.REVIVE_HOLD * 0.75:
+				return
+			_interact_started.erase(sender)
+			target.survivor.survival.health = SharkMath.REVIVE_HEALTH
+			_set_downed_state(target, false)
+			target.survivor.notify("%s pulls you back up. You're hurt — patch yourself up." % player.display_name)
+			survivor.notify("You got %s back on their feet." % target.display_name)
+			target.survivor.push_survival()
 
 
 func _use_spring(survivor: Survivor, at: Vector3, slot: int) -> void:
@@ -444,6 +510,7 @@ func _respawn(player: Player) -> void:
 		camp.drop_items(player, lost, "%s's pack" % player.display_name)
 		s.inventory.clear()
 	sfx_at("hit", fell_at)
+	s.recent_bites.clear()
 	s.survival.health = Survival.MAX
 	s.survival.hunger = maxf(s.survival.hunger, 50.0)
 	s.survival.thirst = maxf(s.survival.thirst, 50.0)
@@ -480,8 +547,12 @@ func _on_peer_ready(peer_id: int) -> void:
 				_set_tied.rpc_id(peer_id, String(boat.name), false)
 		for existing: Player in players_root.get_children():
 			_spawn_player.rpc_id(peer_id, existing.peer_id, existing.display_name, existing.player_id, existing.look, existing.worn, existing.world_transform().origin)
+			existing._set_limbs.rpc_id(peer_id, existing.survivor.missing_limbs, existing.survivor.prosthetics)
+			if existing.survivor.downed:
+				existing._set_downed.rpc_id(peer_id, true, existing.survivor.bleed_out)
 		resources.sync_to(peer_id)
 		camp.sync_to(peer_id)
+		sharks.sync_to(peer_id)
 	var player_name: String = Net.roster[peer_id]["name"]
 	var player_id := Net.player_id_of(peer_id)
 	var look := Net.look_of(peer_id)
@@ -490,17 +561,26 @@ func _on_peer_ready(peer_id: int) -> void:
 	_spawn_player(peer_id, player_name, player_id, look, {}, pos)
 	Net.send_to_ready(self, "_spawn_player", [peer_id, player_name, player_id, look, {}, pos])
 	var player := players_root.get_node(str(peer_id)) as Player
-	if saved_players.has(player_id):
-		player.survivor.from_save(saved_players[player_id], Ocean.time)
+	var saved: Dictionary = saved_players.get(player_id, {})
+	if not saved.is_empty():
+		player.survivor.from_save(saved, Ocean.time)
 		saved_players.erase(player_id)
 	else:
 		player.survivor.give_starting_outfit()
 	player.survivor.push_inventory()
 	player.survivor.push_survival()
+	player.survivor.push_limbs()
 	if GameState.spawn_override == "boat":
 		player.teleport_aboard("JohnBoat", JohnBoat.crew_spawn(index))
 	elif GameState.spawn_override in ["shack", "camp"]:
 		player.teleport(pos)
+	elif saved.has("at"):
+		# Back where they left off — aboard their boat if it's still afloat.
+		var boat := find_boat(saved.get("boat", ""))
+		if boat != null:
+			player.teleport_aboard(String(boat.name), saved.local)
+		else:
+			player.teleport(Vector3(saved.at) + Vector3.UP * 0.5)
 	else:
 		camp.teleport_to_spot(player, camp.respawn_spot(player_id))
 
@@ -529,8 +609,12 @@ func _spawn_player(peer_id: int, player_name: String, player_id: String, look: D
 	player.worn = worn
 	player.is_local = peer_id == multiplayer.get_unique_id()
 	player.set_multiplayer_authority(peer_id)
-	player.yaw = PI  # face out to sea
-	player.pitch = -0.12
+	player.yaw = PI
+	player.pitch = -0.05
+	if camp_island != null:
+		# Face the camp island (and its smoke) — the goal is always in sight when you wash up.
+		var to_goal := camp_island.center - Vector2(pos.x, pos.z)
+		player.yaw = atan2(-to_goal.x, -to_goal.y)
 	if camp_island != null and (GameState.spawn_override == "camp" or GameState.face in ["camp", "sea"]):
 		var to_camp := camp_island.center - Vector2(pos.x, pos.z)
 		player.yaw = atan2(-to_camp.x, -to_camp.y)

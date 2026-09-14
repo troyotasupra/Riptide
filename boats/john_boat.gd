@@ -18,7 +18,7 @@ const SEATS := [
 	Vector3(-0.45, FLOOR_Y + 0.05, 0.7), Vector3(0.45, FLOOR_Y + 0.05, 0.7), Vector3(0.0, FLOOR_Y + 0.05, 1.75),
 ]
 const PAINT := Color(0.29, 0.36, 0.27)
-const ALUMINIUM := Color(0.66, 0.68, 0.67)
+const ALUMINIUM := Color(0.55, 0.57, 0.56)
 const BENCH_WOOD := Color(0.56, 0.43, 0.28)
 
 
@@ -82,7 +82,7 @@ func _tube(points: PackedVector3Array, radius: float, mat: Material) -> void:
 
 func _build() -> void:
 	var paint := Materials.metal(PAINT, 0.62)
-	var metal := Materials.metal(ALUMINIUM, 0.5)
+	var metal := Materials.metal(ALUMINIUM, 0.75)
 	var dark := Materials.metal(ALUMINIUM.darkened(0.35), 0.6)
 	var wood := Materials.wood(BENCH_WOOD)
 	var half_l := LENGTH * 0.5

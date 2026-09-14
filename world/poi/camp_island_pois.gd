@@ -169,17 +169,18 @@ static func _castaway_camp(shape: CampIsland) -> Node3D:
 
 static func _smoke() -> GPUParticles3D:
 	var particles := GPUParticles3D.new()
-	particles.amount = 32
-	particles.lifetime = 14.0
-	particles.preprocess = 14.0
+	# A tall column — the landmark you row toward from the starter island.
+	particles.amount = 56
+	particles.lifetime = 20.0
+	particles.preprocess = 20.0
 	var process := ParticleProcessMaterial.new()
 	process.direction = Vector3.UP
-	process.spread = 8.0
-	process.initial_velocity_min = 2.0
-	process.initial_velocity_max = 3.0
-	process.gravity = Vector3(0.25, 0.15, 0.1)
-	process.scale_min = 1.5
-	process.scale_max = 4.0
+	process.spread = 6.0
+	process.initial_velocity_min = 3.8
+	process.initial_velocity_max = 5.0
+	process.gravity = Vector3(0.3, 0.1, 0.12)
+	process.scale_min = 2.5
+	process.scale_max = 7.0
 	particles.process_material = process
 	var quad := QuadMesh.new()
 	quad.size = Vector2(3.0, 3.0)
@@ -192,7 +193,7 @@ static func _smoke() -> GPUParticles3D:
 	puff.roughness = 1.0
 	quad.material = puff
 	particles.draw_pass_1 = quad
-	particles.visibility_aabb = AABB(Vector3(-40.0, -5.0, -40.0), Vector3(80.0, 90.0, 80.0))
+	particles.visibility_aabb = AABB(Vector3(-60.0, -5.0, -60.0), Vector3(120.0, 130.0, 120.0))
 	return particles
 
 

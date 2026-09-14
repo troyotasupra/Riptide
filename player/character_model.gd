@@ -45,6 +45,9 @@ var worn := {}
 var crew_color_index := 4
 var emblem_index := 1
 var held_id := ""
+## Limbs lost to sharks ("leg_l", "arm_r", ...) and those with a peg leg or hook fitted.
+var missing_limbs: Array = []
+var prosthetics: Array = []
 
 var _pelvis: Node3D
 var _spine: Node3D
@@ -78,6 +81,14 @@ func set_held(id: String) -> void:
 		return
 	held_id = id
 	_rebuild_held()
+
+
+func set_limbs(missing: Array, fitted: Array) -> void:
+	if missing == missing_limbs and fitted == prosthetics:
+		return
+	missing_limbs = missing.duplicate()
+	prosthetics = fitted.duplicate()
+	rebuild()
 
 
 ## Plays one tool swing (chop, cut, use).
@@ -143,6 +154,14 @@ func rebuild() -> void:
 		if legs_item == "shorts":
 			_capsule(hip, leg_r * 1.14, THIGH * 0.5, Vector3(0.0, -THIGH * 0.2, 0.0), pants)
 		var knee := _joint(hip, "Knee_" + key, Vector3(0.0, -THIGH, 0.0))
+		if missing_limbs.has("leg_" + key):
+			# Lost below the knee: a rounded stump, and a peg leg if one's fitted.
+			_ellipsoid(knee, Vector3.ONE * leg_r * 1.9, Vector3(0.0, 0.02, 0.0), thigh_color)
+			if prosthetics.has("leg_" + key):
+				_cylinder(knee, leg_r * 1.05, 0.1, Vector3(0.0, -0.04, 0.0), Color(0.36, 0.26, 0.17))
+				_cylinder(knee, leg_r * 0.42, SHIN + 0.04, Vector3(0.0, -(SHIN + 0.04) * 0.5 - 0.04, 0.0), Color(0.52, 0.39, 0.25))
+			_legs[key] = {"hip": hip, "knee": knee}
+			continue
 		var shin_color := pants if long_legs else skin
 		_ellipsoid(knee, Vector3.ONE * leg_r * 1.8, Vector3.ZERO, shin_color)
 		_capsule(knee, leg_r * 0.8, SHIN, Vector3(0.0, -SHIN * 0.5, 0.0), shin_color)
@@ -173,6 +192,16 @@ func rebuild() -> void:
 		if torso_item == "tshirt":
 			_capsule(shoulder, arm_r * 1.22, UPPER_ARM * 0.45, Vector3(0.0, -UPPER_ARM * 0.2, 0.0), shirt)
 		var elbow := _joint(shoulder, "Elbow_" + key, Vector3(0.0, -UPPER_ARM, 0.0))
+		if missing_limbs.has("arm_" + key):
+			# Lost below the elbow: a stump, and a leather cuff with an iron hook if one's fitted.
+			_ellipsoid(elbow, Vector3.ONE * arm_r * 1.9, Vector3(0.0, 0.02, 0.0), shirt if long_sleeves else skin)
+			var stump_hand := _joint(elbow, "Hand_" + key, Vector3(0.0, -FOREARM - 0.03, 0.0))
+			if prosthetics.has("arm_" + key):
+				_cylinder(elbow, arm_r * 1.05, FOREARM * 0.5, Vector3(0.0, -FOREARM * 0.28, 0.0), Color(0.40, 0.28, 0.18))
+				_cylinder(elbow, 0.012, 0.1, Vector3(0.0, -FOREARM * 0.58, 0.0), Color(0.62, 0.62, 0.64))
+				_ellipsoid(elbow, Vector3(0.022, 0.09, 0.022), Vector3(-side * 0.025, -FOREARM * 0.58 - 0.08, 0.0), Color(0.62, 0.62, 0.64), Vector3(0.0, 0.0, side * 0.7))
+			_arms[key] = {"shoulder": shoulder, "elbow": elbow, "hand": stump_hand}
+			continue
 		var forearm_color := shirt if long_sleeves else skin
 		_ellipsoid(elbow, Vector3.ONE * arm_r * 1.8, Vector3.ZERO, forearm_color)
 		_capsule(elbow, arm_r * 0.9, FOREARM, Vector3(0.0, -FOREARM * 0.5, 0.0), forearm_color)
@@ -543,7 +572,8 @@ func _build_head(skin: Color, feminine: bool) -> void:
 		"wool_beanie":
 			covered = func(d: Vector3) -> bool: return _above_hairline(d, 0.52, 0.3, false)
 		"combat_helmet":
-			covered = func(d: Vector3) -> bool: return d.y > maxf(-0.15, 0.1 + 0.25 * -d.z) - 0.03
+			# Only a short band of hair shows at the back below a helmet's rim.
+			covered = func(d: Vector3) -> bool: return d.y > maxf(-0.15, 0.1 + 0.25 * -d.z) - 0.03 or -d.z > 0.15
 	if style != 0:
 		# A scalp tint under every style — lighter on a mohawk's shaved sides — so
 		# the gaps between hair shells show hair colour, never bare skin.
@@ -563,11 +593,11 @@ func _build_head(skin: Color, feminine: bool) -> void:
 				var quiff_dir := Vector3(0.0, 0.72, -0.7)
 				_ellipsoid(_head, Vector3(0.14, 0.06, 0.1), _head_point(quiff_dir) + _head_normal(quiff_dir) * 0.03, hair_color, Vector3(-0.4, 0.0, 0.0))
 		4:
-			_ellipsoid(_head, Vector3(_head_shape.size.x * 1.05, 0.34, 0.07), back + Vector3(0.0, -0.1, 0.02), hair_color)
+			_ellipsoid(_head, Vector3(_head_shape.size.x * 0.98, 0.34, 0.14), back + Vector3(0.0, -0.1, -0.035), hair_color)
 			for side: float in [-1.0, 1.0]:
 				var side_dir := Vector3(side, -0.2, 0.25)
 				# Lies flat against the side of the head rather than sticking out like an earmuff.
-				_ellipsoid(_head, Vector3(0.045, 0.26, 0.15), _head_point(side_dir) + Vector3(-side * 0.008, -0.1, 0.02), hair_color)
+				_ellipsoid(_head, Vector3(0.045, 0.26, 0.15), _head_point(side_dir) + Vector3(-side * 0.02, -0.1, 0.02), hair_color)
 		5:
 			_ellipsoid(_head, Vector3(0.065, 0.22, 0.065), back + Vector3(0.0, -0.06, 0.04), hair_color, Vector3(0.3, 0.0, 0.0))
 		6:

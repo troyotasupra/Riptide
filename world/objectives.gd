@@ -78,10 +78,15 @@ static func upcoming(world: Node, player: Player, count: int = 3) -> PackedStrin
 	for entry: Array in LIST:
 		if not done.has(entry[0]) and check(entry[0], world, player):
 			done[entry[0]] = true
-	# Anyone who has reached the camp island is past the starter island's steps.
-	if done.has("reach_camp") or done.has("shack"):
-		for id: String in ["gather", "rope", "hatchet", "oar", "raft_site", "raft", "reach_camp"]:
-			done[id] = true
+	# Anyone further along the starter-island chain (or a crewmate who didn't
+	# craft those steps themselves) has the earlier steps behind them.
+	var chain_end := 7  # gather … reach_camp
+	var furthest := -1
+	for i in LIST.size():
+		if done.has(LIST[i][0]):
+			furthest = i
+	for i in mini(furthest, chain_end):
+		done[LIST[i][0]] = true
 	var out: PackedStringArray = []
 	for entry: Array in LIST:
 		if not done.has(entry[0]):

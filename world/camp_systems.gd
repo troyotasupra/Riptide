@@ -48,6 +48,7 @@ const PICKUPS := {
 	"journal": {"item": "journal", "count": 1, "label": "Take the journal"},
 	"page_shelter": {"item": "book_page_shelter", "count": 1, "label": "Take the torn book page"},
 	"page_camp": {"item": "book_page_camp", "count": 1, "label": "Take the torn book page"},
+	"page_prosthetics": {"item": "book_page_prosthetics", "count": 1, "label": "Take the torn book page"},
 }
 ## Offsets from the castaway camp (camp space: -Z faces the island centre).
 const PICKUP_SPOTS := {
@@ -56,6 +57,7 @@ const PICKUP_SPOTS := {
 	"journal": Vector3(0.3, 0.05, 0.2),
 	"page_shelter": Vector3(-1.6, 0.05, 1.3),
 	"page_camp": Vector3(0.9, 0.05, -0.5),
+	"page_prosthetics": Vector3(-1.3, 0.05, -0.7),
 }
 
 const STASH := [["survival_book", 1], ["knife", 1], ["canteen", 1], ["lighter", 1], ["tarp", 1], ["paracord", 2],
@@ -222,6 +224,15 @@ func from_save(data: Dictionary, now: float) -> void:
 		var key: String = SAVE_RENAMES.get(id, id)
 		containers[key] = grid
 		container_titles[key] = SHACK_STORAGE[key.substr(6)].title if SHACK_STORAGE.has(key.substr(6)) and key.begins_with("shack:") else entry.get("title", "Storage")
+	# Storage that grew since the save keeps its contents in the bigger grid.
+	for part: String in SHACK_STORAGE:
+		var size: Vector2i = SHACK_STORAGE[part].size
+		var old: ItemGrid = containers.get("shack:" + part)
+		if old != null and (old.width < size.x or old.height < size.y):
+			var bigger := ItemGrid.new(size.x, size.y)
+			for item: Dictionary in old.items:
+				bigger.add_stack(item)
+			containers["shack:" + part] = bigger
 	if not containers.has("shack:chest"):
 		_stock_shack()
 	if not containers.has("boat:JohnBoat:drybox"):
@@ -615,7 +626,13 @@ func drop_items(player: Player, stacks: Array, title: String) -> void:
 	var at := player.world_transform().origin
 	var ground: float = world.ground_height(at.x, at.z)
 	var pos := Vector3(at.x, 0.15, at.z) if ground == -INF or at.y < 0.0 else Vector3(at.x, maxf(at.y, ground) + 0.05, at.z)
-	var pending: Array = left
+	drop_loot(pos, left, title)
+
+
+## Host: leaves `stacks` in a bag at `pos` — merged into a bag already there, and
+## spilling into more bags when one is full.
+func drop_loot(pos: Vector3, stacks: Array, title: String) -> void:
+	var pending: Array = stacks
 	for id: String in bags:
 		if Vector3(bags[id].pos).distance_to(pos) < BAG_MERGE_RANGE:
 			pending = _fill_bag(id, pending)
@@ -1232,7 +1249,18 @@ func _launch(survivor: Survivor, id: String, entry: Dictionary) -> void:
 		survivor.notify("There's no open water close enough to push it into.")
 		return
 	var dir: Vector2 = spot.dir
-	var xf := Transform3D(Basis(Vector3.UP, atan2(-dir.x, -dir.y)), spot.pos)
+	var pos: Vector3 = spot.pos
+	# Don't launch a new raft on top of one already floating there.
+	var sideways := Vector3(-dir.y, 0.0, dir.x)
+	for attempt in 6:
+		var clear := true
+		for boat: Boat in world.boats_root.get_children():
+			if Vector2(boat.global_position.x, boat.global_position.z).distance_to(Vector2(pos.x, pos.z)) < 4.5:
+				clear = false
+		if clear:
+			break
+		pos += sideways * 4.5
+	var xf := Transform3D(Basis(Vector3.UP, atan2(-dir.x, -dir.y)), pos)
 	world.launch_boat(StructureTable.get_type(entry.type).get("launches", "raft"), xf)
 	_remove_structure(id)
 	Net.send_to_ready(self, "_remove_structure", [id])

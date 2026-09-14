@@ -9,10 +9,10 @@ extends RefCounted
 
 const KINDS := {
 	"palm": {"label": "Shake the palm for coconuts", "depleted_label": "No coconuts left up there", "yields": [["coconut", 1, 2]], "respawn": 600.0, "seconds": 1.0},
-	"tree": {"label": "Chop the tree", "depleted_label": "Just a stump now", "needs": "You'll need a hatchet to fell this — the survival book shows how to make one.", "requires": "hatchet", "yields": [["log", 2, 3]], "respawn": 1200.0, "seconds": 4.0},
+	"tree": {"label": "Chop the tree", "depleted_label": "Just a stump now — it'll grow back", "needs": "You'll need a stone hatchet to fell this — make one from wood, flint and rope (B).", "requires": "hatchet", "yields": [["log", 2, 3]], "respawn": 700.0, "seconds": 4.0},
 	"berry_bush": {"label": "Pick berries", "depleted_label": "Picked clean", "yields": [["berries", 3, 6]], "respawn": 420.0, "seconds": 1.5, "tool_speed": {"knife": 1.5, "machete": 2.0}},
 	"red_berry_bush": {"label": "Pick red berries", "depleted_label": "Picked clean", "yields": [["red_berries", 3, 6]], "respawn": 420.0, "seconds": 1.5, "tool_speed": {"knife": 1.5, "machete": 2.0}},
-	"fiber": {"label": "Cut plant fiber", "yields": [["fiber", 2, 4]], "respawn": 300.0, "seconds": 3.0, "tool_speed": {"knife": 2.0, "machete": 6.0}},
+	"fiber": {"label": "Cut plant fiber", "depleted_label": "Cut back — it'll grow again soon", "yields": [["fiber", 3, 4]], "respawn": 240.0, "seconds": 3.0, "tool_speed": {"knife": 2.0, "machete": 6.0}},
 	"stone": {"label": "Pick up stone", "yields": [["stone", 1, 1]], "respawn": 900.0},
 	"flint": {"label": "Pick up flint", "yields": [["flint", 1, 1]], "respawn": 900.0},
 	"driftwood": {"label": "Pick up driftwood", "yields": [["driftwood", 1, 2]], "respawn": 900.0},

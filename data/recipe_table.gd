@@ -21,6 +21,8 @@ const RECIPES := {
 	"torch": {"name": "Torch", "needs": {"wood": 1, "fiber": 2}, "makes": "torch", "count": 1},
 	"tent_kit": {"name": "Tent", "needs": {"tarp": 1, "rope": 4, "wood": 4}, "makes": "tent_kit", "count": 1},
 	"drying_rack_kit": {"name": "Drying rack", "needs": {"wood": 6, "rope": 3}, "makes": "drying_rack_kit", "count": 1},
+	"peg_leg": {"name": "Peg leg", "needs": {"log": 1, "rope": 2}, "makes": "peg_leg", "count": 1, "tool": "knife"},
+	"hook_hand": {"name": "Hook hand", "needs": {"wood": 1, "rope": 1, "lure": 1}, "makes": "hook_hand", "count": 1, "tool": "knife"},
 	"storage_crate_kit": {"name": "Storage crate", "needs": {"log": 3, "rope": 2}, "makes": "storage_crate_kit", "count": 1, "tool": "hatchet"},
 }
 

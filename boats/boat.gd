@@ -55,6 +55,7 @@ var parts := {}
 var mooring: Array[Dictionary] = []
 
 var _ropes: Array[MeshInstance3D] = []
+var _rower_check := 0.0
 var _snapshots: Array[Dictionary] = []
 var _tick := 0
 
@@ -216,18 +217,36 @@ func _simulate() -> void:
 	apply_central_force(Vector3(-v.x, 0.0, -v.z) * water_drag * mass * wet)
 	apply_torque(-angular_velocity * mass * water_angular_drag * wet)
 
+	_rower_check += get_physics_process_delta_time()
+	if _rower_check >= 0.5:
+		_rower_check = 0.0
+		_drop_stale_rowers()
 	if rowers.is_empty():
 		return
+	# Sitting to one side only matters when someone's there to row the other side.
+	var shared := rowers.size() > 1
 	var oars := Vector2.ZERO
 	for peer: int in rowers:
 		var entry: Dictionary = rowers[peer]
-		oars += RowMath.oars_for(entry.left, entry.right, _seat_x(peer)) * (RowMath.POWER if entry.power else 1.0)
+		oars += RowMath.oars_for(entry.left, entry.right, _seat_x(peer) if shared else 0.0) \
+			* (RowMath.POWER if entry.power else 1.0) * float(entry.get("strength", 1.0))
 	var drive := RowMath.thrust(oars)
 	var forward := -global_basis.z
 	forward.y = 0.0
 	if forward.length_squared() > 0.001:
 		apply_central_force(forward.normalized() * drive.x * row_force * wet)
 	apply_torque(Vector3.UP * drive.y * row_torque * wet)
+
+
+## Host: forget anyone who has left the boat, lost their oar or gone down.
+func _drop_stale_rowers() -> void:
+	if GameState.world == null:
+		return
+	for peer: int in rowers.keys():
+		var player := GameState.world.players_root.get_node_or_null(str(peer)) as Player
+		if player == null or player.platform != self or player.survivor == null or player.survivor.downed \
+				or not player.survivor.inventory.tool_types().has("oar"):
+			rowers.erase(peer)
 
 
 ## How far a rower sits off the centreline (boat space), or 0 if unknown.
@@ -242,13 +261,16 @@ func _seat_x(peer: int) -> float:
 
 # --- mooring ----------------------------------------------------------------------
 
-## Ties the boat up with `lines` ({"local", "anchor"}); each line gets a little slack.
-func moor(lines: Array) -> void:
+## Ties the boat up with `lines` ({"local", "anchor"}), each with a little slack.
+## Line lengths come from `berth` — where the boat belongs — so a boat tied up a
+## little way off is drawn in to it.
+func moor(lines: Array, berth: Transform3D = Transform3D()) -> void:
 	untie()
+	var rest := global_transform if berth == Transform3D() else berth
 	for line: Dictionary in lines:
 		var cleat: Vector3 = line.local
 		var anchor: Vector3 = line.anchor
-		var length := (global_transform * cleat).distance_to(anchor) * LINE_SLACK
+		var length := (rest * cleat).distance_to(anchor) * LINE_SLACK
 		mooring.append({"local": cleat, "anchor": anchor, "length": length})
 		var rope := MeshInstance3D.new()
 		rope.mesh = _unit_rope()
@@ -280,6 +302,7 @@ func _pull_mooring_lines() -> void:
 		var dir := to_anchor / distance
 		var closing := point_velocity(p).dot(dir)
 		var tension := maxf(0.0, (distance - float(line.length)) * LINE_STIFFNESS_PER_KG * mass - closing * LINE_DAMPING_PER_KG * mass)
+		tension = minf(tension, mass * 6.0)  # a line pulls hard, but never yanks the boat around
 		apply_force(dir * tension, p - global_position)
 
 
@@ -375,4 +398,8 @@ func set_row_input(left: float, right: float, power: bool) -> void:
 	if player == null or player.platform != self or player.survivor == null or not player.survivor.inventory.tool_types().has("oar"):
 		rowers.erase(sender)
 		return
-	rowers[sender] = {"left": clampf(left, -1.0, 1.0), "right": clampf(right, -1.0, 1.0), "power": power}
+	if player.survivor.downed:
+		rowers.erase(sender)
+		return
+	rowers[sender] = {"left": clampf(left, -1.0, 1.0), "right": clampf(right, -1.0, 1.0), "power": power,
+		"strength": SharkMath.arm_factor(player.survivor.missing_limbs, player.survivor.prosthetics)}

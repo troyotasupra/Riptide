@@ -109,7 +109,16 @@ static func build(id: String) -> Node3D:
 			_box(root, Vector3(0.012, 0.22, 0.046), Vector3(-0.078, 0.1, 0.0), Materials.leather(cover.darkened(0.2)))
 			if id == "logbook":
 				_box(root, Vector3(0.02, 0.23, 0.05), Vector3(0.03, 0.1, 0.0), Materials.leather(LEATHER.darkened(0.3)))
-		"book_page_shelter", "book_page_camp":
+		"peg_leg":
+			_cylinder(root, 0.05, 0.1, Vector3(0.0, 0.62, 0.0), Materials.leather(LEATHER))
+			_cylinder(root, 0.028, 0.6, Vector3(0.0, 0.3, 0.0), Materials.wood(WOOD), Vector3.ZERO, 0.02)
+			for y: float in [0.5, 0.56]:
+				_torus(root, 0.05, 0.006, Vector3(0.0, y, 0.0), Materials.cloth(ROPE))
+		"hook_hand":
+			_cylinder(root, 0.04, 0.14, Vector3(0.0, 0.07, 0.0), Materials.leather(LEATHER))
+			_cylinder(root, 0.008, 0.08, Vector3(0.0, 0.18, 0.0), Materials.metal(DARK_STEEL, 0.5))
+			_torus(root, 0.035, 0.008, Vector3(0.03, 0.24, 0.0), Materials.metal(DARK_STEEL, 0.5), Vector3(PI / 2.0, 0.0, 0.0))
+		"book_page_shelter", "book_page_camp", "book_page_prosthetics":
 			var page := _box(root, Vector3(0.14, 0.19, 0.003), Vector3(0.0, 0.09, 0.0), Materials.cloth(PAPER))
 			page.rotation.z = 0.08
 			for i in 5:
@@ -152,8 +161,9 @@ static func build(id: String) -> Node3D:
 			tail.position.y = -0.005
 			root.add_child(tail)
 			_sphere(root, 0.008, Vector3(0.018, 0.2, -0.02), Materials.plain(Color(0.05, 0.05, 0.05), 0.2))
-		"raw_meat", "cooked_meat", "dried_meat", "spoiled_food":
-			var tone: Color = {"raw_meat": Color(0.72, 0.18, 0.2), "cooked_meat": Color(0.45, 0.25, 0.13), "dried_meat": Color(0.35, 0.18, 0.1), "spoiled_food": Color(0.35, 0.42, 0.22)}[id]
+		"raw_meat", "cooked_meat", "dried_meat", "spoiled_food", "raw_shark_meat", "cooked_shark":
+			var tone: Color = {"raw_meat": Color(0.72, 0.18, 0.2), "cooked_meat": Color(0.45, 0.25, 0.13), "dried_meat": Color(0.35, 0.18, 0.1),
+				"spoiled_food": Color(0.35, 0.42, 0.22), "raw_shark_meat": Color(0.86, 0.66, 0.66), "cooked_shark": Color(0.62, 0.44, 0.28)}[id]
 			if id == "dried_meat":
 				for i in 3:
 					_box(root, Vector3(0.03, 0.15, 0.008), Vector3((i - 1) * 0.035, 0.07, i * 0.004), Materials.leather(tone)).rotation.z = (i - 1) * 0.15

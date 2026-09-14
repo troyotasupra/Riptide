@@ -26,6 +26,8 @@ var _note: NotePanel
 var _pause: PauseMenu
 var _settings: SettingsPanel
 var _sleep_overlay: ColorRect
+var _downed_overlay: ColorRect
+var _downed_label: Label
 var _message_log: Array = []
 var _lan_addresses := ""
 var _bound: Survivor = null
@@ -88,6 +90,22 @@ func _ready() -> void:
 	sleep_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	sleep_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	sleep_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+
+	_downed_overlay = ColorRect.new()
+	_downed_overlay.color = Color(0.35, 0.0, 0.0, 0.38)
+	_downed_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_downed_overlay.visible = false
+	add_child(_downed_overlay)
+	_downed_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_downed_label = Label.new()
+	_downed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_downed_label.add_theme_font_size_override("font_size", 22)
+	_downed_label.add_theme_constant_override("outline_size", 6)
+	_downed_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.85))
+	_downed_overlay.add_child(_downed_label)
+	_downed_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_downed_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_downed_label.grow_vertical = Control.GROW_DIRECTION_BOTH
 
 	_inventory = InventoryScreen.new()
 	_inventory.visible = false
@@ -356,6 +374,9 @@ func _process(delta: float) -> void:
 	_bars["hunger"].value = survival.hunger
 	_bars["thirst"].value = survival.thirst
 	_bars["stamina"].value = player.stamina
+	_downed_overlay.visible = player.downed
+	if player.downed:
+		_downed_label.text = "YOU'RE DOWN\nBleeding out in %ds — a crewmate can revive you (hold E on you)" % ceili(player.bleed_left)
 	var temperature := "Body %.1f°C · feels %.0f°C" % [survival.body_temp, _bound.air_temp]
 	if _bound.warmth > 0.0:
 		temperature += " · sheltered"
@@ -379,7 +400,12 @@ func _process(delta: float) -> void:
 		var forward := -player.camera.global_basis.z
 		heading = fposmod(rad_to_deg(atan2(forward.x, -forward.z)), 360.0)
 	_clock.text = "%s    %s %03d°" % [DayNight.clock_text(GameState.time_of_day()), CARDINALS[int(round(heading / 45.0)) % 8], int(heading)]
-	_markers.text = _chart_markers(here) if _camp.chart_read else ""
+	if _camp.chart_read:
+		_markers.text = _chart_markers(here)
+	elif not GameState.objectives_done.has("reach_camp") and GameState.world.camp_island != null:
+		_markers.text = "Smoke on the horizon  %03d°" % _bearing(here, GameState.world.camp_island.camp)
+	else:
+		_markers.text = ""
 	_prompt.text = "" if GameState.ui_open else _prompt_text(player)
 
 	var status: Dictionary = _camp.sleep_status
@@ -437,7 +463,7 @@ func _update_info(player: Player) -> void:
 		lines.append("Crew: " + ", ".join(names))
 	if player != null and player.platform != null and player.platform.can_paddle:
 		if player.paddling:
-			lines.append("Rowing — %s left oar · %s right oar · both to go straight · hold %s back-row · %s pull hard · %s let go" % [
+			lines.append("ROWING   %s ◀ left · right ▶ %s   (both = straight · %s back · %s hard · %s stop)" % [
 				Controls.tag("row_left"), Controls.tag("row_right"), Controls.tag("move_back"), Controls.tag("sprint"), Controls.tag("paddle")])
 		elif player.survivor.inventory.tool_types().has("oar"):
 			lines.append("%s take the oars" % Controls.tag("paddle"))

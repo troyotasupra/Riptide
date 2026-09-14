@@ -87,7 +87,7 @@ func test_trees_need_a_hatchet() -> void:
 
 
 func test_every_item_explains_itself() -> void:
-	var handled := ["food", "drink", "medical", "page", "book", "note", "chart", "placeable", "wearable"]
+	var handled := ["food", "drink", "medical", "page", "book", "note", "chart", "placeable", "wearable", "prosthetic"]
 	for id: String in Items.ITEMS:
 		var item: Dictionary = Items.ITEMS[id]
 		check(handled.has(item.category) or item.has("hint"), "%s needs a left-click action or a hint" % id)

@@ -27,8 +27,13 @@ func _run() -> void:
 			return  # stays up for a --shot screenshot
 		"starter":
 			await _starter_loop()
+		"sharks":
+			await _shark_loop()
 		"dock":
 			_dock_view()
+			return  # stays up for a --shot screenshot
+		"shark_view":
+			_shark_view()
 			return  # stays up for a --shot screenshot
 		"structures":
 			_structures_view()
@@ -182,6 +187,8 @@ func _camp_loop() -> void:
 	var carried := pack.all_stacks().size()
 	s.survival.health = 0.0
 	await _wait(1.0)
+	_check(s.downed, "at zero health you go down first")
+	await _wait(SharkMath.DOWNED_SOLO_SECONDS + 0.5)
 	var bag_ok := false
 	for id: String in camp.bags:
 		if (camp.containers["bag:" + id] as ItemGrid).count_of("cooked_fish") == 1:
@@ -352,6 +359,104 @@ func _starter_loop() -> void:
 	_check(boats.has("JohnBoat") and not boats.JohnBoat.tied, "and remembers the john boat is untied")
 
 
+## Host: sharks patrol → one hunts a swimmer and bites → a spear kills it → the
+## carcass gives meat → at 0 health you're downed → bites while down take a limb
+## → you bleed out and wake with the limb still gone → a peg leg fits → saved.
+func _shark_loop() -> void:
+	var world := GameState.world
+	var camp: CampSystems = world.camp
+	var field: SharkField = world.sharks
+	var player := GameState.local_player as Player
+	var s := player.survivor
+	var pack := s.inventory
+	_check(field.sharks.size() >= 3, "sharks patrol the crossing and the reef (%d)" % field.sharks.size())
+
+	var sea: Vector2 = world.camp_island.center * 0.45
+	player.teleport(Vector3(sea.x, -2.6, sea.y))
+	await _wait(2.0)
+	_check(player.swimming, "swimming in open water, far from land")
+	var here := player.world_transform().origin
+	var hunter := field.spawn(here + Vector3(14.0, -2.0, 0.0), here, 10.0)
+	var before := s.survival.health
+	var waited := 0.0
+	while s.survival.health >= before and waited < 14.0:
+		await _wait(0.5)
+		waited += 0.5
+	_check(s.survival.health < before, "a shark hunts the swimmer down and bites (%.0f s)" % waited)
+	_check(hunter.state != "cruise", "it goes after the swimmer rather than cruising past")
+
+	s.survival.health = Survival.MAX
+	pack.clear()
+	pack.hotbar[0] = {"uid": 4242, "id": "spear", "count": 1, "spoils_at": 0.0}
+	s.select_slot(0)
+	player.held_id = "spear"
+	var bags_before := camp.bags.size()
+	for i in 4:
+		if hunter.state == "dead":
+			break
+		hunter.position = player.world_transform().origin + Vector3(0.0, 0.0, -1.8)
+		field.request_strike(hunter.shark_id)
+		await _wait(0.6)
+	_check(hunter.state == "dead", "three spear strikes kill it")
+	await _wait(0.5)
+	var meat := false
+	for id: String in camp.bags:
+		if (camp.containers["bag:" + id] as ItemGrid).count_of("raw_shark_meat") > 0:
+			meat = true
+	_check(camp.bags.size() > bags_before and meat, "its carcass leaves shark meat floating on the water")
+
+	s.survival.health = 0.0
+	await _wait(0.5)
+	_check(s.downed and player.downed, "at zero health you're downed, not dead")
+	var maw := field.spawn(player.world_transform().origin + Vector3(0.0, -1.0, 3.0), player.world_transform().origin, 5.0)
+	field.bite(maw, player)
+	field.bite(maw, player)
+	_check(s.missing_limbs.size() == 1 and player.missing_limbs.size() == 1, "two bites while down take a limb (%s)" % [s.missing_limbs])
+	var lost: String = s.missing_limbs[0] if not s.missing_limbs.is_empty() else ""
+	await _wait(SharkMath.DOWNED_SOLO_SECONDS + 2.0)
+	_check(not s.downed and s.survival.health > 50.0, "alone, you bleed out and wake up somewhere safe")
+	_check(s.missing_limbs.has(lost), "the limb is still gone")
+
+	camp.learn(["peg_leg", "hook_hand"], s)
+	var fits := "leg" if lost.begins_with("leg") else "arm"
+	pack.add("knife", 1)
+	pack.add("log", 1)
+	pack.add("driftwood", 1)
+	pack.add("rope", 3)
+	pack.add("lure", 1)
+	var recipe := "peg_leg" if fits == "leg" else "hook_hand"
+	camp.request_craft(recipe)
+	_check(pack.count_of(recipe) == 1, "the castaway's page teaches a %s" % ItemTable.display_name(recipe).to_lower())
+	s._request_use(_uid(pack, recipe))
+	_check(s.prosthetics.has(lost) and pack.count_of(recipe) == 0, "strapping it on fits it to the missing %s" % fits)
+	_check(SharkMath.speed_factor(s.missing_limbs, s.prosthetics) >= 0.85, "and gets you most of the way back")
+
+	world.save_now()
+	var saved := SaveGame.read()
+	var record: Dictionary = saved.get("players", {}).get(player.player_id, {})
+	_check(Array(record.get("limbs", [])).has(lost) and Array(record.get("prosthetics", [])).has(lost), "the save remembers the lost limb and the prosthetic")
+
+
+## Visual check: a shark cruising just under the surface off the cove, dorsal fin up.
+func _shark_view() -> void:
+	var world := GameState.world
+	var island: CampIsland = world.camp_island
+	var out := Vector2.from_angle(island.cove_bearing)
+	var at2 := island.cove + out * 60.0 + out.orthogonal() * 25.0
+	var surface := Waves.height_at(at2, Ocean.time)
+	var shark: Shark = world.sharks.spawn(Vector3(at2.x, surface - 0.3, at2.y), Vector3(at2.x, 0.0, at2.y), 10.0)
+	shark.set_physics_process(false)
+	shark.heading = atan2(-out.x, -out.y)
+	shark.rotation.y = shark.heading
+	var eye2 := at2 + out.orthogonal() * -5.0 + out * 1.0
+	var eye := Vector3(eye2.x, surface + 1.3, eye2.y)
+	var cam := Camera3D.new()
+	cam.fov = 60.0
+	world.add_child(cam)
+	cam.global_transform = Transform3D(Basis.looking_at(shark.position - eye, Vector3.UP), eye)
+	cam.make_current()
+
+
 ## Visual check around the fishing shack. --face=interior (inside the shack),
 ## boat (sitting in the john boat), or anything else for the dock and shack from the water.
 func _dock_view() -> void:
@@ -360,8 +465,8 @@ func _dock_view() -> void:
 	var boat: Boat = world.find_boat("JohnBoat")
 	var frame: Node3D = null
 	var base: Transform3D = shack.xf
-	var eye := Vector3(8.0, 6.0, -33.0)
-	var target := Vector3(-3.0, 0.0, -15.0)
+	var eye := Vector3(14.0, 5.5, -29.0)
+	var target := Vector3(4.5, 0.4, -18.0)
 	match GameState.face:
 		"interior":
 			eye = Vector3(0.3, 1.6, -1.6)
@@ -444,8 +549,12 @@ func _lineup() -> void:
 	# portrait_back turn everyone around to check their hair from other angles.
 	var portrait := GameState.face.begins_with("portrait")
 	var spin: float = {"portrait_side": PI * 0.5, "portrait_back": PI}.get(GameState.face, 0.0)
-	var distance := 1.25 if portrait else 4.5
-	var spacing := 0.62 if portrait else 1.3
+	var limbs := GameState.face == "limbs"
+	if limbs:
+		player.yaw += PI  # turn away from the shack, toward the open beach
+		player.pitch = -0.32
+	var distance := 1.25 if portrait else (2.6 if limbs else 4.5)
+	var spacing := 0.62 if portrait else (0.95 if limbs else 1.3)
 	var turn := 0.12 if portrait else 0.25
 	if portrait:
 		player.pitch = -0.02
@@ -459,6 +568,10 @@ func _lineup() -> void:
 		var model := CharacterModel.new()
 		world.add_child(model)
 		model.setup(looks[i], outfits[i % outfits.size()], GameState.crew_color, GameState.emblem)
+		if GameState.face == "limbs":
+			# Peg leg, hook hand, and two raw stumps.
+			var sets := [[["leg_r"], ["leg_r"]], [["arm_l"], ["arm_l"]], [["leg_l"], []], [["arm_r"], []], [[], []]]
+			model.set_limbs(sets[i][0], sets[i][1])
 		var p: Vector3 = at.origin + forward * distance + right * (i - 2) * spacing
 		var ground: float = world.ground_height(p.x, p.z)
 		p.y = ground if ground != -INF else at.origin.y

@@ -49,7 +49,7 @@ static func generate(shape: CampIsland) -> Array[Dictionary]:
 ## The starter island's supplies — deliberately limited, just enough to build a
 ## raft and an oar and get off: [kind, how many, lowest ground, highest ground].
 const START_SUPPLIES := [
-	["tree", 6, 1.9, 99.0], ["palm", 7, 0.9, 2.8], ["driftwood", 8, 0.5, 1.6], ["fiber", 12, 1.3, 99.0],
+	["tree", 6, 1.9, 99.0], ["palm", 7, 0.9, 2.8], ["driftwood", 8, 0.5, 1.6], ["fiber", 16, 1.3, 99.0],
 	["stone", 7, 0.6, 99.0], ["flint", 5, 0.6, 99.0], ["berry_bush", 2, 1.6, 99.0], ["rock", 3, 1.8, 99.0],
 ]
 

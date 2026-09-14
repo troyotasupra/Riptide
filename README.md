@@ -57,6 +57,15 @@ private networks.
 | Esc | Menu | Pause · settings · save and leave |
 | F3 | — | Debug info |
 
+Sharks patrol the open water between the islands and the reef. They only go after
+people in the water — never anyone aboard a boat, never in the shallows. Strike
+them with a spear, machete, hatchet or knife (look at one, left click); a dead
+shark leaves meat floating in a bag. At 0 health you're **downed**: crawl, and a
+crewmate can hold E on you to revive you before you bleed out (60 s; alone, you
+black out after a few seconds). Bitten too often — or bitten while down — a shark
+can take a limb for good. A torn page at the castaway camp teaches peg legs and
+hook hands (use one from your inventory to strap it on).
+
 Rowing: plain strokes cost no stamina (you even catch your breath slowly); Shift
 pulls harder for about 20 seconds of a full stamina bar. Two crewmates sitting on
 opposite sides each work their own side's oar.

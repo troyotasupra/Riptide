@@ -28,6 +28,8 @@ const ITEMS := {
 	"raw_meat": {"name": "Raw meat", "category": "food", "weight": 0.8, "stack": 5, "food": 10.0, "spoil": 900.0, "sickness": 90.0, "sick_chance": 0.5, "cooks_to": "cooked_meat", "dries_to": "dried_meat"},
 	"cooked_meat": {"name": "Cooked meat", "category": "food", "weight": 0.7, "stack": 5, "food": 35.0, "water": 2.0, "spoil": 1800.0},
 	"dried_meat": {"name": "Jerky", "category": "food", "weight": 0.3, "stack": 10, "food": 25.0},
+	"raw_shark_meat": {"name": "Raw shark meat", "category": "food", "weight": 0.9, "stack": 5, "food": 12.0, "spoil": 900.0, "sickness": 90.0, "sick_chance": 0.4, "cooks_to": "cooked_shark", "dries_to": "dried_meat"},
+	"cooked_shark": {"name": "Shark steak", "category": "food", "weight": 0.8, "stack": 5, "food": 32.0, "water": 2.0, "spoil": 1800.0},
 	"spoiled_food": {"name": "Spoiled food", "category": "food", "weight": 0.5, "stack": 20, "food": 2.0, "sickness": 90.0, "sick_chance": 1.0},
 
 	# --- drink ---
@@ -56,12 +58,15 @@ const ITEMS := {
 	"torch": {"name": "Torch", "category": "tool", "tool": "torch", "weight": 0.5, "stack": 3, "hint": "Lights your way while it's in your hand."},
 	"canteen": {"name": "Canteen (empty)", "category": "tool", "tool": "canteen", "weight": 0.3, "stack": 1, "hint": "Hold it and press E at the spring (clean) or the stream (boil it first)."},
 	"fishing_rod": {"name": "Fishing rod", "category": "tool", "tool": "fishing_rod", "weight": 1.0, "stack": 1, "hint": COMING_SOON},
-	"spear": {"name": "Spear", "category": "weapon", "weight": 1.5, "stack": 1, "hint": COMING_SOON},
+	"spear": {"name": "Spear", "category": "weapon", "tool": "spear", "weight": 1.5, "stack": 1, "hint": "Look at a shark and left click to strike — the best reach and damage you've got."},
 	"pistol": {"name": "Pistol", "category": "weapon", "weight": 0.9, "stack": 1, "hint": COMING_SOON},
 	"flare_gun": {"name": "Flare gun", "category": "weapon", "weight": 0.6, "stack": 1, "hint": COMING_SOON},
 
 	# --- medical, reading, keys ---
 	"bandage": {"name": "Bandage", "category": "medical", "weight": 0.05, "stack": 10, "heal": 25.0},
+	"peg_leg": {"name": "Peg leg", "category": "prosthetic", "fits": "leg", "weight": 1.5, "stack": 1},
+	"hook_hand": {"name": "Hook hand", "category": "prosthetic", "fits": "arm", "weight": 0.5, "stack": 1},
+	"book_page_prosthetics": {"name": "Book page: Field prosthetics", "category": "page", "weight": 0.01, "stack": 5, "teaches": ["peg_leg", "hook_hand"]},
 	"survival_book": {"name": "Survival book", "category": "book", "weight": 0.4, "stack": 1},
 	"book_page_shelter": {"name": "Book page: Shelters", "category": "page", "weight": 0.01, "stack": 5, "teaches": ["tent_kit", "drying_rack_kit"]},
 	"book_page_camp": {"name": "Book page: Camp craft", "category": "page", "weight": 0.01, "stack": 5, "teaches": ["storage_crate_kit", "stone_hatchet"]},
@@ -98,7 +103,7 @@ const ITEMS := {
 
 ## Grid footprint [width, height] in inventory cells. Anything missing is 1×1.
 const SIZES := {
-	"raw_fish": [2, 1], "cooked_fish": [2, 1], "canteen_clean": [1, 2], "canteen_dirty": [1, 2], "canteen": [1, 2],
+	"raw_fish": [2, 1], "cooked_fish": [2, 1], "raw_shark_meat": [2, 1], "cooked_shark": [2, 1], "peg_leg": [1, 3], "hook_hand": [1, 2], "canteen_clean": [1, 2], "canteen_dirty": [1, 2], "canteen": [1, 2],
 	"driftwood": [2, 1], "log": [3, 1], "tarp": [2, 2],
 	"knife": [1, 2], "machete": [1, 3], "stone_hatchet": [1, 3], "oar": [1, 4], "raft_kit": [3, 3], "torch": [1, 3], "fishing_rod": [1, 4], "spear": [1, 4],
 	"pistol": [2, 1], "flare_gun": [2, 1],
@@ -117,6 +122,7 @@ const RARITY := {
 	"rain_jacket": 1, "wool_sweater": 1, "cargo_pants": 1, "hiking_boots": 1, "wool_beanie": 1, "daypack": 2,
 	"pistol": 3, "plate_carrier": 3, "combat_helmet": 3, "compartment_key": 3,
 	"tent_kit": 1, "storage_crate_kit": 1, "book_page_shelter": 2, "book_page_camp": 2,
+	"cooked_shark": 1, "peg_leg": 2, "hook_hand": 2, "book_page_prosthetics": 2, "oar": 1,
 }
 const RARITY_NAMES := ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Exotic"]
 const RARITY_COLORS := [

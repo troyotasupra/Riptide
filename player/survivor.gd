@@ -30,6 +30,14 @@ var wetness := 0.0
 var air_temp := 0.0
 var warmth := 0.0
 var selected_slot := 0
+## Host: at 0 health a crew member is downed and bleeds out unless revived.
+var downed := false
+var bleed_out := 0.0
+## Ocean-clock times of recent shark bites.
+var recent_bites: Array = []
+## Limbs lost for good ("leg_l", "arm_r", ...) and the ones fitted with a prosthetic.
+var missing_limbs: Array = []
+var prosthetics: Array = []
 
 var _tick_accum := 0.0
 var _push_accum := 0.0
@@ -149,7 +157,11 @@ func to_save(now: float) -> Dictionary:
 	var copy := Pack.new()
 	copy.from_dict(inventory.to_dict())
 	copy.shift_times(-now)
-	return {"pack": copy.to_dict(), "survival": survival.to_dict(), "worn": equipment.to_dict(), "name": player.display_name}
+	var boat_name := String(player.platform.name) if player.platform != null else ""
+	var local := player.global_position - player.platform.proxy_xf.origin if player.platform != null else Vector3.ZERO
+	return {"pack": copy.to_dict(), "survival": survival.to_dict(), "worn": equipment.to_dict(), "name": player.display_name,
+		"limbs": missing_limbs.duplicate(), "prosthetics": prosthetics.duplicate(),
+		"at": player.world_transform().origin, "boat": boat_name, "local": local}
 
 
 func from_save(data: Dictionary, now: float) -> void:
@@ -170,6 +182,9 @@ func from_save(data: Dictionary, now: float) -> void:
 	if not leftover.is_empty():
 		_drop_overflow.call_deferred(leftover)
 	survival.from_dict(data.get("survival", {}))
+	missing_limbs = Array(data.get("limbs", [])).duplicate()
+	prosthetics = Array(data.get("prosthetics", [])).duplicate()
+	player.apply_limbs(missing_limbs, prosthetics)
 	player.carried_weight_kg = total_weight()
 
 
@@ -214,7 +229,7 @@ func use_item(uid: int) -> void:
 			book_requested.emit()
 		"wearable":
 			Sound.play("cloth")
-		"food", "drink", "medical", "page", "chart":
+		"food", "drink", "medical", "page", "chart", "prosthetic":
 			pass
 		_:
 			if item.has("hint"):
@@ -292,6 +307,35 @@ func _request_use(uid: int) -> void:
 			camp().read_chart(self)
 		"wearable":
 			wear(uid)
+		"prosthetic":
+			var limb := SharkMath.prosthetic_limb(item.get("fits", ""), missing_limbs, prosthetics)
+			if limb.is_empty():
+				notify("You don't need that — nothing's missing it would fit.")
+				return
+			inventory.take(uid, 1)
+			prosthetics.append(limb)
+			notify("You strap the %s onto your %s. Better than nothing — much better." % [String(item.name).to_lower(), SharkMath.LIMB_NAMES[limb]])
+			push_inventory()
+			push_limbs()
+
+
+## Host: a shark has taken `limb` for good.
+func lose_limb(limb: String) -> void:
+	if missing_limbs.has(limb):
+		return
+	missing_limbs.append(limb)
+	notify("The shark tore off your %s. It's gone for good — a prosthetic can help (the castaway's pages)." % SharkMath.LIMB_NAMES[limb])
+	if camp() != null:
+		for other: Player in GameState.world.players_root.get_children():
+			if other != player:
+				other.survivor.notify("A shark took %s's %s!" % [player.display_name, SharkMath.LIMB_NAMES[limb]])
+	push_limbs()
+
+
+## Host: tell everyone which limbs this crew member has lost and replaced.
+func push_limbs() -> void:
+	player.apply_limbs(missing_limbs, prosthetics)
+	Net.send_to_ready(player, "_set_limbs", [missing_limbs, prosthetics])
 
 
 func _consume(uid: int, item: Dictionary) -> void:
