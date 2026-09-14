@@ -51,6 +51,7 @@ const ITEMS := {
 	"knife": {"name": "Knife", "category": "tool", "tool": "knife", "weight": 0.3, "stack": 1, "hint": "Swing at plants and bushes (left click) to cut them faster. Carrying it speeds up E too."},
 	"machete": {"name": "Machete", "category": "tool", "tool": "machete", "weight": 0.8, "stack": 1, "hint": "Hack through plants and bushes (left click) — much faster than by hand."},
 	"stone_hatchet": {"name": "Stone hatchet", "category": "tool", "tool": "hatchet", "weight": 1.2, "stack": 1, "hint": "Look at a tree and hold left click to chop it down for logs."},
+	"oar": {"name": "Oar", "category": "tool", "tool": "oar", "weight": 1.4, "stack": 1, "hint": "Carry it aboard a raft or boat and press F to row: Q strokes the left oar, E the right, both to go straight. Hold S to back-row, Shift to pull hard."},
 	"lighter": {"name": "Lighter", "category": "tool", "tool": "lighter", "weight": 0.05, "stack": 1, "uses": 20, "hint": "Press E on a campfire or stove that has wood in it to light it."},
 	"torch": {"name": "Torch", "category": "tool", "tool": "torch", "weight": 0.5, "stack": 3, "hint": "Lights your way while it's in your hand."},
 	"canteen": {"name": "Canteen (empty)", "category": "tool", "tool": "canteen", "weight": 0.3, "stack": 1, "hint": "Hold it and press E at the spring (clean) or the stream (boil it first)."},
@@ -67,7 +68,7 @@ const ITEMS := {
 	"logbook": {"name": "Captain's logbook", "category": "note", "weight": 0.3, "stack": 1, "note": "logbook"},
 	"journal": {"name": "Castaway's journal", "category": "note", "weight": 0.2, "stack": 1, "note": "journal"},
 	"sea_chart": {"name": "Sea chart", "category": "chart", "weight": 0.1, "stack": 1},
-	"compartment_key": {"name": "Small brass key", "category": "key", "weight": 0.02, "stack": 1, "hint": "Opens the locked compartment in the sailboat's cabin — press E on it."},
+	"compartment_key": {"name": "Small brass key", "category": "key", "weight": 0.02, "stack": 1, "hint": "Opens the locked footlocker in the fishing shack — press E on it."},
 
 	# --- structure kits ---
 	"campfire_kit": {"name": "Campfire (place)", "category": "placeable", "weight": 3.0, "stack": 1, "places": "campfire"},
@@ -75,6 +76,7 @@ const ITEMS := {
 	"tent_kit": {"name": "Tent (place)", "category": "placeable", "weight": 4.0, "stack": 1, "places": "tent"},
 	"drying_rack_kit": {"name": "Drying rack (place)", "category": "placeable", "weight": 3.0, "stack": 1, "places": "drying_rack"},
 	"storage_crate_kit": {"name": "Storage crate (place)", "category": "placeable", "weight": 6.0, "stack": 1, "places": "storage_crate"},
+	"raft_kit": {"name": "Raft frame (place)", "category": "placeable", "weight": 5.0, "stack": 1, "places": "raft_site"},
 
 	# --- clothing (warmth vs. speed) ---
 	"tshirt": {"name": "Crew T-shirt", "category": "wearable", "slot": "torso", "insulation": 0.05, "weight": 0.2, "stack": 1, "tint": "crew"},
@@ -98,7 +100,7 @@ const ITEMS := {
 const SIZES := {
 	"raw_fish": [2, 1], "cooked_fish": [2, 1], "canteen_clean": [1, 2], "canteen_dirty": [1, 2], "canteen": [1, 2],
 	"driftwood": [2, 1], "log": [3, 1], "tarp": [2, 2],
-	"knife": [1, 2], "machete": [1, 3], "stone_hatchet": [1, 3], "torch": [1, 3], "fishing_rod": [1, 4], "spear": [1, 4],
+	"knife": [1, 2], "machete": [1, 3], "stone_hatchet": [1, 3], "oar": [1, 4], "raft_kit": [3, 3], "torch": [1, 3], "fishing_rod": [1, 4], "spear": [1, 4],
 	"pistol": [2, 1], "flare_gun": [2, 1],
 	"survival_book": [2, 2], "logbook": [2, 2], "sea_chart": [1, 2],
 	"campfire_kit": [2, 2], "lean_to_kit": [2, 3], "tent_kit": [3, 2], "drying_rack_kit": [2, 3], "storage_crate_kit": [3, 3],

@@ -70,6 +70,24 @@ static func build(id: String) -> Node3D:
 			_cylinder(root, 0.035, 0.03, Vector3(0.0, 0.18, 0.035), Materials.metal(STEEL), Vector3(0.0, 0.0, PI / 2.0))
 			for y: float in [0.45, 0.75, 1.05]:
 				_torus(root, 0.012, 0.002, Vector3(0.0, y, 0.012), Materials.metal(STEEL), Vector3(PI / 2.0, 0.0, 0.0))
+		"oar":
+			var shaft := MeshInstance3D.new()
+			shaft.mesh = MeshKit.tube(PackedVector3Array([Vector3(0.0, -0.05, 0.0), Vector3(0.0, 0.7, 0.0), Vector3(0.0, 1.3, 0.0)]), PackedFloat32Array([0.024, 0.022, 0.02]), 8, "oar_shaft")
+			shaft.material_override = Materials.wood(PALE_WOOD)
+			root.add_child(shaft)
+			_box(root, Vector3(0.15, 0.48, 0.02), Vector3(0.0, 1.52, 0.0), Materials.wood(PALE_WOOD.darkened(0.08)))
+			_torus(root, 0.027, 0.008, Vector3(0.0, 0.55, 0.0), Materials.cloth(ROPE))
+			_capsule(root, 0.03, 0.16, Vector3(0.0, -0.02, 0.0), Materials.wood(WOOD))
+		"raft_kit":
+			for i in 3:
+				var pole := MeshInstance3D.new()
+				pole.mesh = MeshKit.branch(70 + i, 0.9, 0.035, 0.03, 0.05, 5)
+				pole.material_override = Materials.bark(BARK)
+				pole.rotation = Vector3(0.0, 0.0, PI / 2.0)
+				pole.position = Vector3(0.45, 0.04 + (i % 2) * 0.06, (i - 1) * 0.07)
+				root.add_child(pole)
+			for x: float in [-0.25, 0.25]:
+				_torus(root, 0.12, 0.012, Vector3(x, 0.07, 0.0), Materials.cloth(ROPE), Vector3(0.0, 0.0, PI / 2.0), Vector3(1.0, 1.0, 0.6))
 		"spear":
 			_cylinder(root, 0.018, 1.5, Vector3(0.0, 0.45, 0.0), Materials.wood(PALE_WOOD), Vector3.ZERO, 0.02)
 			_rock(root, 5, Vector3(0.05, 0.17, 0.02), Vector3(0.0, 1.27, 0.0), Materials.stone(Color(0.25, 0.25, 0.28)))

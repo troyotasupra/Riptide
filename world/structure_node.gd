@@ -10,6 +10,7 @@ var _fire_parts: Array[Node3D] = []
 var _flames: Array[MeshInstance3D] = []
 var _fire_light: OmniLight3D
 var _lit := false
+var _build_parts: Node3D
 
 
 func setup(id: String, p_type: String, pos: Vector3, yaw: float) -> void:
@@ -32,6 +33,8 @@ func setup(id: String, p_type: String, pos: Vector3, yaw: float) -> void:
 			_drying_rack()
 		"storage_crate":
 			_crate()
+		"raft_site":
+			_raft_site()
 	text_provider = func(player: Node) -> String:
 		if GameState.world == null or GameState.world.camp == null:
 			return ""
@@ -219,6 +222,63 @@ func _drying_rack() -> void:
 	for x: float in [-0.75, 0.75]:
 		for y: float in [0.65, 0.95, 1.25]:
 			_mesh(MeshKit.rock(120, 0.05, 1.0), Materials.cloth(Color(0.7, 0.6, 0.42)), Vector3(x, y, 0.0), Vector3.ZERO, Vector3.ONE * 0.07)
+
+
+## A finished raft is pushed into the water by holding E.
+func hold_seconds(_player: Node) -> float:
+	if StructureTable.is_build_site(type) and GameState.world != null:
+		var entry: Dictionary = GameState.world.camp.structures.get(structure_id, {})
+		if StructureTable.next_stage(type, entry.get("progress", {})).is_empty():
+			return 2.0
+	return 0.0
+
+
+## The raft build site: log rollers and a pole frame on the sand. Logs appear as
+## they're added, then the rope lashings.
+func _raft_site() -> void:
+	var bark := Materials.bark(Color(0.42, 0.32, 0.22))
+	for z: float in [-1.2, 1.2]:
+		_pole(Vector3(-1.6, 0.1, z), Vector3(1.6, 0.1, z + 0.05), 0.11, 130 + int(z), bark)
+	for x: float in [-1.35, 1.35]:
+		_pole(Vector3(x, 0.24, -1.75), Vector3(x + 0.03, 0.24, 1.75), 0.05, 134 + int(x), bark)
+	for corner: Vector3 in [Vector3(-1.7, 0.0, -1.5), Vector3(1.7, 0.0, -1.5), Vector3(-1.7, 0.0, 1.5), Vector3(1.7, 0.0, 1.5)]:
+		_pole(corner - Vector3(0.0, 0.15, 0.0), corner + Vector3(0.0, 0.45, 0.0), 0.03, 140, bark)
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(3.0, 0.5, 3.6)
+	_collider(shape, Vector3(0.0, 0.25, 0.0))
+	set_progress({})
+
+
+func set_progress(progress: Dictionary) -> void:
+	if not StructureTable.is_build_site(type):
+		return
+	if _build_parts != null:
+		_build_parts.queue_free()
+	_build_parts = Node3D.new()
+	add_child(_build_parts)
+	var bark := Materials.bark(Color(0.46, 0.34, 0.22))
+	var logs := mini(int(progress.get("log", 0)), 6)
+	for i in logs:
+		var points := PackedVector3Array()
+		var radii := PackedFloat32Array()
+		for k in 7:
+			var t := k / 6.0
+			points.append(Vector3(0.02 * sin(t * PI + i), 0.0, (t - 0.5) * 3.3))
+			radii.append(0.21 * (0.96 + 0.05 * sin(t * 17.0 + i)))
+		var log_visual := MeshInstance3D.new()
+		log_visual.mesh = MeshKit.tube(points, radii, 10, "site_log_%d" % (i % 3))
+		log_visual.material_override = bark
+		log_visual.position = Vector3(-1.1 + i * 0.44, 0.5, 0.0)
+		_build_parts.add_child(log_visual)
+	var lashings := mini(int(progress.get("rope", 0)), 3)
+	for k in lashings:
+		var band := BoxMesh.new()
+		band.size = Vector3(2.75, 0.05, 0.09)
+		var lashing := MeshInstance3D.new()
+		lashing.mesh = band
+		lashing.material_override = Materials.cloth(Color(0.72, 0.62, 0.45))
+		lashing.position = Vector3(0.0, 0.72, -1.2 + k * 1.2)
+		_build_parts.add_child(lashing)
 
 
 func _crate() -> void:

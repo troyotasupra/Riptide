@@ -2,7 +2,7 @@ class_name CampIslandPois
 extends RefCounted
 ## Landmarks on the camp island: the spring and its stream, the castaway camp
 ## (with its smoke — the landmark you steer the raft by), the cave mouth, the
-## mooring posts for the sailboat, and the shipwreck on the reef.
+## fishing shack and its dock, and the shipwreck on the reef.
 
 static func build(shape: CampIsland) -> Node3D:
 	var root := Node3D.new()
@@ -11,7 +11,7 @@ static func build(shape: CampIsland) -> Node3D:
 	root.add_child(_stream(shape))
 	root.add_child(_castaway_camp(shape))
 	root.add_child(_cave(shape))
-	root.add_child(_mooring_posts(shape))
+	root.add_child(FishingShack.build(shape))
 	root.add_child(_shipwreck(shape))
 	return root
 
@@ -227,20 +227,6 @@ static func _cave(shape: CampIsland) -> Node3D:
 		var rock := SphereShape3D.new()
 		rock.radius = 1.5
 		_solid(node, rock, spot)
-	return node
-
-
-## Posts on the cove beach and the anchor buoy the sailboat's lines run to.
-static func _mooring_posts(shape: CampIsland) -> Node3D:
-	var node := Node3D.new()
-	node.name = "MooringPosts"
-	var layout := Sailboat.mooring_layout(shape)
-	for post: Vector3 in layout.posts:
-		_mesh(node, _cylinder(0.12, 0.14, 1.8), "post", Color(0.45, 0.34, 0.22), post - Vector3(0.0, 0.3, 0.0))
-		var column := CylinderShape3D.new()
-		column.radius = 0.14
-		column.height = 1.8
-		_solid(node, column, post - Vector3(0.0, 0.3, 0.0))
 	return node
 
 

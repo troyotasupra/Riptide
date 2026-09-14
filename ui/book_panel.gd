@@ -35,7 +35,7 @@ func refresh() -> void:
 	for child in _list.get_children():
 		child.queue_free()
 	if camp.known_recipes.is_empty():
-		UiKit.label(_list, "You don't know how to make anything yet.\nThere's a survival book in the sailboat's sea chest — put it in your hotbar and use it to learn the basics.")
+		UiKit.label(_list, "You don't know how to make anything yet.\nThere's a survival book in the fishing shack on the big island — put it in your hotbar and use it to learn the basics.")
 		return
 	for id: String in RecipeTable.RECIPES:
 		if not camp.known_recipes.has(id):

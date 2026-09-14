@@ -1,7 +1,8 @@
 class_name CampSystems
 extends Node3D
-## The crew's shared camp, owned by the host: storage grids (sea chest,
-## lockers, crates, dropped bags), cooking and drying stations, placed
+## The crew's shared camp, owned by the host: storage grids (the fishing shack's
+## sea chest, gear locker and footlocker, the john boat's dry box, crates,
+## dropped bags), cooking and drying stations, placed and half-built
 ## structures, one-off pickups, recipes the crew knows, the sea chart, where
 ## each crew member respawns, and the vote to sleep through the night. It also
 ## applies every drag-and-drop item move. Clients keep mirrors and send requests.
@@ -26,10 +27,19 @@ const BAG_SIZE := Vector2i(10, 8)
 const BAG_MERGE_RANGE := 1.5
 ## How far from an open container a crew member can still move things in and out.
 const CONTAINER_RANGE := 6.0
-const BOAT_STORAGE := {
-	"chest": {"title": "Sea chest", "size": Vector2i(8, 6)},
-	"lockers": {"title": "Crew lockers", "size": Vector2i(8, 6)},
-	"compartment": {"title": "Locked compartment", "size": Vector2i(5, 4)},
+const SHACK_STORAGE := {
+	"chest": {"title": "Sea chest", "size": Vector2i(10, 6)},
+	"lockers": {"title": "Gear locker", "size": Vector2i(8, 6)},
+	"footlocker": {"title": "Locked footlocker", "size": Vector2i(5, 4)},
+}
+const DRYBOX_SIZE := Vector2i(4, 3)
+## °C of shelter inside the fishing shack, plus more while its stove burns.
+const SHACK_WARMTH := 5.0
+const STOVE_WARMTH := 6.0
+## Saves from before the sloop was replaced by the fishing shack.
+const SAVE_RENAMES := {
+	"boat:Sailboat:chest": "shack:chest", "boat:Sailboat:lockers": "shack:lockers",
+	"boat:Sailboat:compartment": "shack:footlocker", "boat:Sailboat:stove": "shack:stove",
 }
 
 const PICKUPS := {
@@ -51,7 +61,7 @@ const PICKUP_SPOTS := {
 const STASH := [["survival_book", 1], ["knife", 1], ["canteen", 1], ["lighter", 1], ["tarp", 1], ["paracord", 2],
 	["logbook", 1], ["sea_chart", 1], ["fishing_rod", 1], ["lure", 3], ["flare_gun", 1], ["flare", 2], ["bandage", 4], ["sun_hat", 1]]
 const LOCKER_CONTENTS := [["rain_jacket", 1], ["cargo_pants", 1], ["hiking_boots", 1], ["wool_beanie", 1], ["wool_sweater", 1], ["daypack", 1]]
-const COMPARTMENT_CONTENTS := [["pistol", 1], ["pistol_ammo", 15], ["plate_carrier", 1], ["combat_helmet", 1]]
+const FOOTLOCKER_CONTENTS :=[["pistol", 1], ["pistol_ammo", 15], ["plate_carrier", 1], ["combat_helmet", 1]]
 
 var world: Node3D
 ## id -> ItemGrid (the host's are the truth; clients mirror what they open)
@@ -70,8 +80,11 @@ var picked := {}
 var known_recipes := {}
 var chart_read := false
 var unlocked := {}
-## player id -> {"kind": "boat", "boat", "local"} or {"kind": "structure", "id"}
+## player id -> {"kind": "shack"} or {"kind": "structure", "id"}
 var respawns := {}
+## FishingShack.layout() for this world (set by the world before anything else).
+var shack := {}
+var shack_glow: OmniLight3D
 ## peer id -> true (host)
 var sleeping := {}
 ## Owner-side mirrors for the local player's UI.
@@ -97,19 +110,31 @@ func _ready() -> void:
 
 # --- setup, sync and saves ----------------------------------------------------
 
-## Host, fresh world: stock the abandoned sailboat.
+## Host, fresh world: stock the fishing shack and the john boat, and teach the
+## crew what they already know when they wash up.
 func setup_new_world() -> void:
-	_stock_boat()
-	stations["boat:Sailboat:stove"] = CookStation.new("cook")
+	_stock_shack()
+	stations["shack:stove"] = CookStation.new("cook")
+	_make_container("boat:JohnBoat:drybox", DRYBOX_SIZE, "Dry box")
+	for id: String in RecipeTable.KNOWN_AT_START:
+		known_recipes[id] = true
 
 
-func _stock_boat() -> void:
-	var contents := {"chest": STASH, "lockers": LOCKER_CONTENTS, "compartment": COMPARTMENT_CONTENTS}
-	for part: String in BOAT_STORAGE:
-		var info: Dictionary = BOAT_STORAGE[part]
-		var grid := _make_container("boat:Sailboat:" + part, info.size, info.title)
+func _stock_shack() -> void:
+	var contents := {"chest": STASH, "lockers": LOCKER_CONTENTS, "footlocker": FOOTLOCKER_CONTENTS}
+	for part: String in SHACK_STORAGE:
+		var info: Dictionary = SHACK_STORAGE[part]
+		var grid := _make_container("shack:" + part, info.size, info.title)
 		for entry: Array in contents[part]:
 			grid.add_stack(fresh_stack(entry[0], entry[1]))
+
+
+## Where the n-th crew member stands when they wake in the shack.
+func shack_spawn(index: int) -> Vector3:
+	if shack.is_empty():
+		return Vector3.ZERO
+	var xf: Transform3D = shack.xf
+	return xf * (FishingShack.SPAWN + Vector3((index % 3 - 1) * 0.6, 0.0, -int(index / 3.0) * 0.5))
 
 
 ## A new stack of `id` with its spoil time and charges filled in.
@@ -184,6 +209,7 @@ func from_save(data: Dictionary, now: float) -> void:
 	for id: String in saved_structures:
 		var entry: Dictionary = saved_structures[id]
 		_spawn_structure(id, entry.type, entry.pos, entry.yaw)
+		_apply_progress(id, entry.get("progress", {}))
 	_next_structure = data.get("next_structure", _next_structure)
 	var saved_containers: Dictionary = data.get("containers", {})
 	for id: String in saved_containers:
@@ -193,10 +219,13 @@ func from_save(data: Dictionary, now: float) -> void:
 		var grid := ItemGrid.new()
 		grid.from_dict(entry.grid)
 		grid.shift_times(now)
-		containers[id] = grid
-		container_titles[id] = entry.get("title", "Storage")
-	if not containers.has("boat:Sailboat:chest"):
-		_stock_boat()
+		var key: String = SAVE_RENAMES.get(id, id)
+		containers[key] = grid
+		container_titles[key] = SHACK_STORAGE[key.substr(6)].title if SHACK_STORAGE.has(key.substr(6)) and key.begins_with("shack:") else entry.get("title", "Storage")
+	if not containers.has("shack:chest"):
+		_stock_shack()
+	if not containers.has("boat:JohnBoat:drybox"):
+		_make_container("boat:JohnBoat:drybox", DRYBOX_SIZE, "Dry box")
 	var saved_bags: Dictionary = data.get("bags", {})
 	for id: String in saved_bags:
 		if containers.has("bag:" + id):
@@ -206,18 +235,24 @@ func from_save(data: Dictionary, now: float) -> void:
 	for id: String in saved_stations:
 		var station := CookStation.new()
 		station.from_dict(saved_stations[id], now)
-		stations[id] = station
-		_apply_station_visual(id)
-	if not stations.has("boat:Sailboat:stove"):
-		stations["boat:Sailboat:stove"] = CookStation.new("cook")
+		var key: String = SAVE_RENAMES.get(id, id)
+		stations[key] = station
+		_apply_station_visual(key)
+	if not stations.has("shack:stove"):
+		stations["shack:stove"] = CookStation.new("cook")
 	for id: String in data.get("picked", []):
 		_apply_picked(id)
 	for id: String in data.get("recipes", []):
 		known_recipes[id] = true
+	for id: String in RecipeTable.KNOWN_AT_START:
+		known_recipes[id] = true
 	chart_read = data.get("chart", false)
 	for id: String in data.get("unlocked", []):
-		unlocked[id] = true
+		unlocked[SAVE_RENAMES.get(id, id)] = true
 	respawns = data.get("respawns", {})
+	for player_id: String in respawns.keys():
+		if respawns[player_id].get("kind", "") == "boat":
+			respawns[player_id] = {"kind": "shack"}
 
 
 func _make_container(id: String, size: Vector2i, title: String) -> ItemGrid:
@@ -232,6 +267,7 @@ func _full_sync(data: Dictionary) -> void:
 	for id: String in data.structures:
 		var entry: Dictionary = data.structures[id]
 		_spawn_structure(id, entry.type, entry.pos, entry.yaw)
+		_apply_progress(id, entry.get("progress", {}))
 	for id: String in data.bags:
 		_spawn_bag(id, data.bags[id].pos, data.bags[id].title)
 	for id: String in data.stations:
@@ -275,7 +311,7 @@ func _physics_process(delta: float) -> void:
 		world.save_now()
 
 
-## °C a crew member gains from nearby fires, shelters, or the sailboat's cabin.
+## °C a crew member gains from nearby fires, shelters, or the fishing shack.
 func warmth_for(player: Player) -> float:
 	var at := player.world_transform().origin
 	var warmth := 0.0
@@ -290,38 +326,55 @@ func warmth_for(player: Player) -> float:
 				warmth = maxf(warmth, info.warmth)
 		elif info.has("shelter"):
 			warmth = maxf(warmth, info.shelter)
-	if player.platform is Sailboat:
-		var local := player.global_position - player.platform.proxy_xf.origin
-		if local.y < Sailboat.DECK_Y - 0.2:
-			var stove: CookStation = stations.get("boat:%s:stove" % player.platform.name)
-			warmth = maxf(warmth, Sailboat.CABIN_WARMTH + (Sailboat.STOVE_WARMTH if stove != null and stove.lit else 0.0))
+	if player.platform == null and FishingShack.contains(shack, at):
+		var stove: CookStation = stations.get("shack:stove")
+		warmth = maxf(warmth, SHACK_WARMTH + (STOVE_WARMTH if stove != null and stove.lit else 0.0))
 	return warmth
+
+
+func in_shack(p: Vector3) -> bool:
+	return FishingShack.contains(shack, p)
 
 
 # --- prompts (any peer, for the local player's crosshair) --------------------
 
-func part_prompt(boat: Sailboat, part_name: String, player: Node) -> String:
-	var container_id := "boat:%s:%s" % [boat.name, part_name]
+func part_prompt(boat: Boat, part_name: String, _player: Node) -> String:
+	match part_name:
+		"drybox":
+			return "Open the dry box"
+		"cleat":
+			if boat.is_tied():
+				return "Untie the boat from the dock"
+			return "Tie up to the dock" if _near_dock(boat) else "Bring her alongside the dock to tie up"
+	return ""
+
+
+func shack_prompt(part_name: String, player: Node) -> String:
+	var container_id := "shack:" + part_name
 	match part_name:
 		"bunk":
 			return "" if local_asleep else "Sleep in the bunk (sets your respawn)"
 		"chest":
 			return "Open the sea chest"
 		"lockers":
-			return "Open the crew lockers"
-		"compartment":
+			return "Open the gear locker"
+		"footlocker":
 			if unlocked.has(container_id):
-				return "Open the compartment"
+				return "Open the footlocker"
 			if player != null and player.survivor != null and player.survivor.inventory.count_of("compartment_key") > 0:
-				return "Unlock the compartment with the brass key"
-			return "Locked compartment — someone must have the key"
+				return "Unlock the footlocker with the brass key"
+			return "Locked footlocker — someone must have the key"
 		"stove":
-			return station_prompt(container_id, "Galley stove", player)
+			return station_prompt(container_id, "Wood stove", player)
 		"chart":
-			return "Chart table — islands marked on your compass" if chart_read else "Study the chart table"
-		"helm":
-			return "Ship's wheel — she won't sail until the hull and sail are repaired"
+			return "Chart table — islands marked on your compass" if chart_read else "Study the chart on the table"
 	return ""
+
+
+func _near_dock(boat: Boat) -> bool:
+	if shack.is_empty() or boat.kind != "john_boat":
+		return false
+	return boat.global_position.distance_to(Transform3D(shack.boat_xf).origin) < 6.0
 
 
 func structure_prompt(id: String, player: Node) -> String:
@@ -329,6 +382,16 @@ func structure_prompt(id: String, player: Node) -> String:
 	if entry.is_empty():
 		return ""
 	var info := StructureTable.get_type(entry.type)
+	if StructureTable.is_build_site(entry.type):
+		var progress: Dictionary = entry.get("progress", {})
+		var stage := StructureTable.next_stage(entry.type, progress)
+		if stage.is_empty():
+			return "%s — push it into the water (hold)" % info.name
+		var have := 0
+		if player != null and player.survivor != null:
+			have = player.survivor.inventory.count_of(stage.item)
+		return "%s — add %s (%d/%d)%s" % [info.name, _plural(stage.item, 2), int(progress.get(stage.item, 0)), int(stage.count),
+			"" if have > 0 else " · you're not carrying any"]
 	if info.has("station"):
 		return station_prompt("struct:" + id, info.name, player)
 	if info.has("container"):
@@ -370,16 +433,37 @@ static func held_item(player: Node) -> String:
 
 # --- host: interactions --------------------------------------------------------
 
-func interact_boat_part(survivor: Survivor, boat: Sailboat, part_name: String, slot: int) -> void:
+func interact_boat_part(survivor: Survivor, boat: Boat, part_name: String, _slot: int) -> void:
 	var id := "boat:%s:%s" % [boat.name, part_name]
 	var at: Vector3 = (boat.parts[part_name] as Node3D).global_position if boat.parts.has(part_name) else boat.global_position
 	match part_name:
+		"drybox":
+			if containers.has(id):
+				world.sfx_at("chest", at)
+				open_container_for(survivor, id)
+		"cleat":
+			if boat.is_tied():
+				world.set_boat_tied(boat, false)
+				world.sfx_at("cloth", at)
+				survivor.notify("You cast off. Carry an oar, press F to row — Q strokes left, E strokes right.")
+			elif _near_dock(boat):
+				world.set_boat_tied(boat, true)
+				world.sfx_at("cloth", at)
+				survivor.notify("Tied up at the dock.")
+			else:
+				survivor.notify("There's nothing to tie up to here — bring her back alongside the dock.")
+
+
+func interact_shack_part(survivor: Survivor, part_name: String, slot: int) -> void:
+	var id := "shack:" + part_name
+	var at: Vector3 = shack.parts[part_name]
+	match part_name:
 		"bunk":
-			request_sleep_at(survivor, {"kind": "boat", "boat": String(boat.name), "local": Sailboat.BUNK_SPAWN})
+			request_sleep_at(survivor, {"kind": "shack"})
 		"chest", "lockers":
 			world.sfx_at("chest", at)
 			open_container_for(survivor, id)
-		"compartment":
+		"footlocker":
 			if not unlocked.has(id):
 				if survivor.inventory.count_of("compartment_key") == 0:
 					survivor.notify("It's locked tight. Someone must have the key.")
@@ -393,8 +477,6 @@ func interact_boat_part(survivor: Survivor, boat: Sailboat, part_name: String, s
 			_use_station(survivor, id, slot, at)
 		"chart":
 			read_chart(survivor)
-		"helm":
-			survivor.notify("The sail is in tatters and she's taking on water. She needs repairs before she'll sail.")
 
 
 func interact_structure(survivor: Survivor, id: String, slot: int) -> void:
@@ -402,7 +484,9 @@ func interact_structure(survivor: Survivor, id: String, slot: int) -> void:
 	if entry.is_empty():
 		return
 	var info := StructureTable.get_type(entry.type)
-	if info.has("station"):
+	if StructureTable.is_build_site(entry.type):
+		_work_build_site(survivor, id, entry)
+	elif info.has("station"):
 		_use_station(survivor, "struct:" + id, slot, entry.pos)
 	elif info.has("container"):
 		world.sfx_at("chest", entry.pos)
@@ -464,8 +548,8 @@ func request_sleep_at(survivor: Survivor, spot: Dictionary) -> void:
 func respawn_spot(player_id: String) -> Dictionary:
 	var spot: Dictionary = respawns.get(player_id, {})
 	match spot.get("kind", ""):
-		"boat":
-			if world.find_boat(spot.boat) != null:
+		"shack":
+			if not shack.is_empty():
 				return spot
 		"structure":
 			if structures.has(spot.id):
@@ -476,8 +560,8 @@ func respawn_spot(player_id: String) -> Dictionary:
 ## Puts `player` at their respawn spot. False if they have none.
 func teleport_to_spot(player: Player, spot: Dictionary) -> bool:
 	match spot.get("kind", ""):
-		"boat":
-			player.teleport_aboard(spot.boat, spot.local)
+		"shack":
+			player.teleport(shack_spawn(absi(hash(player.player_id)) % 3))
 			return true
 		"structure":
 			var entry: Dictionary = structures[spot.id]
@@ -508,22 +592,22 @@ func forget_peer(peer_id: int) -> void:
 		_viewers[id].erase(peer_id)
 
 
-## Host: leaves stacks in the world near `player`. Aboard the sailboat they go
-## into the crew lockers instead, so nothing is left hanging over the water.
+## Host: leaves stacks in the world near `player`. Aboard a boat with a dry box
+## they go in there first, so nothing is left hanging over the water.
 func drop_items(player: Player, stacks: Array, title: String) -> void:
 	var left: Array = []
-	if player.platform is Sailboat:
-		var lockers_id := "boat:%s:lockers" % player.platform.name
-		var lockers: ItemGrid = containers.get(lockers_id)
+	var box_id := "boat:%s:drybox" % player.platform.name if player.platform != null else ""
+	if containers.has(box_id):
+		var box: ItemGrid = containers[box_id]
 		for stack: Dictionary in stacks:
-			var remaining := lockers.add_stack(stack) if lockers != null else int(stack.count)
+			var remaining := box.add_stack(stack)
 			if remaining > 0:
 				var rest := stack.duplicate()
 				rest.count = remaining
 				left.append(rest)
 		if left.size() < stacks.size() or _total(left) < _total(stacks):
-			_push_container(lockers_id)
-			player.survivor.notify("Stowed in the crew lockers.")
+			_push_container(box_id)
+			player.survivor.notify("Stowed in the dry box.")
 		if left.is_empty():
 			return
 	else:
@@ -738,10 +822,8 @@ func _apply_station_visual(id: String) -> void:
 		var node: StructureNode = structure_nodes.get(id.substr(7))
 		if node != null:
 			node.set_lit(station.lit)
-	elif id.begins_with("boat:"):
-		var boat := world.find_boat(id.split(":")[1]) as Sailboat
-		if boat != null:
-			boat.set_stove_lit(station.lit)
+	elif id == "shack:stove" and shack_glow != null:
+		shack_glow.visible = station.lit
 
 
 func _apply_picked(id: String) -> void:
@@ -807,9 +889,12 @@ func _may_use(player: Player, id: String) -> bool:
 	var spot := Vector3.INF
 	match bits[0]:
 		"boat":
-			var boat := world.find_boat(bits[1]) as Sailboat
+			var boat: Boat = world.find_boat(bits[1])
 			if boat != null and bits.size() > 2 and boat.parts.has(bits[2]):
 				spot = (boat.parts[bits[2]] as Node3D).global_position
+		"shack":
+			if bits.size() > 1 and shack.get("parts", {}).has(bits[1]):
+				spot = shack.parts[bits[1]]
 		"struct":
 			if structures.has(bits[1]):
 				spot = structures[bits[1]].pos
@@ -1041,6 +1126,9 @@ func request_place(slot: int, pos: Vector3, yaw: float) -> void:
 	if ground < 0.3 or absf(pos.y - ground) > 1.2:
 		survivor.notify("You can't build there.")
 		return
+	if StructureTable.get_type(type).get("shore", false) and (ground > StructureTable.SHORE_MAX_HEIGHT or world.water_spot(pos).is_empty()):
+		survivor.notify("Build that on the beach, close to the water.")
+		return
 	var footprint: float = StructureTable.get_type(type).get("footprint", 1.0)
 	for other: Dictionary in structures.values():
 		var clearance: float = footprint + float(StructureTable.get_type(other.type).get("footprint", 1.0))
@@ -1082,6 +1170,79 @@ func _spawn_structure(id: String, type: String, pos: Vector3, yaw: float) -> voi
 		stations["struct:" + id] = CookStation.new(info.station)
 	if info.has("container") and not containers.has("struct:" + id):
 		_make_container("struct:" + id, Vector2i(info.container[0], info.container[1]), info.name)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _remove_structure(id: String) -> void:
+	structures.erase(id)
+	stations.erase("struct:" + id)
+	containers.erase("struct:" + id)
+	var node: Node = structure_nodes.get(id)
+	if node != null:
+		node.queue_free()
+	structure_nodes.erase(id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _structure_progress(id: String, progress: Dictionary) -> void:
+	_apply_progress(id, progress)
+
+
+func _apply_progress(id: String, progress: Dictionary) -> void:
+	if not structures.has(id):
+		return
+	structures[id].progress = progress
+	var node: StructureNode = structure_nodes.get(id)
+	if node != null:
+		node.set_progress(progress)
+
+
+## Host: add whatever the build site's current stage needs from the crew member's pack,
+## or push the finished boat into the water.
+func _work_build_site(survivor: Survivor, id: String, entry: Dictionary) -> void:
+	var progress: Dictionary = entry.get("progress", {}).duplicate()
+	var stage := StructureTable.next_stage(entry.type, progress)
+	if stage.is_empty():
+		_launch(survivor, id, entry)
+		return
+	var item: String = stage.item
+	var needed: int = int(stage.count) - int(progress.get(item, 0))
+	var adding := mini(needed, survivor.inventory.count_of(item))
+	if adding <= 0:
+		survivor.notify("It still needs %d %s." % [needed, _plural(item, needed)])
+		return
+	survivor.inventory.remove(item, adding)
+	progress[item] = int(progress.get(item, 0)) + adding
+	_apply_progress(id, progress)
+	Net.send_to_ready(self, "_structure_progress", [id, progress])
+	world.sfx_at("thud", entry.pos)
+	var next := StructureTable.next_stage(entry.type, progress)
+	if next.is_empty():
+		_notify_crew("The raft is lashed together. Hold E on it to push it into the water.")
+	elif next.item != item:
+		survivor.notify("Added %d %s. Now it needs %d %s." % [adding, _plural(item, adding), int(next.count), _plural(next.item, int(next.count))])
+	else:
+		survivor.notify("Added %d %s (%d/%d)." % [adding, _plural(item, adding), int(progress[item]), int(stage.count)])
+	survivor.push_inventory()
+
+
+func _launch(survivor: Survivor, id: String, entry: Dictionary) -> void:
+	var spot: Dictionary = world.water_spot(entry.pos)
+	if spot.is_empty():
+		survivor.notify("There's no open water close enough to push it into.")
+		return
+	var dir: Vector2 = spot.dir
+	var xf := Transform3D(Basis(Vector3.UP, atan2(-dir.x, -dir.y)), spot.pos)
+	world.launch_boat(StructureTable.get_type(entry.type).get("launches", "raft"), xf)
+	_remove_structure(id)
+	Net.send_to_ready(self, "_remove_structure", [id])
+	world.sfx_at("splash", spot.pos)
+	_notify_crew("%s pushed the raft into the water! Climb aboard with an oar and press F to row — Q and E stroke." % survivor.player.display_name)
+
+
+static func _plural(item: String, count: int) -> String:
+	var name := ItemTable.display_name(item).to_lower()
+	return name if count == 1 or name.ends_with("s") else name + "s"
 
 
 @rpc("authority", "call_remote", "reliable")

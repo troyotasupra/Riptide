@@ -21,7 +21,7 @@ var _terrain := FastNoiseLite.new()
 var _outline := FastNoiseLite.new()
 
 
-func _init(p_seed: int, p_radius: float = 55.0, p_peak: float = 14.0) -> void:
+func _init(p_seed: int, p_radius: float = 55.0, p_peak: float = 4.5) -> void:
 	island_seed = p_seed
 	radius = p_radius
 	peak = p_peak
@@ -39,11 +39,11 @@ func height_at(x: float, z: float) -> float:
 	var angle := atan2(z, x)
 	var edge := radius * (0.8 + 0.35 * _outline.get_noise_2d(cos(angle) * 1.5, sin(angle) * 1.5))
 	var d := Vector2(x, z).length() / edge
-	# Profile from the sea inward: seabed -> shallow shelf -> flat beach -> rolling upland.
+	# Profile from the sea inward: seabed -> shallow shelf -> flat beach -> low, gently rolling ground.
 	var shelf := 1.0 - smoothstep(0.78, 1.0, d)
-	var inland := 1.0 - smoothstep(0.15, 0.62, d)
+	var inland := 1.0 - smoothstep(0.2, 0.7, d)
 	var bumps := (_terrain.get_noise_2d(x, z) + 1.0) * 0.5
-	var upland := BEACH_HEIGHT + (peak - BEACH_HEIGHT) * (0.3 + 0.7 * bumps)
+	var upland := BEACH_HEIGHT + (peak - BEACH_HEIGHT) * (0.45 + 0.55 * bumps)
 	return lerpf(SEABED, BEACH_HEIGHT, shelf) + (upland - BEACH_HEIGHT) * inland
 
 
@@ -113,9 +113,9 @@ func _add_triangle(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
 		color = WET_SAND
 	elif h < 1.4:
 		color = SAND
-	elif normal.y < 0.75 or h > peak * 0.8:
+	elif normal.y < 0.75:
 		color = ROCK
-	elif h < peak * 0.45:
+	elif h < peak * 0.7:
 		color = GRASS
 	else:
 		color = DARK_GRASS

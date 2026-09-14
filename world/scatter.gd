@@ -46,6 +46,48 @@ static func generate(shape: CampIsland) -> Array[Dictionary]:
 	return spots
 
 
+## The starter island's supplies — deliberately limited, just enough to build a
+## raft and an oar and get off: [kind, how many, lowest ground, highest ground].
+const START_SUPPLIES := [
+	["tree", 6, 1.9, 99.0], ["palm", 7, 0.9, 2.8], ["driftwood", 8, 0.5, 1.6], ["fiber", 12, 1.3, 99.0],
+	["stone", 7, 0.6, 99.0], ["flint", 5, 0.6, 99.0], ["berry_bush", 2, 1.6, 99.0], ["rock", 3, 1.8, 99.0],
+]
+
+
+## Deterministic props for the starter island (ids "st_<kind>_<n>").
+static func generate_start(island: IslandGenerator) -> Array[Dictionary]:
+	var spots: Array[Dictionary] = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("start_island:%d" % island.island_seed)
+	for entry: Array in START_SUPPLIES:
+		var kind: String = entry[0]
+		var wanted: int = entry[1]
+		var spacing := 3.5 if kind in ["tree", "palm", "rock"] else 1.4
+		var placed := 0
+		var tries := 0
+		while placed < wanted and tries < 600:
+			tries += 1
+			var angle := rng.randf() * TAU
+			var r := sqrt(rng.randf()) * island.radius * 1.05
+			var yaw := rng.randf() * TAU
+			var size := rng.randf_range(0.85, 1.15)
+			var x := cos(angle) * r
+			var z := sin(angle) * r
+			var h := island.height_at(x, z)
+			if h < float(entry[2]) or h > float(entry[3]):
+				continue
+			var crowded := false
+			for other: Dictionary in spots:
+				if Vector2(other.pos.x, other.pos.z).distance_to(Vector2(x, z)) < spacing:
+					crowded = true
+					break
+			if crowded:
+				continue
+			spots.append({"id": "st_%s_%d" % [kind, placed], "kind": kind, "pos": Vector3(x, h, z), "yaw": yaw, "scale": size})
+			placed += 1
+	return spots
+
+
 static func pick(biome: int, normal_y: float, roll: float) -> String:
 	if normal_y < 0.75:
 		if roll < 0.15:

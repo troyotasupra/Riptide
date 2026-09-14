@@ -1,14 +1,19 @@
 class_name RecipeTable
 extends RefCounted
-## What the survival book teaches. Reading the book teaches STARTING to the whole
-## crew; book pages found around the island teach the rest.
+## What the crew can make. Everyone washes up knowing KNOWN_AT_START — enough to
+## get off the starter island. Reading the survival book (in the fishing shack on
+## the camp island) teaches STARTING to the whole crew; book pages teach the rest.
 ## A need can name an item or a group from ItemTable.GROUPS ("wood" = driftwood or logs).
 ## `tool`: a tool type that must be carried (not used up).
 
-const STARTING := ["rope", "campfire_kit", "lean_to_kit", "spear", "bandage", "torch"]
+const KNOWN_AT_START := ["rope", "stone_hatchet", "oar", "raft_kit"]
+const STARTING := ["campfire_kit", "lean_to_kit", "spear", "bandage", "torch"]
 
 const RECIPES := {
-	"rope": {"name": "Rope", "needs": {"fiber": 6}, "makes": "rope", "count": 1},
+	"rope": {"name": "Rope", "needs": {"fiber": 5}, "makes": "rope", "count": 1},
+	"stone_hatchet": {"name": "Stone hatchet", "needs": {"wood": 1, "flint": 2, "rope": 1}, "makes": "stone_hatchet", "count": 1},
+	"oar": {"name": "Oar", "needs": {"wood": 2, "rope": 1}, "makes": "oar", "count": 1, "tool": "hatchet"},
+	"raft_kit": {"name": "Raft frame", "needs": {"wood": 3, "rope": 2}, "makes": "raft_kit", "count": 1, "tool": "hatchet"},
 	"campfire_kit": {"name": "Campfire", "needs": {"stone": 6, "wood": 3}, "makes": "campfire_kit", "count": 1},
 	"lean_to_kit": {"name": "Lean-to", "needs": {"tarp": 1, "paracord": 1, "wood": 2}, "makes": "lean_to_kit", "count": 1},
 	"spear": {"name": "Spear", "needs": {"wood": 1, "flint": 1, "fiber": 2}, "makes": "spear", "count": 1},
@@ -17,7 +22,6 @@ const RECIPES := {
 	"tent_kit": {"name": "Tent", "needs": {"tarp": 1, "rope": 4, "wood": 4}, "makes": "tent_kit", "count": 1},
 	"drying_rack_kit": {"name": "Drying rack", "needs": {"wood": 6, "rope": 3}, "makes": "drying_rack_kit", "count": 1},
 	"storage_crate_kit": {"name": "Storage crate", "needs": {"log": 3, "rope": 2}, "makes": "storage_crate_kit", "count": 1, "tool": "hatchet"},
-	"stone_hatchet": {"name": "Stone hatchet", "needs": {"wood": 1, "flint": 2, "rope": 1}, "makes": "stone_hatchet", "count": 1},
 }
 
 

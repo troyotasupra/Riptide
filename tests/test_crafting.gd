@@ -15,8 +15,27 @@ func test_recipes_reference_real_items() -> void:
 		check(Items.exists(recipe.makes), "%s makes a real item" % id)
 		for need: String in recipe.needs:
 			check(Items.exists(need) or Items.GROUPS.has(need), "%s needs real item or group %s" % [id, need])
-	for id: String in Recipes.STARTING:
+	for id: String in Recipes.STARTING + Recipes.KNOWN_AT_START:
 		check(Recipes.RECIPES.has(id), "starting recipe %s exists" % id)
+
+
+func test_the_starter_island_recipes_get_you_off_it() -> void:
+	var inv = InventoryScript.new()
+	inv.add("driftwood", 3)
+	inv.add("rope", 2)
+	check(Recipes.missing_tool(inv, "raft_kit") == "hatchet" and Recipes.missing_tool(inv, "oar") == "hatchet", "raft frames and oars need a hatchet")
+	inv.add("stone_hatchet", 1)
+	check(Recipes.can_craft(inv, "raft_kit"), "driftwood, rope and a hatchet make a raft frame")
+	check(Items.get_item("raft_kit").get("places", "") == "raft_site", "the frame places a raft build site")
+	check(Items.get_item("oar").get("tool", "") == "oar", "an oar is the rowing tool")
+
+
+func test_raft_build_site_goes_in_stages() -> void:
+	check(Structures.next_stage("raft_site", {}).item == "log", "logs first")
+	check(Structures.next_stage("raft_site", {"log": 6}).item == "rope", "then rope lashings")
+	check(Structures.next_stage("raft_site", {"log": 6, "rope": 3}).is_empty(), "then it's ready to launch")
+	near(Structures.build_fraction("raft_site", {"log": 3}), 3.0 / 9.0, 0.001, "a third of the way with three logs")
+	check(Structures.get_type("raft_site").get("shore", false), "rafts are built on the shore")
 
 
 func test_items_point_at_real_things() -> void:
@@ -35,11 +54,11 @@ func test_items_point_at_real_things() -> void:
 
 func test_can_craft_only_with_everything() -> void:
 	var inv = InventoryScript.new()
-	inv.add("fiber", 5)
-	check(not Recipes.can_craft(inv, "rope"), "5 fiber isn't enough for rope")
+	inv.add("fiber", 4)
+	check(not Recipes.can_craft(inv, "rope"), "4 fiber isn't enough for rope")
 	check(Recipes.missing(inv, "rope") == {"fiber": 1}, "one fiber short")
 	inv.add("fiber", 1)
-	check(Recipes.can_craft(inv, "rope"), "6 fiber makes rope")
+	check(Recipes.can_craft(inv, "rope"), "5 fiber makes rope")
 	check(Recipes.missing(inv, "campfire_kit") == {"stone": 6, "wood": 3}, "campfire needs stones and wood")
 
 

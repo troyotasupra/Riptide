@@ -31,6 +31,24 @@ func test_props_are_plentiful_unique_and_on_land() -> void:
 		check(kinds.has(kind), "island should have some %s" % kind)
 
 
+func test_starter_island_has_just_enough() -> void:
+	const IslandScript = preload("res://world/island_generator.gd")
+	var island = IslandScript.new(31, 55.0)
+	var a: Array = ScatterScript.generate_start(island)
+	var b: Array = ScatterScript.generate_start(IslandScript.new(31, 55.0))
+	check(a.size() == b.size() and (a.is_empty() or a[0].pos == b[0].pos), "same seed, same starter props")
+	var counts := {}
+	var ids := {}
+	for spot: Dictionary in a:
+		counts[spot.kind] = int(counts.get(spot.kind, 0)) + 1
+		check(not ids.has(spot.id) and String(spot.id).begins_with("st_"), "unique starter id %s" % spot.id)
+		ids[spot.id] = true
+		check(spot.pos.y > 0.4, "%s is on land" % spot.id)
+	check(int(counts.get("tree", 0)) >= 4, "enough trees for a raft's logs (%s)" % counts)
+	check(int(counts.get("flint", 0)) >= 2 and int(counts.get("fiber", 0)) >= 8, "flint for a hatchet, fiber for rope")
+	check(a.size() < 70, "but supplies are limited (%d props)" % a.size())
+
+
 func test_steep_ground_only_gets_rocks() -> void:
 	check(ScatterScript.pick(CampScript.Biome.JUNGLE, 0.5, 0.05) == "rock", "steep slope, low roll -> rock")
 	check(ScatterScript.pick(CampScript.Biome.JUNGLE, 0.5, 0.9) == "", "steep slope, high roll -> nothing")

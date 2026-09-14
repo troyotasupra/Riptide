@@ -138,6 +138,51 @@ static func metal(color: Color, roughness: float = 0.35) -> StandardMaterial3D:
 		return m)
 
 
+## Board siding and floors: grain with dark seams between boards (`board_width`
+## metres wide) and staggered butt joints. Triplanar, so walls get vertical boards.
+static func planks(color: Color, board_width: float = 0.25) -> StandardMaterial3D:
+	return _cached("planks_%s_%.2f" % [color.to_html(false), board_width], func() -> StandardMaterial3D:
+		var m := StandardMaterial3D.new()
+		m.albedo_color = color
+		m.albedo_texture = plank_texture()
+		m.uv1_triplanar = true
+		var scale := 1.0 / (board_width * PLANK_COUNT)
+		m.uv1_scale = Vector3(scale, scale, scale)
+		m.roughness = 0.9
+		return m)
+
+
+const PLANK_COUNT := 8
+static var _plank_image: ImageTexture
+
+
+## Grayscale boards (tinted by the material colour): PLANK_COUNT boards across.
+static func plank_texture() -> ImageTexture:
+	if _plank_image != null:
+		return _plank_image
+	var width := 128
+	var height := 512
+	var noise := _noise(71, 0.05, Vector2.ONE, 3)
+	var image := Image.create(width, height, false, Image.FORMAT_RGB8)
+	for x in width:
+		var board := x * PLANK_COUNT / width
+		var across := x - board * width / PLANK_COUNT
+		var shade := 0.88 + 0.1 * sin(board * 12.9898)
+		var joint := int(fposmod(board * 173.0, float(height)))
+		for y in height:
+			var v := shade + noise.get_noise_2d(x * 1.5, y * 0.12) * 0.13
+			if across < 2:
+				v *= 0.42
+			elif across == 2:
+				v *= 0.78
+			if absi(y - joint) < 2:
+				v *= 0.55
+			image.set_pixel(x, y, Color(v, v * 0.97, v * 0.93))
+	image.generate_mipmaps()
+	_plank_image = ImageTexture.create_from_image(image)
+	return _plank_image
+
+
 ## Glowing, unlit (flames, embers).
 static func glow(color: Color, energy: float = 2.0) -> StandardMaterial3D:
 	return _cached("glow_%s_%.1f" % [color.to_html(false), energy], func() -> StandardMaterial3D:

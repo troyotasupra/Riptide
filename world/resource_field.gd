@@ -18,8 +18,12 @@ var _regrow_accum := 0.0
 
 
 func populate(shape: CampIsland) -> void:
-	_pending = Scatter.generate(shape)
+	_pending.append_array(Scatter.generate(shape))
 	print("[resources] %d props to place" % _pending.size())
+
+
+func populate_start(island: IslandGenerator) -> void:
+	_pending.append_array(Scatter.generate_start(island))
 
 
 func _process(delta: float) -> void:

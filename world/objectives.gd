@@ -1,19 +1,23 @@
 class_name Objectives
 extends RefCounted
-## A light guide through the first island, shown on the HUD. Each objective is
-## checked against what the local player can see; once met it stays met.
+## A light guide from the starter island to the camp island, shown on the HUD.
+## Each objective is checked against what the local player can see; once met it stays met.
 
 const LIST := [
-	["reach_camp", "Paddle the raft to the island under the smoke"],
-	["board_sailboat", "Swim out to the moored sailboat and climb aboard"],
-	["read_book", "Find the survival book in the sea chest and read it"],
+	["gather", "Gather fiber, flint and driftwood on the beach"],
+	["rope", "Twist fiber into rope (B opens your crafting book)"],
+	["hatchet", "Make a stone hatchet and chop down a tree for logs"],
+	["oar", "Carve an oar"],
+	["raft_site", "Place a raft frame on the beach near the water"],
+	["raft", "Add logs and rope lashings, then launch the raft"],
+	["reach_camp", "Row to the island under the smoke (F to row, Q/E strokes)"],
+	["shack", "Find the fishing shack and read the survival book"],
 	["castaway_camp", "Search the castaway camp inland"],
-	["unlock", "Unlock the compartment in the sailboat's cabin"],
+	["unlock", "Unlock the footlocker in the fishing shack"],
 	["campfire", "Build a campfire"],
 	["cook", "Cook food or boil water on a fire"],
 	["sleep", "Sleep through the night in a bed"],
-	["hatchet", "Make a stone hatchet and chop down a tree"],
-	["repair", "Repair the sailboat (next update)"],
+	["john_boat", "Untie the john boat at the dock and take it out"],
 ]
 
 
@@ -21,17 +25,30 @@ static func check(id: String, world: Node, player: Player) -> bool:
 	var camp: CampSystems = world.camp
 	var inventory := player.survivor.inventory
 	match id:
+		"gather":
+			return inventory.count_of("fiber") > 0 or inventory.count_of("flint") > 0 or inventory.count_of("driftwood") > 0
+		"rope":
+			return inventory.count_of("rope") > 0
+		"hatchet":
+			return inventory.count_of("log") > 0
+		"oar":
+			return inventory.count_of("oar") > 0
+		"raft_site":
+			for entry: Dictionary in camp.structures.values():
+				if entry.type == "raft_site":
+					return true
+			return _has_boat(world, "raft")
+		"raft":
+			return _has_boat(world, "raft")
 		"reach_camp":
 			var at := player.world_transform().origin
 			return world.camp_island != null and Vector2(at.x, at.z).distance_to(world.camp_island.center) < CampIsland.RADIUS * 1.1
-		"board_sailboat":
-			return player.platform is Sailboat
-		"read_book":
-			return not camp.known_recipes.is_empty()
+		"shack":
+			return camp.known_recipes.has("campfire_kit")
 		"castaway_camp":
 			return camp.picked.has("machete") or camp.picked.has("compartment_key") or camp.picked.has("journal")
 		"unlock":
-			return camp.unlocked.has("boat:Sailboat:compartment")
+			return camp.unlocked.has("shack:footlocker")
 		"campfire":
 			for entry: Dictionary in camp.structures.values():
 				if entry.type == "campfire":
@@ -42,8 +59,16 @@ static func check(id: String, world: Node, player: Player) -> bool:
 					return true
 		"sleep":
 			return camp.local_asleep
-		"hatchet":
-			return inventory.count_of("log") > 0
+		"john_boat":
+			var boat: Boat = world.find_boat("JohnBoat")
+			return boat != null and not boat.is_tied() and player.platform == boat
+	return false
+
+
+static func _has_boat(world: Node, kind: String) -> bool:
+	for boat: Boat in world.boats_root.get_children():
+		if boat.kind == kind:
+			return true
 	return false
 
 
@@ -53,9 +78,10 @@ static func upcoming(world: Node, player: Player, count: int = 3) -> PackedStrin
 	for entry: Array in LIST:
 		if not done.has(entry[0]) and check(entry[0], world, player):
 			done[entry[0]] = true
-	if done.has("read_book"):
-		done["reach_camp"] = true
-		done["board_sailboat"] = true
+	# Anyone who has reached the camp island is past the starter island's steps.
+	if done.has("reach_camp") or done.has("shack"):
+		for id: String in ["gather", "rope", "hatchet", "oar", "raft_site", "raft", "reach_camp"]:
+			done[id] = true
 	var out: PackedStringArray = []
 	for entry: Array in LIST:
 		if not done.has(entry[0]):

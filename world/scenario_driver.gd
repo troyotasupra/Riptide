@@ -25,8 +25,10 @@ func _run() -> void:
 		"inventory":
 			_inventory_screen()
 			return  # stays up for a --shot screenshot
-		"ship":
-			_ship_view()
+		"starter":
+			await _starter_loop()
+		"dock":
+			_dock_view()
 			return  # stays up for a --shot screenshot
 		"structures":
 			_structures_view()
@@ -63,18 +65,17 @@ func _camp_loop() -> void:
 	var player := GameState.local_player as Player
 	var s := player.survivor
 	var pack := s.inventory
-	var boat := world.find_boat("Sailboat") as Sailboat
-	_check(player.platform == boat, "host starts aboard the sailboat")
+	_check(camp.in_shack(player.world_transform().origin), "host starts in the fishing shack")
 	_check(s.equipment.ids() == {"torso": "tshirt", "legs": "shorts", "feet": "sandals", "back": "satchel"}, "a new crew member washes up in the starting outfit")
 	_check(pack.grid_names() == ["pockets", "backpack"], "the satchel gives a backpack grid")
 	_check(player.model.worn.get("torso", "") == "tshirt", "the character model shows the T-shirt")
 
-	camp.interact_boat_part(s, boat, "chest", 0)
-	_check(camp.open_container == "boat:Sailboat:chest", "the sea chest opens")
-	var chest: ItemGrid = camp.containers["boat:Sailboat:chest"]
+	camp.interact_shack_part(s, "chest", 0)
+	_check(camp.open_container == "shack:chest", "the sea chest opens")
+	var chest: ItemGrid = camp.containers["shack:chest"]
 	var uids: Array = chest.items.map(func(item: Dictionary) -> int: return int(item.uid))
 	for uid: int in uids:
-		camp.request_quick_move("boat:Sailboat:chest", uid)
+		camp.request_quick_move("shack:chest", uid)
 	_check(pack.count_of("survival_book") == 1 and pack.count_of("lighter") == 1 and pack.count_of("knife") == 1,
 		"the important stash items move into the pack")
 	_check(chest.count_of("survival_book") == 0, "they leave the chest")
@@ -84,17 +85,17 @@ func _camp_loop() -> void:
 	s._request_use(_uid(pack, "survival_book"))
 	_check(camp.known_recipes.has("campfire_kit") and camp.known_recipes.has("rope"), "reading the book teaches the basics")
 
-	camp.interact_boat_part(s, boat, "compartment", 0)
-	_check(not camp.unlocked.has("boat:Sailboat:compartment"), "the compartment stays locked without the key")
+	camp.interact_shack_part(s, "footlocker", 0)
+	_check(not camp.unlocked.has("shack:footlocker"), "the footlocker stays locked without the key")
 	pack.add("compartment_key", 1)
-	camp.interact_boat_part(s, boat, "compartment", 0)
-	_check(camp.unlocked.has("boat:Sailboat:compartment") and camp.open_container == "boat:Sailboat:compartment", "the brass key unlocks it")
-	var compartment: ItemGrid = camp.containers["boat:Sailboat:compartment"]
+	camp.interact_shack_part(s, "footlocker", 0)
+	_check(camp.unlocked.has("shack:footlocker") and camp.open_container == "shack:footlocker", "the brass key unlocks it")
+	var compartment: ItemGrid = camp.containers["shack:footlocker"]
 	_check(compartment.count_of("pistol") == 1 and compartment.count_of("plate_carrier") == 1, "the pistol and a plate carrier are inside")
 
 	pack.clear()
 	var carrier_uid := int(compartment.items.filter(func(item: Dictionary) -> bool: return item.id == "plate_carrier")[0].uid)
-	camp.request_wear_item("boat:Sailboat:compartment", carrier_uid)
+	camp.request_wear_item("shack:footlocker", carrier_uid)
 	_check(s.equipment.ids().get("vest", "") == "plate_carrier" and s.total_weight() > 8.0, "wearing the plate carrier from the compartment adds its weight")
 	_check(pack.grid("rig") != null and pack.grid("rig").width == 4, "the plate carrier adds a chest rig grid")
 	_check(player.model.worn.get("vest", "") == "plate_carrier", "the plate carrier shows on the character")
@@ -160,18 +161,21 @@ func _camp_loop() -> void:
 		world.resources.harvest(s, tree.interact_id.substr(4))
 		_check(pack.count_of("log") >= 2 and tree.depleted, "with a hatchet the tree falls and gives logs")
 
-	player.teleport_aboard("Sailboat", Sailboat.BUNK_SPAWN)
+	player.teleport(camp.shack_spawn(0))
 	await _wait(1.0)
 	GameState.day_offset = 0.92 - Ocean.time / DayNight.DAY_LENGTH
-	camp.interact_boat_part(s, boat, "bunk", 0)
+	camp.interact_shack_part(s, "bunk", 0)
 	_check(camp.local_asleep, "asleep in the bunk at night")
 	await _wait(3.5)
 	_check(DayNight.is_day(GameState.time_of_day()) and not camp.local_asleep, "the night skips to dawn when the crew sleeps")
-	_check(camp.respawn_spot(player.player_id).get("kind", "") == "boat", "the bunk becomes the respawn point")
+	_check(camp.respawn_spot(player.player_id).get("kind", "") == "shack", "the bunk becomes the respawn point")
+	_check(camp.warmth_for(player) >= CampSystems.SHACK_WARMTH, "the shack keeps you warm")
 
+	player.teleport_aboard("JohnBoat", JohnBoat.crew_spawn(0))
+	await _wait(1.0)
 	pack.hotbar[6] = {"uid": 903, "id": "flint", "count": 3, "spoils_at": 0.0}
 	camp.request_drop_item("", 903)
-	_check((camp.containers["boat:Sailboat:lockers"] as ItemGrid).count_of("flint") == 3, "dropping aboard stows the item in the crew lockers")
+	_check((camp.containers["boat:JohnBoat:drybox"] as ItemGrid).count_of("flint") == 3, "dropping aboard the john boat stows the item in its dry box")
 
 	player.teleport(ground + Vector3(-3.0, 1.0, 2.0))
 	await _wait(1.5)
@@ -185,7 +189,7 @@ func _camp_loop() -> void:
 	_check(carried > 0 and bag_ok and s.inventory.is_empty(), "blacking out leaves the pack in a bag where you fell")
 	_check(s.equipment.ids().get("vest", "") == "plate_carrier", "worn gear stays on you")
 	await _wait(1.0)
-	_check(player.platform is Sailboat, "you wake up in your bunk")
+	_check(camp.in_shack(player.world_transform().origin), "you wake up in the shack")
 
 	world.save_now()
 	var saved := SaveGame.read()
@@ -200,27 +204,27 @@ func _client_chest() -> void:
 	var camp: CampSystems = GameState.world.camp
 	var player := GameState.local_player as Player
 	var pack := player.survivor.inventory
-	_check(player != null and player.platform is Sailboat, "the crew member spawns aboard")
+	_check(player != null and camp.in_shack(player.world_transform().origin), "the crew member spawns in the shack")
 	var host := GameState.world.players_root.get_node_or_null("1") as Player
 	_check(host != null and host.model.visible and host.model.worn.get("torso", "") == "tshirt", "the host is visible in their starting clothes")
 	_check(player.survivor.equipment.ids().has("back") and pack.grid("backpack") != null, "the crew member's outfit and satchel storage arrived")
 	var opened := [false]
 	camp.container_opened.connect(func(_id: String, _title: String) -> void: opened[0] = true)
-	GameState.world.rpc_id(1, "request_interact", "boat:Sailboat:chest", 0)
+	GameState.world.rpc_id(1, "request_interact", "shack:chest", 0)
 	await _wait(1.0)
-	_check(opened[0] and camp.containers.has("boat:Sailboat:chest"), "the host opens the chest for a remote crew member")
-	if not camp.containers.has("boat:Sailboat:chest"):
+	_check(opened[0] and camp.containers.has("shack:chest"), "the host opens the chest for a remote crew member")
+	if not camp.containers.has("shack:chest"):
 		return
-	var chest: ItemGrid = camp.containers["boat:Sailboat:chest"]
+	var chest: ItemGrid = camp.containers["shack:chest"]
 	var knife: Array = chest.items.filter(func(item: Dictionary) -> bool: return item.id == "knife")
 	if knife.is_empty():
 		_check(false, "the knife is in the chest")
 		return
-	camp.rpc_id(1, "request_move_item", "boat:Sailboat:chest", int(knife[0].uid), 0, {"area": "pockets", "x": 4, "y": 0, "rot": false})
+	camp.rpc_id(1, "request_move_item", "shack:chest", int(knife[0].uid), 0, {"area": "pockets", "x": 4, "y": 0, "rot": false})
 	await _wait(1.0)
 	var in_pocket: Dictionary = pack.grid("pockets").item_at(Vector2i(4, 0))
 	_check(in_pocket.get("id", "") == "knife", "dragged the knife from the chest into a pocket cell over the network")
-	_check((camp.containers["boat:Sailboat:chest"] as ItemGrid).count_of("knife") == 0, "everyone's view of the chest updated")
+	_check((camp.containers["shack:chest"] as ItemGrid).count_of("knife") == 0, "everyone's view of the chest updated")
 	camp.rpc_id(1, "request_move_item", "", _uid(pack, "knife"), 0, {"area": "hotbar", "index": 3})
 	await _wait(1.0)
 	_check(pack.hotbar[3] != null and pack.hotbar[3].id == "knife", "dragged the knife onto hotbar slot 4")
@@ -229,29 +233,149 @@ func _client_chest() -> void:
 	_check(pack.count_of("knife") == 0, "dropping over the network takes it from the pack")
 
 
-## Visual check: a fixed camera on the sloop. --face=deck (from the helm),
-## cabin (below deck), or anything else for a three-quarter view from the water.
-func _ship_view() -> void:
-	var boat := GameState.world.find_boat("Sailboat") as Sailboat
-	if boat == null:
+## Host, fresh world: wash up on the starter island → craft rope, a hatchet, an
+## oar and a raft frame → chop a tree → build the raft on the beach in stages →
+## launch it → row → untie and row the john boat → save.
+func _starter_loop() -> void:
+	var world := GameState.world
+	var camp: CampSystems = world.camp
+	var player := GameState.local_player as Player
+	var s := player.survivor
+	var pack := s.inventory
+	var here := player.world_transform().origin
+	_check(Vector2(here.x, here.z).length() < 80.0, "a new crew washes up on the starter island")
+	var rafts: Array = world.boats_root.get_children().filter(func(b: Boat) -> bool: return b.kind == "raft")
+	_check(rafts.is_empty(), "there's no raft waiting — they have to build one")
+	var knows := true
+	for id: String in RecipeTable.KNOWN_AT_START:
+		knows = knows and camp.known_recipes.has(id)
+	_check(knows and not camp.known_recipes.has("campfire_kit"), "they know rope, hatchet, oar and raft frame — the book teaches the rest")
+	var kinds := {}
+	for node: ResourceNode in world.resources.nodes.values():
+		if node.interact_id.begins_with("res:st_"):
+			kinds[node.kind] = int(kinds.get(node.kind, 0)) + 1
+	_check(int(kinds.get("tree", 0)) >= 4 and int(kinds.get("palm", 0)) >= 4 and int(kinds.get("flint", 0)) >= 3 and int(kinds.get("fiber", 0)) >= 8,
+		"the starter island has trees, palms, flint and fiber (%s)" % kinds)
+
+	pack.clear()
+	pack.add("fiber", 25)
+	pack.add("flint", 2)
+	pack.add("driftwood", 6)
+	for i in 5:
+		camp.request_craft("rope")
+	_check(pack.count_of("rope") == 5 and pack.count_of("fiber") == 0, "twisted 25 fiber into 5 rope")
+	camp.request_craft("oar")
+	_check(pack.count_of("oar") == 0, "an oar needs a hatchet first")
+	camp.request_craft("stone_hatchet")
+	_check(pack.count_of("stone_hatchet") == 1, "made a stone hatchet")
+
+	var logs_before := pack.count_of("log")
+	for node: ResourceNode in world.resources.nodes.values():
+		if node.interact_id.begins_with("res:st_tree") and not node.depleted:
+			world.resources.harvest(s, node.interact_id.substr(4))
+			break
+	_check(pack.count_of("log") > logs_before, "chopped a starter-island tree for logs")
+	pack.add("log", maxi(0, 6 - pack.count_of("log")))
+	camp.request_craft("oar")
+	_check(pack.count_of("oar") == 1, "carved an oar")
+	camp.request_craft("raft_kit")
+	_check(pack.count_of("raft_kit") == 1 and pack.count_of("log") >= 6, "made a raft frame from driftwood and rope, keeping the logs")
+	pack.add("rope", maxi(0, 3 - pack.count_of("rope")))
+
+	var shore: Vector3 = world.island.find_shore_point(Vector2(0.0, 1.0))
+	var site := Vector3(shore.x + 3.0, 0.0, shore.z - 1.0)
+	site.y = world.island.height_at(site.x, site.z)
+	player.teleport(site + Vector3(0.0, 1.0, -3.5))
+	await _wait(1.0)
+	var slot := pack.hotbar.find(null)
+	_to_hotbar(pack, "raft_kit", slot)
+	camp.request_place(slot, Vector3(site.x, site.y + 40.0, site.z), 0.0)
+	_check(camp.structures.is_empty(), "can't build a raft frame in mid-air")
+	camp.request_place(slot, site, 0.0)
+	var site_id := ""
+	for id: String in camp.structures:
+		if camp.structures[id].type == "raft_site":
+			site_id = id
+	_check(not site_id.is_empty(), "placed the raft frame on the beach")
+	if site_id.is_empty():
 		return
-	var eye := Vector3(13.0, 4.5, -11.0)
-	var target := Vector3(0.0, 4.0, 0.5)
+	camp.interact_structure(s, site_id, 0)
+	_check(int(camp.structures[site_id].progress.get("log", 0)) == 6 and pack.count_of("log") == 0, "added six logs")
+	camp.interact_structure(s, site_id, 0)
+	_check(StructureTable.next_stage("raft_site", camp.structures[site_id].progress).is_empty(), "lashed them with rope — the raft is ready")
+	camp.interact_structure(s, site_id, 0)
+	await _wait(3.0)
+	var raft: Boat = null
+	for boat: Boat in world.boats_root.get_children():
+		if boat.kind == "raft":
+			raft = boat
+	_check(raft != null and not camp.structures.has(site_id), "pushed the raft into the water")
+	if raft == null:
+		return
+	_check(absf(raft.global_position.y) < 1.0 and world.ground_height(raft.global_position.x, raft.global_position.z) < -0.5, "it floats in open water")
+
+	player.teleport_aboard(String(raft.name), Vector3(0.0, raft.deck_top + 0.05, 0.0))
+	await _wait(1.0)
+	var start := raft.global_position
+	raft.set_row_input(1.0, 1.0, false)
+	await _wait(4.0)
+	var moved := raft.global_position - start
+	_check(Vector2(moved.x, moved.z).length() > 3.0, "rowing both oars moves the raft (%.1f m)" % Vector2(moved.x, moved.z).length())
+	var yaw_before := raft.global_rotation.y
+	raft.set_row_input(1.0, 0.0, false)
+	await _wait(3.0)
+	_check(absf(angle_difference(raft.global_rotation.y, yaw_before)) > 0.2, "a left-oar stroke alone turns it")
+	raft.set_row_input(0.0, 0.0, false)
+	pack.take(_uid(pack, "oar"))
+	raft.set_row_input(1.0, 1.0, false)
+	_check(raft.rowers.is_empty(), "no oar, no rowing")
+
+	var john: Boat = world.find_boat("JohnBoat")
+	_check(john != null and john.is_tied(), "the john boat waits tied up at the fishing shack's dock")
+	if john == null:
+		return
+	player.teleport_aboard("JohnBoat", JohnBoat.crew_spawn(0))
+	await _wait(1.0)
+	camp.interact_boat_part(s, john, "cleat", 0)
+	_check(not john.is_tied(), "untied her at the bow cleat")
+	pack.add("oar", 1)
+	var john_start := john.global_position
+	john.set_row_input(1.0, 1.0, true)
+	await _wait(4.0)
+	john.set_row_input(0.0, 0.0, false)
+	_check(john.global_position.distance_to(john_start) > 3.0, "rowed the john boat away from the dock (%.1f m)" % john.global_position.distance_to(john_start))
+
+	world.save_now()
+	var saved := SaveGame.read()
+	var boats: Dictionary = saved.get("boats", {})
+	_check(boats.has(String(raft.name)) and boats[String(raft.name)].kind == "raft", "the save keeps the raft the crew built")
+	_check(boats.has("JohnBoat") and not boats.JohnBoat.tied, "and remembers the john boat is untied")
+
+
+## Visual check around the fishing shack. --face=interior (inside the shack),
+## boat (sitting in the john boat), or anything else for the dock and shack from the water.
+func _dock_view() -> void:
+	var world := GameState.world
+	var shack: Dictionary = world.camp.shack
+	var boat: Boat = world.find_boat("JohnBoat")
+	var frame: Node3D = null
+	var base: Transform3D = shack.xf
+	var eye := Vector3(8.0, 6.0, -33.0)
+	var target := Vector3(-3.0, 0.0, -15.0)
 	match GameState.face:
-		"deck":
-			eye = Vector3(0.6, Sailboat.QUARTER_Y + 1.7, 5.6)
-			target = Vector3(0.0, Sailboat.DECK_Y + 2.5, -5.0)
-		"cabin":
-			eye = Vector3(0.0, Sailboat.FLOOR_Y + 1.55, 3.4)
-			target = Vector3(0.0, Sailboat.FLOOR_Y + 0.6, -2.4)
-		"stern":
-			eye = Vector3(-9.0, 3.5, 14.0)
-			target = Vector3(0.0, 3.5, 0.0)
+		"interior":
+			eye = Vector3(0.3, 1.6, -1.6)
+			target = Vector3(-0.6, 0.6, 1.5)
+		"boat":
+			frame = boat
+			eye = Vector3(0.0, 1.3, 1.9)
+			target = Vector3(0.0, 0.4, -2.5)
 	var cam := Camera3D.new()
 	cam.fov = 70.0
-	GameState.world.add_child(cam)
+	world.add_child(cam)
 	var place := func() -> void:
-		cam.global_transform = boat.get_global_transform_interpolated() * Transform3D(Basis.looking_at(target - eye, Vector3.UP), eye)
+		var origin := frame.get_global_transform_interpolated() if frame != null else base
+		cam.global_transform = origin * Transform3D(Basis.looking_at(target - eye, Vector3.UP), eye)
 	get_tree().process_frame.connect(place)
 	place.call()
 	cam.make_current()
@@ -264,14 +388,15 @@ func _structures_view() -> void:
 	var island: CampIsland = world.camp_island
 	var inland := (island.center - island.cove).normalized()
 	var across := inland.orthogonal()
-	var base: Vector2 = island.cove + inland * 16.0
-	var types := ["lean_to", "campfire", "tent", "drying_rack", "storage_crate"]
+	var base: Vector2 = island.cove + inland * 30.0 - inland.orthogonal() * 18.0
+	var types := ["lean_to", "campfire", "tent", "drying_rack", "storage_crate", "raft_site"]
 	for i in types.size():
-		var xz := base + across * (i - 2) * 3.2
+		var xz := base + across * (i - 2.5) * 3.4
 		var pos := Vector3(xz.x, island.height_at(xz.x, xz.y), xz.y)
 		camp._spawn_structure("view%d" % i, types[i], pos, atan2(-inland.x, -inland.y) + PI)
 	(camp.structure_nodes["view1"] as StructureNode).set_lit(true)
-	var eye2 := base - inland * 7.0
+	camp._apply_progress("view5", {"log": 4, "rope": 0})
+	var eye2 := base - inland * 9.0
 	var eye := Vector3(eye2.x, island.height_at(base.x, base.y) + 2.6, eye2.y)
 	var target := Vector3(base.x, island.height_at(base.x, base.y) + 0.6, base.y)
 	var cam := Camera3D.new()
@@ -295,8 +420,7 @@ func _inventory_screen() -> void:
 			["pistol", 1], ["pistol_ammo", 30], ["rope", 5], ["berries", 12], ["tarp", 1], ["stone_hatchet", 1]]:
 		s.inventory.add(entry[0], entry[1], Ocean.time)
 	s.push_inventory()
-	var boat := world.find_boat("Sailboat") as Sailboat
-	camp.interact_boat_part(s, boat, "chest", 0)
+	camp.interact_shack_part(s, "chest", 0)
 	print("[scenario] inventory open")
 
 
@@ -316,8 +440,10 @@ func _lineup() -> void:
 	]
 	var outfits: Array = CharacterCreator.OUTFITS.values()
 	var poses := ["idle", "walk", "crouch", "idle", "swing"]
-	# --face=portrait puts the row close enough to judge faces.
-	var portrait := GameState.face == "portrait"
+	# --face=portrait puts the row close enough to judge faces; portrait_side and
+	# portrait_back turn everyone around to check their hair from other angles.
+	var portrait := GameState.face.begins_with("portrait")
+	var spin: float = {"portrait_side": PI * 0.5, "portrait_back": PI}.get(GameState.face, 0.0)
 	var distance := 1.25 if portrait else 4.5
 	var spacing := 0.62 if portrait else 1.3
 	var turn := 0.12 if portrait else 0.25
@@ -337,7 +463,7 @@ func _lineup() -> void:
 		var ground: float = world.ground_height(p.x, p.z)
 		p.y = ground if ground != -INF else at.origin.y
 		model.global_position = p
-		model.rotation.y = player.yaw + PI + (i - 2) * turn
+		model.rotation.y = player.yaw + PI + (i - 2) * turn + spin
 		if poses[i] == "swing":
 			model.set_held("stone_hatchet")
 		animator.models.append([model, poses[i]])

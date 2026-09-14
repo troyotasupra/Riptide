@@ -534,10 +534,27 @@ func _build_head(skin: Color, feminine: bool) -> void:
 	var style := int(look.hair)
 	var hair_material := _two_sided(_material(hair_color))
 	var hair_inflate: float = [0.0, 0.006, 0.018, 0.022, 0.016, 0.016, 0.0, 0.016][style]
-	if style != 0 and style != 6 and not hatted:
-		# With a full beard the sideburns come down to meet it instead of clearing the ears.
-		var ears := beard != 3
-		_head_part(_head_surface(hair_inflate, func(d: Vector3) -> bool: return _above_hairline(d, 0.42, 0.55, ears), "hair_%d_%s" % [style, ears]), hair_material)
+	# Hair clears the ears unless it's long or meets a full beard.
+	var ears := beard != 3 and style != 4
+	var hair_region := func(d: Vector3) -> bool: return _above_hairline(d, 0.42, 0.55, ears)
+	# Under a beanie or helmet only the hair below its edge is drawn.
+	var covered := func(_d: Vector3) -> bool: return false
+	match head_item:
+		"wool_beanie":
+			covered = func(d: Vector3) -> bool: return _above_hairline(d, 0.52, 0.3, false)
+		"combat_helmet":
+			covered = func(d: Vector3) -> bool: return d.y > maxf(-0.15, 0.1 + 0.25 * -d.z) - 0.03
+	if style != 0:
+		# A scalp tint under every style — lighter on a mohawk's shaved sides — so
+		# the gaps between hair shells show hair colour, never bare skin.
+		var shaved := style == 6
+		var scalp := skin.lerp(hair_color, 0.4) if shaved else hair_color.darkened(0.2)
+		_head_part(_head_surface(0.0025, hair_region, "scalp_%s" % ears), _material(scalp))
+		if not shaved:
+			var shown := hair_region
+			if hatted:
+				shown = func(d: Vector3) -> bool: return hair_region.call(d) and not covered.call(d)
+			_head_part(_head_surface(hair_inflate, shown, "hair_%d_%s_%s" % [style, ears, head_item if hatted else ""]), hair_material)
 	var back_dir := Vector3(0.0, -0.2, 1.0)
 	var back := _head_point(back_dir)
 	match style:
@@ -549,7 +566,8 @@ func _build_head(skin: Color, feminine: bool) -> void:
 			_ellipsoid(_head, Vector3(_head_shape.size.x * 1.05, 0.34, 0.07), back + Vector3(0.0, -0.1, 0.02), hair_color)
 			for side: float in [-1.0, 1.0]:
 				var side_dir := Vector3(side, -0.2, 0.25)
-				_ellipsoid(_head, Vector3(0.04, 0.24, 0.13), _head_point(side_dir) + Vector3(side * 0.015, -0.08, 0.0), hair_color)
+				# Lies flat against the side of the head rather than sticking out like an earmuff.
+				_ellipsoid(_head, Vector3(0.045, 0.26, 0.15), _head_point(side_dir) + Vector3(-side * 0.008, -0.1, 0.02), hair_color)
 		5:
 			_ellipsoid(_head, Vector3(0.065, 0.22, 0.065), back + Vector3(0.0, -0.06, 0.04), hair_color, Vector3(0.3, 0.0, 0.0))
 		6:

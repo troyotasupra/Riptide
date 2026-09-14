@@ -436,7 +436,13 @@ func _update_info(player: Player) -> void:
 			names.append(Net.roster[id]["name"])
 		lines.append("Crew: " + ", ".join(names))
 	if player != null and player.platform != null and player.platform.can_paddle:
-		lines.append("%s paddle%s" % [Controls.tag("paddle"), " — WASD steers, %s pulls hard" % Controls.tag("sprint") if player.paddling else ""])
+		if player.paddling:
+			lines.append("Rowing — %s left oar · %s right oar · both to go straight · hold %s back-row · %s pull hard · %s let go" % [
+				Controls.tag("row_left"), Controls.tag("row_right"), Controls.tag("move_back"), Controls.tag("sprint"), Controls.tag("paddle")])
+		elif player.survivor.inventory.tool_types().has("oar"):
+			lines.append("%s take the oars" % Controls.tag("paddle"))
+		else:
+			lines.append("You'll need an oar to row")
 	if Settings.show_debug:
 		lines.append("")
 		lines.append("RIPTIDE M1c-pre · %s · peer %d" % ["HOST" if multiplayer.is_server() else "CREW", multiplayer.get_unique_id()])

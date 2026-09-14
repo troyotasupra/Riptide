@@ -24,7 +24,18 @@ func test_different_seeds_differ() -> void:
 func test_center_is_land_and_edges_are_sea() -> void:
 	for island_seed: int in [1, 77, 90210]:
 		var island = IslandScript.new(island_seed, 55.0)
-		check(island.height_at(0.0, 0.0) > 3.0, "seed %d centre should be well above water" % island_seed)
+		check(island.height_at(0.0, 0.0) > 1.8, "seed %d centre should be above the beach" % island_seed)
+
+
+func test_starter_island_is_low_and_gentle() -> void:
+	for island_seed: int in [1, 77, 90210]:
+		var island = IslandScript.new(island_seed, 55.0)
+		var highest := -INF
+		for i in 400:
+			var angle := i * 2.39996
+			var r := sqrt(i / 400.0) * 50.0
+			highest = maxf(highest, island.height_at(cos(angle) * r, sin(angle) * r))
+		check(highest < 6.0, "seed %d starter island tops out low (%.1f m)" % [island_seed, highest])
 		check(island.height_at(55.0 * 1.3, 0.0) < -2.0, "seed %d edge should be under water" % island_seed)
 
 

@@ -3,6 +3,10 @@ extends Node3D
 ## their boats and their camp. The host builds it from the shared seed (or a
 ## save); clients build the same thing once welcomed, and then the host spawns
 ## everyone for everyone. The host also runs survival and every interaction.
+##
+## The crew washes up on the small starter island with nothing, builds a raft
+## and oars there, and rows to the camp island, where the fishing shack and its
+## john boat wait at the dock.
 
 const START_ISLAND_RADIUS := 55.0
 const INTERACT_RANGE := 4.5
@@ -10,6 +14,9 @@ const SPRING_DRINK := 30.0
 const STREAM_DRINK := 20.0
 const STREAM_SICK_CHANCE := 0.5
 const STREAM_SICKNESS := 90.0
+const SAVE_VERSION := 4
+## Proxy slots 0 and 1 are reserved; built boats take the next free one.
+const FIRST_BUILT_BOAT_INDEX := 2
 
 var island: IslandGenerator
 var camp_island: CampIsland
@@ -19,6 +26,9 @@ var players_root := Node3D.new()
 var boats_root := Node3D.new()
 ## Saved crew members who aren't connected right now, by player id.
 var saved_players := {}
+## Boats the crew built (not part of the generated world): name -> {"kind", "index"}.
+var built_boats := {}
+var _next_boat_index := FIRST_BUILT_BOAT_INDEX
 var _age := 0.0
 ## peer id -> {"id": target, "at": ocean clock} for hold-to-gather validation
 var _interact_started := {}
@@ -119,8 +129,10 @@ func find_boat(boat_name: String) -> Boat:
 
 
 func spawn_point(index: int) -> Vector3:
-	if GameState.spawn_override in ["camp", "boat"] and camp_island != null:
+	if GameState.spawn_override == "camp" and camp_island != null:
 		return camp_beach_point(index)
+	if GameState.spawn_override in ["shack", "boat"] and not camp.shack.is_empty():
+		return camp.shack_spawn(index)
 	return start_beach_point(index)
 
 
@@ -135,6 +147,24 @@ func camp_beach_point(index: int) -> Vector3:
 	var inland := (camp_island.center - camp_island.cove).normalized()
 	var p := camp_island.cove + inland * 10.0 + inland.orthogonal() * (index - 2.5) * 1.5
 	return Vector3(p.x, camp_island.height_at(p.x, p.y) + 1.2, p.y)
+
+
+## Where a boat built at `from` can be pushed into the water: straight out from
+## the island it sits on, the first spot deep enough to float. {"pos", "dir"} or {}.
+func water_spot(from: Vector3) -> Dictionary:
+	var here := Vector2(from.x, from.z)
+	var center := Vector2.ZERO
+	if camp_island != null and here.distance_to(camp_island.center) < CampIsland.RADIUS * 1.5:
+		center = camp_island.center
+	var dir := here - center
+	dir = Vector2(0.0, 1.0) if dir.length() < 0.1 else dir.normalized()
+	for step in 40:
+		var p := here + dir * float(step)
+		var h := ground_height(p.x, p.y)
+		if h == -INF or h < -0.9:
+			var q := p + dir * 2.0
+			return {"pos": Vector3(q.x, 0.3, q.y), "dir": dir}
+	return {}
 
 
 ## Plays a sound at a spot for everyone in the world (host only).
@@ -153,12 +183,9 @@ func _sfx(set_name: String, pos: Vector3) -> void:
 func _generate() -> void:
 	island = IslandGenerator.new(GameState.world_seed, START_ISLAND_RADIUS)
 	add_child(island.build())
-	var shore := island.find_shore_point(Vector2(0.0, 1.0))
-	var raft := Boat.create_raft(0)
-	raft.position = Vector3(shore.x, 0.3, shore.z + 7.0)
-	boats_root.add_child(raft)
 
 	camp_island = CampIsland.new(GameState.world_seed)
+	camp.shack = FishingShack.layout(camp_island)
 	var camp_root := Node3D.new()
 	camp_root.name = "CampIsland"
 	add_child(camp_root)
@@ -170,14 +197,14 @@ func _generate() -> void:
 	resources.name = "Resources"
 	camp_root.add_child(resources)
 	resources.populate(camp_island)
+	resources.populate_start(island)
 	camp_root.add_child(CampIslandPois.build(camp_island))
+	camp.shack_glow = camp_root.find_child("StoveGlow", true, false) as OmniLight3D
 
-	var layout := Sailboat.mooring_layout(camp_island)
-	var sailboat := Sailboat.create(1)
-	sailboat.transform = layout.transform
-	boats_root.add_child(sailboat)
-	sailboat.moor(layout.lines)
-	sailboat.set_crew_flag(GameState.crew_color, GameState.emblem)
+	var john_boat := JohnBoat.create(1)
+	john_boat.transform = camp.shack.boat_xf
+	boats_root.add_child(john_boat)
+	john_boat.moor(camp.shack.lines)
 
 	camp.create_pickups(camp_island)
 
@@ -185,6 +212,51 @@ func _generate() -> void:
 func _on_welcomed() -> void:
 	_generate()
 	Net.report_world_ready()
+
+
+# --- boats the crew builds ----------------------------------------------------------
+
+## Host: puts a newly built boat of `kind` into the world at `xf` for everyone.
+func launch_boat(kind: String, xf: Transform3D) -> Boat:
+	var index := _next_boat_index
+	var boat_name := "Raft%d" % (index - FIRST_BUILT_BOAT_INDEX + 1)
+	_spawn_boat(kind, boat_name, index, xf)
+	Net.send_to_ready(self, "_spawn_boat", [kind, boat_name, index, xf])
+	return find_boat(boat_name)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _spawn_boat(kind: String, boat_name: String, index: int, xf: Transform3D) -> void:
+	_next_boat_index = maxi(_next_boat_index, index + 1)
+	if find_boat(boat_name) != null:
+		return
+	var boat := Boat.create_raft(index)
+	boat.name = boat_name
+	boat.kind = kind
+	boat.transform = xf
+	boats_root.add_child(boat)
+	built_boats[boat_name] = {"kind": kind, "index": index}
+
+
+## Host: tie `boat` up at the fishing shack's dock, or cast it off.
+func set_boat_tied(boat: Boat, tied: bool) -> void:
+	_apply_tied(String(boat.name), tied)
+	Net.send_to_ready(self, "_set_tied", [String(boat.name), tied])
+
+
+@rpc("authority", "call_remote", "reliable")
+func _set_tied(boat_name: String, tied: bool) -> void:
+	_apply_tied(boat_name, tied)
+
+
+func _apply_tied(boat_name: String, tied: bool) -> void:
+	var boat := find_boat(boat_name)
+	if boat == null:
+		return
+	if tied and boat.kind == "john_boat":
+		boat.moor(camp.shack.lines)
+	elif not tied:
+		boat.untie()
 
 
 # --- saving --------------------------------------------------------------------
@@ -201,15 +273,16 @@ func save_now() -> void:
 		depleted[id] = maxf(0.0, resources.depleted[id] - now)
 	var boats := {}
 	for boat: Boat in boats_root.get_children():
-		boats[String(boat.name)] = boat.global_transform
+		boats[String(boat.name)] = {"kind": boat.kind, "index": boat.proxy_index, "xf": boat.global_transform, "tied": boat.is_tied()}
 	var ok := SaveGame.write({
-		"version": 3,
+		"version": SAVE_VERSION,
 		"seed": GameState.world_seed,
 		"crew_color": GameState.crew_color,
 		"emblem": GameState.emblem,
 		"time_of_day": GameState.time_of_day(),
 		"resources": depleted,
 		"boats": boats,
+		"next_boat_index": _next_boat_index,
 		"camp": camp.to_save(now),
 		"players": players,
 	})
@@ -221,12 +294,25 @@ func _apply_save(data: Dictionary) -> void:
 	var depleted: Dictionary = data.get("resources", {})
 	for id: String in depleted:
 		resources.depleted[id] = now + float(depleted[id])
+	_next_boat_index = maxi(_next_boat_index, int(data.get("next_boat_index", FIRST_BUILT_BOAT_INDEX)))
 	var boats: Dictionary = data.get("boats", {})
 	for boat_name: String in boats:
+		var entry = boats[boat_name]
+		if entry is Transform3D:
+			# Saved before rafts were built: the old found raft becomes a built one; the sloop is gone.
+			if boat_name == "Raft":
+				launch_boat("raft", entry)
+			continue
 		var boat := find_boat(boat_name)
-		if boat != null:
-			boat.global_transform = boats[boat_name]
-			boat.reset_physics_interpolation()
+		if boat == null and entry.get("kind", "") == "raft":
+			_spawn_boat("raft", boat_name, int(entry.get("index", _next_boat_index)), entry.xf)
+			boat = find_boat(boat_name)
+		if boat == null:
+			continue
+		boat.global_transform = entry.xf
+		boat.reset_physics_interpolation()
+		if not entry.get("tied", true):
+			boat.untie()
 	camp.from_save(data.get("camp", {}), now)
 	saved_players = data.get("players", {})
 	print("[save] world loaded (%d crew members on record)" % saved_players.size())
@@ -292,15 +378,20 @@ func request_interact(target_id: String, slot: int) -> void:
 				camp.open_container_for(survivor, "bag:" + parts[1])
 		"struct":
 			var structure: Node3D = camp.structure_nodes.get(parts[1]) if parts.size() > 1 else null
-			if structure != null and at.distance_to(structure.global_position) <= INTERACT_RANGE + 1.0:
+			if structure != null and at.distance_to(structure.global_position) <= INTERACT_RANGE + 1.5:
 				camp.interact_structure(survivor, parts[1], slot)
 		"boat":
 			if parts.size() < 3:
 				return
-			var boat := find_boat(parts[1]) as Sailboat
+			var boat := find_boat(parts[1])
 			var part: Node3D = boat.parts.get(parts[2]) if boat != null else null
 			if part != null and at.distance_to(part.global_position) <= INTERACT_RANGE:
 				camp.interact_boat_part(survivor, boat, parts[2], slot)
+		"shack":
+			if parts.size() < 2 or not camp.shack.get("parts", {}).has(parts[1]):
+				return
+			if at.distance_to(camp.shack.parts[parts[1]]) <= INTERACT_RANGE:
+				camp.interact_shack_part(survivor, parts[1], slot)
 
 
 func _use_spring(survivor: Survivor, at: Vector3, slot: int) -> void:
@@ -380,6 +471,13 @@ func _sender_id() -> int:
 
 func _on_peer_ready(peer_id: int) -> void:
 	if peer_id != multiplayer.get_unique_id():
+		for boat_name: String in built_boats:
+			var boat := find_boat(boat_name)
+			if boat != null:
+				_spawn_boat.rpc_id(peer_id, built_boats[boat_name].kind, boat_name, built_boats[boat_name].index, boat.global_transform)
+		for boat: Boat in boats_root.get_children():
+			if boat.kind == "john_boat" and not boat.is_tied():
+				_set_tied.rpc_id(peer_id, String(boat.name), false)
 		for existing: Player in players_root.get_children():
 			_spawn_player.rpc_id(peer_id, existing.peer_id, existing.display_name, existing.player_id, existing.look, existing.worn, existing.world_transform().origin)
 		resources.sync_to(peer_id)
@@ -400,14 +498,16 @@ func _on_peer_ready(peer_id: int) -> void:
 	player.survivor.push_inventory()
 	player.survivor.push_survival()
 	if GameState.spawn_override == "boat":
-		player.teleport_aboard("Sailboat", Sailboat.crew_spawn(index))
+		player.teleport_aboard("JohnBoat", JohnBoat.crew_spawn(index))
+	elif GameState.spawn_override in ["shack", "camp"]:
+		player.teleport(pos)
 	else:
 		camp.teleport_to_spot(player, camp.respawn_spot(player_id))
 
 
 func _on_peer_left(peer_id: int) -> void:
 	for boat: Boat in get_tree().get_nodes_in_group("boats"):
-		boat.paddlers.erase(peer_id)
+		boat.rowers.erase(peer_id)
 	var player := players_root.get_node_or_null(str(peer_id)) as Player
 	if player != null:
 		saved_players[player.player_id] = player.survivor.to_save(Ocean.time)
@@ -429,7 +529,7 @@ func _spawn_player(peer_id: int, player_name: String, player_id: String, look: D
 	player.worn = worn
 	player.is_local = peer_id == multiplayer.get_unique_id()
 	player.set_multiplayer_authority(peer_id)
-	player.yaw = PI  # face out to sea, toward the raft
+	player.yaw = PI  # face out to sea
 	player.pitch = -0.12
 	if camp_island != null and (GameState.spawn_override == "camp" or GameState.face in ["camp", "sea"]):
 		var to_camp := camp_island.center - Vector2(pos.x, pos.z)

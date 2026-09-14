@@ -15,6 +15,9 @@ var _held_id := "?"
 var _sleeve_key := "?"
 var _phase := 0.0
 var _swing_t := 0.0
+## 0..1 while rowing: the arm pulls the oar through its stroke.
+var rowing := 0.0
+var _row_phase := 0.0
 
 
 func _ready() -> void:
@@ -76,6 +79,11 @@ func animate(delta: float, speed: float) -> void:
 	var arc := sin(_swing_t * PI)
 	_arm.position = REST + Vector3(cos(_phase) * 0.012, absf(sin(_phase)) * 0.018, 0.0) * moving + Vector3(-0.05, 0.08, 0.0) * arc
 	_arm.rotation.x = REST_PITCH + arc * 0.7 - (1.0 - _swing_t) * arc * 1.4
+	if rowing > 0.01:
+		_row_phase = fmod(_row_phase + delta * (3.2 + rowing * 2.0), TAU)
+		var pull := sin(_row_phase)
+		_arm.position += Vector3(-0.06, 0.03 * cos(_row_phase), 0.12 * pull) * rowing
+		_arm.rotation.x += 0.35 * pull * rowing
 
 
 func _part(parent: Node3D, mesh: Mesh, pos: Vector3, color: Color) -> MeshInstance3D:

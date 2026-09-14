@@ -78,9 +78,10 @@ var view_model: ViewModel
 var _label: Label3D
 var _eye_height := EYE_HEIGHT
 var _tick := 0
-var _paddle_boat: Boat = null
-var _paddle_sent := Vector2.ZERO
-var _paddle_sprint_sent := false
+var _row_boat: Boat = null
+var _row_sent := Vector3.ZERO
+## 0..1 how hard this crew member is rowing right now (drives the arm animation).
+var rowing := 0.0
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _has_target := false
@@ -244,7 +245,19 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not _controls_active():
 		return
 	if event.is_action_pressed("paddle") and platform != null and platform.can_paddle:
-		paddling = not paddling
+		if paddling:
+			paddling = false
+		elif survivor.inventory.tool_types().has("oar"):
+			paddling = true
+			if not GameState.hints_shown.has("rowing"):
+				GameState.hints_shown["rowing"] = true
+				survivor.notified.emit("Rowing: %s strokes the left oar, %s the right — both to go straight. Hold %s to back-row, %s to pull hard, %s to let go." % [
+					Controls.tag("row_left"), Controls.tag("row_right"), Controls.tag("move_back"), Controls.tag("sprint"), Controls.tag("paddle")])
+		else:
+			Sound.play("error", -8.0)
+			survivor.notified.emit("You need an oar to row. Carve one from wood and rope (B).")
+	elif paddling:
+		pass  # while rowing, Q and E are oar strokes rather than drop and interact
 	elif event.is_action_pressed("interact") and not focus_id.is_empty():
 		_press_interact("interact")
 	elif event.is_action_pressed("primary"):
@@ -300,7 +313,8 @@ func _process(delta: float) -> void:
 		camera.fov = Settings.fov
 		_torch_light.visible = ItemTable.get_item(held_id).get("tool", "") == "torch"
 		var skin: Color = AppearanceTable.SKIN[int(AppearanceTable.sanitize(look).skin)]
-		view_model.refresh(held_id, worn.get("torso", ""), skin, GameState.crew_color)
+		view_model.refresh("oar" if paddling else held_id, worn.get("torso", ""), skin, GameState.crew_color)
+		view_model.rowing = rowing if paddling else 0.0
 		view_model.animate(delta, Vector2(velocity.x, velocity.z).length())
 		_update_ambience(world.origin)
 	else:
@@ -339,8 +353,8 @@ func board(boat: Boat, surface_y: float) -> void:
 
 
 ## Climbs a boarding ladder: straight onto the deck, facing forward.
-func climb_aboard(boat: Boat, ladder: String = "ladder") -> void:
-	var landing := Sailboat.ladder_landing(ladder) if boat is Sailboat else Vector3(0.0, boat.deck_top + 0.02, 0.0)
+func climb_aboard(boat: Boat, _ladder: String = "ladder") -> void:
+	var landing := Vector3(0.0, boat.deck_top + 0.02, 0.0)
 	platform = boat
 	swimming = false
 	velocity = Vector3.ZERO
@@ -431,10 +445,17 @@ func _local_physics(delta: float) -> void:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	if not GameState.autopilot.is_empty():
 		input = _autopilot_input(delta)
-	if platform == null or not platform.can_paddle:
+	if platform == null or not platform.can_paddle or not survivor.inventory.tool_types().has("oar"):
 		paddling = false
-	var paddle_sprint := paddling and input != Vector2.ZERO and Input.is_action_pressed("sprint") and stamina > 0.0
-	_update_paddle(input if paddling else Vector2.ZERO, paddle_sprint)
+	var strokes := Vector2.ZERO
+	if paddling and active:
+		strokes = Vector2(1.0 if Input.is_action_pressed("row_left") else 0.0, 1.0 if Input.is_action_pressed("row_right") else 0.0)
+		if Input.is_action_pressed("move_back"):
+			strokes = -strokes
+	var rowing_now := strokes != Vector2.ZERO
+	var power_stroke := rowing_now and Input.is_action_pressed("sprint") and stamina > 0.0
+	_update_row(strokes, power_stroke)
+	rowing = lerpf(rowing, (1.0 if power_stroke else 0.6) if rowing_now else 0.0, 1.0 - exp(-6.0 * delta))
 	if paddling:
 		input = Vector2.ZERO
 
@@ -464,17 +485,21 @@ func _local_physics(delta: float) -> void:
 	speed *= LoadoutMath.speed_multiplier(carried_weight_kg)
 
 	var drain := LoadoutMath.stamina_drain_multiplier(carried_weight_kg)
-	if sprinting or paddle_sprint:
+	if sprinting:
 		stamina -= SPRINT_COST * drain * delta
+	elif power_stroke:
+		stamina -= RowMath.POWER_STAMINA_COST * drain * delta
 	elif swimming and moving:
 		stamina -= SWIM_COST * drain * delta
+	elif rowing_now:
+		stamina += RowMath.ROWING_STAMINA_REGEN * delta
 	else:
 		stamina += STAMINA_REGEN * delta
 	stamina = clampf(stamina, 0.0, STAMINA_MAX)
-	if sprinting or paddle_sprint or (swimming and moving):
+	if sprinting or power_stroke or (swimming and moving):
 		exertion = 1.0
 	else:
-		exertion = 0.25 if moving or paddling else 0.0
+		exertion = 0.4 if rowing_now else (0.25 if moving else 0.0)
 
 	rotation.y = yaw
 	var wish := Basis(Vector3.UP, yaw) * Vector3(input.x, 0.0, input.y) * speed
@@ -668,7 +693,8 @@ func _update_placement() -> void:
 		return
 	_ghost_position = hit.position
 	var ground: float = GameState.world.ground_height(_ghost_position.x, _ghost_position.z)
-	_ghost_valid = hit.normal.y > 0.8 and ground > 0.3 and hit.collider is StaticBody3D and not (hit.collider is Interactable)
+	_ghost_valid = hit.normal.y > 0.8 and ground > 0.3 and hit.collider is StaticBody3D and not (hit.collider is Interactable) \
+		and (not StructureTable.get_type(type).get("shore", false) or ground <= StructureTable.SHORE_MAX_HEIGHT)
 	_ghost.visible = true
 	_ghost.global_transform = Transform3D(Basis(Vector3.UP, _ghost_yaw), _ghost_position + Vector3(0.0, 0.4, 0.0))
 	_ghost_material.albedo_color = Color(0.3, 1.0, 0.4, 0.35) if _ghost_valid else Color(1.0, 0.3, 0.25, 0.35)
@@ -722,18 +748,18 @@ func _check_leave_deck() -> void:
 		leave_platform()
 
 
-func _update_paddle(input: Vector2, sprint: bool) -> void:
+## Sends this crew member's oar strokes to the host when they change.
+func _update_row(strokes: Vector2, power: bool) -> void:
 	var boat := platform if paddling else null
-	if boat != _paddle_boat:
-		if _paddle_boat != null and is_instance_valid(_paddle_boat):
-			_paddle_boat.set_paddle_input.rpc_id(1, Vector2.ZERO, false)
-		_paddle_boat = boat
-		_paddle_sent = Vector2.ZERO
-		_paddle_sprint_sent = false
-	if boat != null and (input != _paddle_sent or sprint != _paddle_sprint_sent):
-		boat.set_paddle_input.rpc_id(1, input, sprint)
-		_paddle_sent = input
-		_paddle_sprint_sent = sprint
+	var state := Vector3(strokes.x, strokes.y, 1.0 if power else 0.0)
+	if boat != _row_boat:
+		if _row_boat != null and is_instance_valid(_row_boat):
+			_row_boat.set_row_input.rpc_id(1, 0.0, 0.0, false)
+		_row_boat = boat
+		_row_sent = Vector3.ZERO
+	if boat != null and state != _row_sent:
+		boat.set_row_input.rpc_id(1, strokes.x, strokes.y, power)
+		_row_sent = state
 
 
 func _send_state() -> void:
@@ -775,8 +801,8 @@ func _surface() -> String:
 ## The sea is loud at the shore and on deck, quiet inland and below deck.
 func _update_ambience(at: Vector3) -> void:
 	var level := 1.0
-	if platform is Sailboat and global_position.y - platform.proxy_xf.origin.y < Sailboat.DECK_Y - 0.2:
-		level = 0.35
+	if platform == null and GameState.world != null and GameState.world.camp.in_shack(at):
+		level = 0.4
 	elif platform == null and GameState.world != null:
 		var ground: float = GameState.world.ground_height(at.x, at.z)
 		if ground != -INF:
