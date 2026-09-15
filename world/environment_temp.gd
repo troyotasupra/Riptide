@@ -13,8 +13,9 @@ const WET_CHILL := 7.0
 
 
 ## `warmth`: °C from a nearby fire or shelter (not counted while in the water).
-static func felt_temp(daylight: float, wetness: float, in_water: bool, warmth: float = 0.0) -> float:
-	var air := lerpf(NIGHT_AIR, DAY_AIR, clampf(daylight, 0.0, 1.0))
+## `weather_chill`: °C colder under clouds, rain and storms (0 when sheltered).
+static func felt_temp(daylight: float, wetness: float, in_water: bool, warmth: float = 0.0, weather_chill: float = 0.0) -> float:
+	var air := lerpf(NIGHT_AIR, DAY_AIR, clampf(daylight, 0.0, 1.0)) - weather_chill
 	if in_water:
 		return minf(air, WATER) - IMMERSION_CHILL - WET_CHILL * clampf(wetness, 0.0, 1.0)
 	return air - WET_CHILL * clampf(wetness, 0.0, 1.0) + warmth

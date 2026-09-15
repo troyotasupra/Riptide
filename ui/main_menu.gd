@@ -7,7 +7,7 @@ extends Control
 ##   --free-mouse (don't capture the cursor)  --autopilot[=board|stress|gather] (test drivers)
 ##   --no-focus (window never takes keyboard focus)  --shot=path.png --shot-delay=seconds
 ##   --spawn=camp|boat  --face=camp|sea|bow  --time=0.5 (time of day, 0..1)
-##   --scenario=camp|client (scripted end-to-end checks)  --hide-ocean
+##   --scenario=camp|client (scripted end-to-end checks)  --hide-ocean  --dev (developer mode)
 
 var _main: VBoxContainer
 var _name_edit: LineEdit
@@ -53,6 +53,13 @@ func _build_ui() -> void:
 	_main.add_child(profile_row)
 	UiKit.button(profile_row, "Character", _open_creator).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UiKit.button(profile_row, "Settings", _open_settings).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var dev_toggle := CheckBox.new()
+	dev_toggle.text = "Developer mode when hosting  (F1 menu · V fly)"
+	dev_toggle.button_pressed = Settings.developer_mode
+	dev_toggle.toggled.connect(func(on: bool) -> void:
+		Settings.developer_mode = on
+		Settings.save_settings())
+	_main.add_child(dev_toggle)
 
 	if SaveGame.has_save():
 		UiKit.button(_main, "Continue saved world (host)", _on_continue)
@@ -162,7 +169,12 @@ func _apply_command_line() -> void:
 		if v.size() == 4:
 			DisplayServer.window_set_position(Vector2i(int(v[0]), int(v[1])))
 			DisplayServer.window_set_size(Vector2i(int(v[2]), int(v[3])))
+	if args.has("mute") or args.has("no-focus"):
+		Settings.muted = true
+		Settings.apply()
 	GameState.free_mouse = args.has("free-mouse")
+	if args.has("dev"):
+		Settings.developer_mode = true
 	if args.has("autopilot"):
 		GameState.autopilot = "board" if String(args["autopilot"]).is_empty() else String(args["autopilot"])
 	GameState.spawn_override = args.get("spawn", "")

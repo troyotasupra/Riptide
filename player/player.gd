@@ -46,6 +46,7 @@ const GIVE_REACH := 3.5
 const SWING_TOOLS := ["knife", "machete", "hatchet", "spear"]
 const SWING_SECONDS := 0.55
 const CRAWL_SPEED := 1.1
+const FLY_SPEED := 9.0
 const DOWNED_EYE_HEIGHT := 0.45
 ## After running out of breath, hard strokes wait until stamina is back to this.
 const WINDED_RECOVER := 20.0
@@ -94,6 +95,10 @@ var bleed_left := 0.0
 ## Limbs lost to sharks, and the ones with a prosthetic fitted.
 var missing_limbs: Array = []
 var prosthetics: Array = []
+## Developer mode: flying through everything, and god mode's endless stamina.
+var flying := false
+var god := false
+var angler: Angler
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _has_target := false
@@ -189,6 +194,10 @@ func _ready() -> void:
 		view_model = ViewModel.new()
 		view_model.name = "ViewModel"
 		camera.add_child(view_model)
+		angler = Angler.new()
+		angler.name = "Angler"
+		angler.player = self
+		add_child(angler)
 		model.visible = false
 		_label.visible = false
 		GameState.local_player = self
@@ -222,6 +231,47 @@ func apply_limbs(missing: Array, fitted: Array) -> void:
 func _set_limbs(missing: Array, fitted: Array) -> void:
 	if multiplayer.get_remote_sender_id() == 1:
 		apply_limbs(missing, fitted)
+
+
+## Developer mode: fly through anything — WASD and look to steer, Space up,
+## C down, Shift faster.
+func set_flying(value: bool) -> void:
+	if value == flying:
+		return
+	flying = value
+	velocity = Vector3.ZERO
+	if value:
+		if platform != null:
+			leave_platform()
+		swimming = false
+		paddling = false
+		_update_row(Vector2.ZERO, false)
+		collision_mask = 0
+	else:
+		collision_mask = Layers.WORLD | Layers.BOATS
+	if survivor != null:
+		survivor.notified.emit("Flying %s (V)" % ("on — Space up, C down, Shift fast" if value else "off"))
+
+
+func _fly(delta: float) -> void:
+	var active := _controls_active()
+	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back") if active else Vector2.ZERO
+	var look := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, pitch)
+	var wish := look * Vector3(input.x, 0.0, input.y)
+	if active:
+		wish.y += (1.0 if Input.is_action_pressed("jump") else 0.0) - (1.0 if Input.is_action_pressed("crouch") else 0.0)
+	var speed := FLY_SPEED * (4.0 if active and Input.is_action_pressed("sprint") else 1.0)
+	velocity = velocity.lerp(wish.limit_length(1.0) * speed, 1.0 - exp(-8.0 * delta))
+	global_position += velocity * delta
+	rotation.y = yaw
+	swimming = false
+	crouching = false
+	stamina = STAMINA_MAX
+	exertion = 0.0
+	_update_focus()
+	_update_give_target()
+	_update_hold(delta)
+	_update_placement()
 
 
 func set_downed(value: bool, seconds: float) -> void:
@@ -282,7 +332,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not _controls_active():
 		return
+	if event.is_action_pressed("dev_fly") and GameState.dev_mode:
+		set_flying(not flying)
+		get_viewport().set_input_as_handled()
+		return
 	if downed:
+		return
+	if angler != null and angler.handle_input(event):
+		get_viewport().set_input_as_handled()
 		return
 	# Aboard with an oar, Q or E just takes up the oars — it never drops the oar overboard.
 	if not paddling and platform != null and platform.can_paddle and focus_id.is_empty() \
@@ -487,6 +544,10 @@ func _apply_teleport_aboard(boat_name: String, local: Vector3) -> void:
 
 func _local_physics(delta: float) -> void:
 	held_id = survivor.selected_id()
+	if flying:
+		_fly(delta)
+		_finish_tick()
+		return
 	if platform == null and _hold_for_ground():
 		paddling = false
 		_update_row(Vector2.ZERO, false)
@@ -552,6 +613,8 @@ func _local_physics(delta: float) -> void:
 	else:
 		stamina += STAMINA_REGEN * delta
 	stamina = clampf(stamina, 0.0, STAMINA_MAX)
+	if god:
+		stamina = STAMINA_MAX
 	if stamina <= 0.0:
 		_winded = true
 	elif stamina >= WINDED_RECOVER:

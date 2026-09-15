@@ -132,6 +132,8 @@ func request_strike(id: String) -> void:
 func bite(shark: Shark, player: Player) -> void:
 	var world := GameState.world
 	var s := player.survivor
+	if s.god:
+		return
 	var now: float = Ocean.time
 	s.recent_bites = s.recent_bites.filter(func(t: float) -> bool: return now - t < SharkMath.BITE_WINDOW)
 	s.recent_bites.append(now)

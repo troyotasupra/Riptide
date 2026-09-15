@@ -29,6 +29,8 @@ func _run() -> void:
 			await _starter_loop()
 		"sharks":
 			await _shark_loop()
+		"outdoors":
+			await _outdoors_loop()
 		"dock":
 			_dock_view()
 			return  # stays up for a --shot screenshot
@@ -37,6 +39,9 @@ func _run() -> void:
 			return  # stays up for a --shot screenshot
 		"structures":
 			_structures_view()
+			return  # stays up for a --shot screenshot
+		"look":
+			await _look()
 			return  # stays up for a --shot screenshot
 		_:
 			_check(false, "unknown scenario '%s'" % GameState.scenario)
@@ -239,6 +244,21 @@ func _client_chest() -> void:
 	await _wait(1.0)
 	_check(pack.count_of("knife") == 0, "dropping over the network takes it from the pack")
 
+	# With a --dev host, developer mode reaches the crew too.
+	if GameState.dev_mode:
+		GameState.world.dev.rpc_id(1, "request", "give", ["jig", 2])
+		await _wait(1.0)
+		_check(pack.count_of("jig") == 2, "developer mode: a joined crew member spawns an item")
+		GameState.world.dev.rpc_id(1, "request", "weather", ["rain", true])
+		await _wait(2.0)
+		_check(float(GameState.world.weather.current.rain) > 0.5, "and the host's weather change reaches them")
+		player.set_flying(true)
+		var y := player.global_position.y + 4.0
+		player.teleport(player.global_position + Vector3.UP * 4.0)
+		await _wait(1.5)
+		_check(absf(player.global_position.y - y) < 0.3, "a crew member can fly too")
+		player.set_flying(false)
+
 
 ## Host, fresh world: wash up on the starter island → craft rope, a hatchet, an
 ## oar and a raft frame → chop a tree → build the raft on the beach in stages →
@@ -435,6 +455,210 @@ func _shark_loop() -> void:
 	var saved := SaveGame.read()
 	var record: Dictionary = saved.get("players", {}).get(player.player_id, {})
 	_check(Array(record.get("limbs", [])).has(lost) and Array(record.get("prosthetics", [])).has(lost), "the save remembers the lost limb and the prosthetic")
+
+
+## Host with --dev: developer tools → flying → weather and wind → rain soaking →
+## fishing off the dock (catch, bait used, lure kept, snapped line loses the lure).
+func _outdoors_loop() -> void:
+	var world := GameState.world
+	var camp: CampSystems = world.camp
+	var player := GameState.local_player as Player
+	var s := player.survivor
+	var pack := s.inventory
+	_check(GameState.dev_mode, "developer mode is on for this host")
+
+	world.dev.request("give", ["fishing_rod", 1])
+	_check(pack.count_of("fishing_rod") == 1, "dev: spawn an item by id")
+	world.dev.request("fishing_kit", [])
+	_check(pack.count_of("grub") >= 20 and pack.count_of("jig") >= 1 and pack.count_of("lure") >= 3, "dev: fishing kit")
+	world.dev.request("time", [0.5])
+	_check(absf(GameState.time_of_day() - 0.5) < 0.01, "dev: set the time to noon")
+
+	var sea: Vector2 = world.camp_island.center * 0.45
+	player.teleport(Vector3(sea.x, 12.0, sea.y))
+	player.set_flying(true)
+	await _wait(0.2)
+	var hover_y := player.global_position.y
+	await _wait(1.5)
+	_check(player.flying and absf(player.global_position.y - hover_y) < 0.3 and hover_y > 10.0,
+		"flying: you hang in the air instead of falling (%.2f → %.2f)" % [hover_y, player.global_position.y])
+	# Noclip: fly straight down through the island and out the other side of the ground.
+	var ground_xz: Vector2 = world.camp_island.center
+	var ground_y: float = world.ground_height(ground_xz.x, ground_xz.y)
+	player.teleport(Vector3(ground_xz.x, ground_y - 3.0, ground_xz.y))
+	await _wait(0.5)
+	_check(player.global_position.y < ground_y - 2.0, "flying passes through the ground")
+	player.set_flying(false)
+
+	world.dev.request("weather", ["storm", true])
+	await _wait(0.5)
+	_check(float(world.weather.current.storm) > 0.9 and Waves.storm > 0.9, "a storm makes the sea rough")
+	world.dev.request("wind", [0.0, 16.0])
+	var raft: Boat = world.launch_boat("raft", Transform3D(Basis.IDENTITY, Vector3(sea.x, 0.4, sea.y + 30.0)))
+	var raft_start := raft.global_position
+	await _wait(6.0)
+	_check(raft.global_position.x - raft_start.x > 1.5, "a gale blows an empty raft downwind (%.1f m)" % (raft.global_position.x - raft_start.x))
+
+	world.dev.request("weather", ["rain", true])
+	var beach: Vector3 = world.camp_beach_point(0)
+	player.teleport(beach)
+	await _wait(1.0)
+	s.wetness = 0.0
+	await _wait(3.0)
+	_check(s.wetness > 0.02, "rain soaks you out in the open (%.2f)" % s.wetness)
+	player.teleport(camp.shack_spawn(0))
+	await _wait(1.0)
+	s.wetness = 0.0
+	await _wait(2.0)
+	_check(s.wetness < 0.01, "but not inside the shack")
+	world.dev.request("weather", ["clear", true])
+
+	# Fishing off the end of the dock.
+	var dock_end: Vector3 = camp.shack.dock_end
+	var along: Vector3 = (dock_end - Vector3(camp.shack.dock_start)).normalized()
+	player.teleport(dock_end + Vector3.UP * 0.6)
+	await _wait(1.0)
+	pack.hotbar[0] = null
+	_to_hotbar(pack, "fishing_rod", 0)
+	s.select_slot(0)
+	player.held_id = "fishing_rod"
+	world.dev.request("fast_bites", [true])
+	var cast_at := Vector3(dock_end.x + along.x * 7.0, 0.0, dock_end.z + along.z * 7.0)
+	var me := multiplayer.get_unique_id()
+
+	world.fishing.request_cast(cast_at, "cut_bait")
+	var cast: Dictionary = world.fishing.casts.get(me, {})
+	_check(not cast.is_empty() and not String(cast.species).is_empty(), "cast off the dock: a %s takes the cut bait (%s water)" % [cast.get("species", "?"), cast.get("spot", "?")])
+	if cast.is_empty() or String(cast.species).is_empty():
+		return
+	var bait_before := pack.count_of("cut_bait")
+	await _wait(float(cast.bite) + 1.0)
+	world.fishing.request_result(int(cast.id), "landed")
+	var item: String = FishTable.SPECIES[cast.species].item
+	_check(pack.count_of(item) >= 1 or pack.count_of("cut_bait") > bait_before, "landed it")
+	_check(s.fish_log.has(cast.species), "it goes in the fish log")
+	_check(pack.count_of("cut_bait") <= bait_before, "the cut bait was used up")
+
+	var lures := pack.count_of("lure")
+	world.fishing.request_cast(cast_at, "lure")
+	cast = world.fishing.casts.get(me, {})
+	if not String(cast.get("species", "")).is_empty():
+		await _wait(float(cast.bite) + 1.0)
+		world.fishing.request_result(int(cast.id), "landed")
+		_check(pack.count_of("lure") == lures, "a lure isn't used up by a catch")
+	world.fishing.request_cast(cast_at, "lure")
+	cast = world.fishing.casts.get(me, {})
+	world.fishing.request_result(int(cast.get("id", 0)), "snapped")
+	_check(pack.count_of("lure") == lures - 1, "but a snapped line loses it")
+
+	world.fishing.request_cast(camp.shack_spawn(0), "")
+	_check(not world.fishing.casts.has(me), "no fishing on dry land")
+
+	world.save_now()
+	var saved := SaveGame.read()
+	_check(saved.get("weather", {}).get("state", "") == "clear", "the save keeps the weather")
+	_check(Dictionary(saved.get("players", {}).get(player.player_id, {}).get("fish_log", {})).has(cast.get("species", "")) or not s.fish_log.is_empty(), "and your fish log")
+
+
+## Visual checks, one per --face: tree, tree_under, palm, palm_top, bush, fiber
+## (props up close, at midday), storm (rain and rough water from the dock), dev (the
+## developer panel), fishing (a line out off the dock, first person), fish (every
+## species and bait in the inventory).
+func _look() -> void:
+	var world := GameState.world
+	var camp: CampSystems = world.camp
+	var player := GameState.local_player as Player
+	var s := player.survivor
+	GameState.day_offset = 0.45 - Ocean.time / DayNight.DAY_LENGTH
+	world.weather.set_state("clear", true)
+	world.weather.set_wind(0.8, 3.0)
+	match GameState.face:
+		"storm":
+			world.weather.set_state("storm", true)
+			world.weather.set_wind(0.8, 16.0)
+			var xf: Transform3D = camp.shack.xf
+			_fixed_camera(xf * Vector3(14.0, 4.0, -29.0), xf * Vector3(2.0, 1.2, -8.0))
+		"dev":
+			world.weather.set_state("rain", true)
+			var hud := _hud()
+			hud._show_only(hud._dev)
+			hud._sync_ui_state()
+		"fishing":
+			var dock_end: Vector3 = camp.shack.dock_end
+			var along: Vector3 = dock_end - Vector3(camp.shack.dock_start)
+			along.y = 0.0
+			along = along.normalized()
+			player.teleport(dock_end + Vector3.UP * 0.6 - along * 1.0)
+			s.inventory.add("fishing_rod", 1, Ocean.time)
+			s.inventory.add("cut_bait", 6, Ocean.time)
+			s.inventory.hotbar[0] = null
+			_to_hotbar(s.inventory, "fishing_rod", 0)
+			s.select_slot(0)
+			s.push_inventory()
+			player.yaw = atan2(-along.x, -along.z)
+			player.pitch = -0.1
+			await _wait(1.5)
+			player.held_id = "fishing_rod"
+			player.angler.bait_item = "cut_bait"
+			player.angler.charge = 0.55
+			player.angler._cast()
+			# Keep the bobber waiting for the picture.
+			get_tree().process_frame.connect(func() -> void:
+				if player.angler.state == Angler.State.WAITING:
+					player.angler._bite_in = INF)
+		"fish":
+			s.equipment.wear({"id": "daypack", "count": 1, "spoils_at": 0.0})
+			s.refresh_storage()
+			for id: String in FishTable.SPECIES:
+				s.inventory.add(FishTable.SPECIES[id].item, 1, Ocean.time)
+			for entry: Array in [["grub", 12], ["cut_bait", 8], ["jig", 1], ["lure", 2], ["fish_steak", 3], ["fishing_rod", 1]]:
+				s.inventory.add(entry[0], entry[1], Ocean.time)
+			s.push_inventory()
+			camp.interact_shack_part(s, "chest", 0)
+		_:
+			_prop_camera(GameState.face)
+	print("[scenario] look ready: %s" % GameState.face)
+
+
+func _prop_camera(face: String) -> void:
+	var world := GameState.world
+	var kind: String = {"tree_under": "tree", "palm_top": "palm", "bush": "berry_bush", "": "tree"}.get(face, face)
+	var home: Vector3 = world.camp.shack_spawn(0)
+	var best: ResourceNode = null
+	for node: ResourceNode in world.resources.nodes.values():
+		if node.kind == kind and not node.depleted and (best == null or node.global_position.distance_to(home) < best.global_position.distance_to(home)):
+			best = node
+	if best == null:
+		print("[scenario] no %s to look at" % kind)
+		return
+	var p := best.global_position
+	var out := Vector3(p.x - home.x, 0.0, p.z - home.z).normalized()
+	var side := out.cross(Vector3.UP)
+	# [distance out, eye height, target height]
+	var view: Array = {
+		"tree": [6.5, 2.2, 3.8], "tree_under": [1.3, 1.5, 6.0], "palm": [6.5, 2.5, 4.2],
+		"palm_top": [3.0, 8.5, 5.8], "bush": [2.2, 1.3, 0.5], "fiber": [1.5, 1.0, 0.35],
+	}.get(face, [6.5, 2.2, 3.8])
+	var eye := p + out * float(view[0]) + side * float(view[0]) * 0.3 + Vector3.UP * float(view[1])
+	var ground: float = world.ground_height(eye.x, eye.z)
+	if ground != -INF:
+		eye.y = maxf(eye.y, ground + 0.4)
+	_fixed_camera(eye, p + Vector3.UP * float(view[2]) - out * 0.3)
+
+
+func _fixed_camera(eye: Vector3, target: Vector3) -> void:
+	var cam := Camera3D.new()
+	cam.fov = 70.0
+	GameState.world.add_child(cam)
+	cam.global_transform = Transform3D(Basis.looking_at(target - eye, Vector3.UP), eye)
+	cam.make_current()
+
+
+func _hud() -> Hud:
+	for child in GameState.world.get_children():
+		if child is Hud:
+			return child
+	return null
 
 
 ## Visual check: a shark cruising just under the surface off the cove, dorsal fin up.

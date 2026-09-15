@@ -29,6 +29,9 @@ var saved_players := {}
 ## Boats the crew built (not part of the generated world): name -> {"kind", "index"}.
 var built_boats := {}
 var sharks: SharkField
+var weather: Weather
+var fishing: FishingService
+var dev: DevTools
 var _next_boat_index := FIRST_BUILT_BOAT_INDEX
 var _age := 0.0
 ## peer id -> {"id": target, "at": ocean clock} for hold-to-gather validation
@@ -46,6 +49,17 @@ func _ready() -> void:
 	camp = CampSystems.new()
 	camp.name = "Camp"
 	add_child(camp)
+	weather = Weather.new()
+	weather.name = "Weather"
+	add_child(weather)
+	fishing = FishingService.new()
+	fishing.name = "Fishing"
+	add_child(fishing)
+	dev = DevTools.new()
+	dev.name = "Dev"
+	add_child(dev)
+	if multiplayer.is_server():
+		GameState.dev_mode = Settings.developer_mode
 	add_child(Hud.new())
 	if not GameState.free_mouse:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -82,6 +96,7 @@ func _exit_tree() -> void:
 	if GameState.world == self:
 		GameState.world = null
 	GameState.ui_open = false
+	GameState.dev_mode = false
 
 
 func _notification(what: int) -> void:
@@ -325,6 +340,7 @@ func save_now() -> void:
 		"resources": depleted,
 		"boats": boats,
 		"next_boat_index": _next_boat_index,
+		"weather": weather.to_save(),
 		"camp": camp.to_save(now),
 		"players": players,
 	})
@@ -359,6 +375,8 @@ func _apply_save(data: Dictionary) -> void:
 			# Lines are sized to the dock berth, so a boat saved a little way off is drawn back in gently.
 			boat.moor(camp.shack.lines, camp.shack.boat_xf)
 	camp.from_save(data.get("camp", {}), now)
+	if data.has("weather"):
+		weather.from_save(data.weather)
 	saved_players = data.get("players", {})
 	print("[save] world loaded (%d crew members on record)" % saved_players.size())
 
@@ -553,6 +571,8 @@ func _on_peer_ready(peer_id: int) -> void:
 		resources.sync_to(peer_id)
 		camp.sync_to(peer_id)
 		sharks.sync_to(peer_id)
+		weather.sync_to(peer_id)
+		dev._set_allowed.rpc_id(peer_id, GameState.dev_mode)
 	var player_name: String = Net.roster[peer_id]["name"]
 	var player_id := Net.player_id_of(peer_id)
 	var look := Net.look_of(peer_id)
@@ -592,6 +612,7 @@ func _on_peer_left(peer_id: int) -> void:
 	if player != null:
 		saved_players[player.player_id] = player.survivor.to_save(Ocean.time)
 	camp.forget_peer(peer_id)
+	fishing.forget(peer_id)
 	_despawn_player(peer_id)
 	Net.send_to_ready(self, "_despawn_player", [peer_id])
 

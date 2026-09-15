@@ -24,6 +24,8 @@ const KEYS := {
 	"give": [KEY_G],
 	"pause": [KEY_ESCAPE],
 	"debug": [KEY_F3],
+	"dev_menu": [KEY_F1],
+	"dev_fly": [KEY_V],
 	"leave": [KEY_F10],
 	"hotbar_1": [KEY_1],
 	"hotbar_2": [KEY_2],

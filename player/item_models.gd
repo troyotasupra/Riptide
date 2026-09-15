@@ -161,6 +161,36 @@ static func build(id: String) -> Node3D:
 			tail.position.y = -0.005
 			root.add_child(tail)
 			_sphere(root, 0.008, Vector3(0.018, 0.2, -0.02), Materials.plain(Color(0.05, 0.05, 0.05), 0.2))
+		"raw_sardine", "raw_mullet", "raw_pufferfish", "raw_snapper", "raw_grouper", "raw_barracuda", "raw_mahi_mahi", "raw_tuna", "cooked_pufferfish":
+			_fish(root, id)
+		"fish_steak":
+			_rock(root, 15, Vector3(0.2, 0.05, 0.12), Vector3(0.0, 0.025, 0.0), Materials.leather(Color(0.72, 0.52, 0.34)), 0.12, 1.0)
+			_torus(root, 0.05, 0.006, Vector3(0.0, 0.05, 0.0), Materials.plain(Color(0.9, 0.85, 0.75)), Vector3.ZERO, Vector3(1.4, 1.0, 0.8))
+		"grub":
+			var body := PackedVector3Array()
+			var girth := PackedFloat32Array()
+			for k in 9:
+				var a := k / 8.0 * PI * 1.2
+				body.append(Vector3(cos(a) * 0.035, 0.012, sin(a) * 0.035))
+				girth.append(0.011 * (0.6 + 0.4 * sin(k / 8.0 * PI)) + 0.002 * (k % 2))
+			var grub := MeshInstance3D.new()
+			grub.mesh = MeshKit.tube(body, girth, 8, "grub_item")
+			grub.material_override = Materials.plain(Color(0.93, 0.86, 0.68), 0.45)
+			root.add_child(grub)
+			_sphere(root, 0.01, Vector3(0.035, 0.014, 0.0), Materials.plain(Color(0.45, 0.28, 0.12), 0.4))
+		"cut_bait":
+			for i in 3:
+				_rock(root, 16 + i, Vector3(0.05, 0.025, 0.04), Vector3((i - 1) * 0.045, 0.014, (i % 2) * 0.02), Materials.plain(Color(0.84, 0.45, 0.45), 0.35), 0.25, 1.0)
+		"jig":
+			_sphere(root, 0.014, Vector3(0.0, 0.1, 0.0), Materials.plain(Color(0.95, 0.75, 0.15), 0.3))
+			for i in 7:
+				var feather := MeshInstance3D.new()
+				feather.mesh = MeshKit.leaf(0.08, 0.012, 0.02, 4, 0.0)
+				feather.material_override = Materials.foliage(Color(0.95, 0.95, 0.9) if i % 2 == 0 else Color(0.2, 0.55, 0.85))
+				feather.position = Vector3(0.0, 0.09, 0.0)
+				feather.rotation = Vector3(PI * 0.85, i * TAU / 7.0, 0.0)
+				root.add_child(feather)
+			_torus(root, 0.012, 0.0025, Vector3(0.0, 0.02, 0.0), Materials.metal(Color(0.55, 0.55, 0.56), 0.4), Vector3(PI / 2.0, 0.0, 0.0))
 		"raw_meat", "cooked_meat", "dried_meat", "spoiled_food", "raw_shark_meat", "cooked_shark":
 			var tone: Color = {"raw_meat": Color(0.72, 0.18, 0.2), "cooked_meat": Color(0.45, 0.25, 0.13), "dried_meat": Color(0.35, 0.18, 0.1),
 				"spoiled_food": Color(0.35, 0.42, 0.22), "raw_shark_meat": Color(0.86, 0.66, 0.66), "cooked_shark": Color(0.62, 0.44, 0.28)}[id]
@@ -454,6 +484,63 @@ static func _unit_hemisphere() -> SphereMesh:
 		_hemisphere.radial_segments = 20
 		_hemisphere.rings = 8
 	return _hemisphere
+
+
+## A whole fish, nose up along +Y like the other fish models: body, paler belly,
+## dorsal and tail fins, eyes — coloured and proportioned by species.
+static func _fish(parent: Node3D, id: String) -> void:
+	# [back colour, belly colour, length, depth (back to belly), thickness]
+	var looks := {
+		"raw_sardine": [Color(0.25, 0.42, 0.62), Color(0.85, 0.88, 0.9), 0.16, 0.035, 0.022],
+		"raw_mullet": [Color(0.42, 0.46, 0.48), Color(0.82, 0.84, 0.82), 0.3, 0.07, 0.045],
+		"raw_pufferfish": [Color(0.62, 0.58, 0.38), Color(0.92, 0.9, 0.82), 0.16, 0.13, 0.12],
+		"cooked_pufferfish": [Color(0.55, 0.38, 0.2), Color(0.7, 0.52, 0.32), 0.16, 0.12, 0.11],
+		"raw_snapper": [Color(0.82, 0.28, 0.26), Color(0.95, 0.72, 0.68), 0.34, 0.12, 0.05],
+		"raw_grouper": [Color(0.42, 0.33, 0.24), Color(0.62, 0.55, 0.44), 0.5, 0.18, 0.1],
+		"raw_barracuda": [Color(0.5, 0.55, 0.58), Color(0.88, 0.9, 0.9), 0.62, 0.07, 0.05],
+		"raw_mahi_mahi": [Color(0.2, 0.58, 0.42), Color(0.92, 0.82, 0.25), 0.55, 0.16, 0.06],
+		"raw_tuna": [Color(0.12, 0.18, 0.36), Color(0.82, 0.84, 0.86), 0.7, 0.2, 0.14],
+	}
+	var look: Array = looks.get(id, looks.raw_sardine)
+	var back: Color = look[0]
+	var belly: Color = look[1]
+	var length: float = look[2]
+	var depth: float = look[3]
+	var thick: float = look[4]
+	var cooked := id.begins_with("cooked")
+	var skin := Materials.leather(back) if cooked else Materials.metal(back, 0.45)
+	var pale := Materials.leather(belly) if cooked else Materials.metal(belly, 0.4)
+	# The fish lies in the XY plane, back toward +X and its flat side facing Z, so
+	# icons (photographed from +Z) and the hand show it side-on like a blade.
+	var y := length * 0.5 + 0.02
+	_add(parent, _unit_sphere(), Vector3(0.0, y, 0.0), skin).scale = Vector3(depth, length, thick)
+	_add(parent, _unit_sphere(), Vector3(-depth * 0.16, y - length * 0.03, 0.0), pale).scale = Vector3(depth * 0.7, length * 0.82, thick * 0.92)
+	var fin := Materials.metal(back.darkened(0.25), 0.5) if not cooked else skin
+	# Dorsal fin along the back, anal fin under the belly, a pectoral fin behind each gill.
+	_add(parent, _unit_sphere(), Vector3(depth * 0.5, y + length * 0.04, 0.0), fin).scale = Vector3(depth * 0.4, length * 0.34, 0.006)
+	_add(parent, _unit_sphere(), Vector3(-depth * 0.46, y - length * 0.22, 0.0), fin).scale = Vector3(depth * 0.26, length * 0.16, 0.006)
+	for s: float in [-1.0, 1.0]:
+		# Forked tail: two lobes fanning out from the tail stock.
+		_add(parent, _unit_sphere(), Vector3(s * depth * 0.2, y - length * 0.56, 0.0), fin, Vector3(0.0, 0.0, s * 0.6)).scale = Vector3(depth * 0.3, length * 0.26, 0.006)
+		_add(parent, _unit_sphere(), Vector3(-depth * 0.05, y + length * 0.2, s * thick * 0.5), fin, Vector3(0.0, 0.0, -0.5)).scale = Vector3(depth * 0.14, length * 0.12, 0.005)
+		_sphere(parent, maxf(0.006, depth * 0.09), Vector3(depth * 0.12, y + length * 0.36, s * thick * 0.42), Materials.plain(Color(0.04, 0.04, 0.05), 0.2))
+	match id:
+		"raw_pufferfish", "cooked_pufferfish":
+			var rng := RandomNumberGenerator.new()
+			rng.seed = 91
+			for i in 18:
+				var dir := Vector3(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)).normalized()
+				_add(parent, _unit_sphere(), Vector3(0.0, y, 0.0) + dir * Vector3(depth, length, thick) * 0.5, fin).scale = Vector3.ONE * 0.012
+		"raw_tuna":
+			for i in 5:
+				_sphere(parent, 0.008, Vector3(depth * 0.36, y - length * (0.18 + i * 0.07), 0.0), Materials.plain(Color(0.95, 0.8, 0.2), 0.4))
+				_sphere(parent, 0.008, Vector3(-depth * 0.36, y - length * (0.18 + i * 0.07), 0.0), Materials.plain(Color(0.95, 0.8, 0.2), 0.4))
+		"raw_barracuda":
+			for i in 4:
+				_add(parent, _unit_sphere(), Vector3(depth * 0.12, y + length * (0.2 - i * 0.14), 0.0), Materials.plain(back.darkened(0.5), 0.5)).scale = Vector3(depth * 0.6, length * 0.03, thick * 1.02)
+		"raw_mahi_mahi":
+			# The bull mahi's tall, blunt forehead.
+			_add(parent, _unit_sphere(), Vector3(depth * 0.18, y + length * 0.33, 0.0), skin).scale = Vector3(depth * 0.85, length * 0.2, thick * 0.95)
 
 
 static func _add(parent: Node3D, mesh: Mesh, pos: Vector3, material: Material, rot: Vector3 = Vector3.ZERO) -> MeshInstance3D:

@@ -37,6 +37,7 @@ static func create(index: int) -> JohnBoat:
 	boat.water_angular_drag = 1.8
 	boat.row_force = 450.0
 	boat.row_torque = 320.0
+	boat.wind_area = 2.4
 	boat.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	boat.center_of_mass = Vector3(0.0, 0.12, 0.0)
 	boat.deck_top = FLOOR_Y

@@ -67,3 +67,20 @@ func refresh() -> void:
 			Sound.play("craft", -4.0)
 			camp.rpc_id(1, "request_craft", id))
 		row.add_child(button)
+	_add_fish_log()
+
+
+## Every species, with how many you've caught and your best — "???" until you land one.
+func _add_fish_log() -> void:
+	var caught := 0
+	for id: String in FishTable.SPECIES:
+		if survivor.fish_log.has(id):
+			caught += 1
+	var heading := UiKit.label(_list, "")
+	heading.text = "\nFISH LOG — %d of %d species" % [caught, FishTable.SPECIES.size()]
+	for id: String in FishTable.SPECIES:
+		var entry: Dictionary = survivor.fish_log.get(id, {})
+		if entry.is_empty():
+			UiKit.label(_list, "   ???", true)
+		else:
+			UiKit.label(_list, "   %s — %d caught · best %.1f kg" % [FishTable.SPECIES[id].name, int(entry.count), float(entry.best)])

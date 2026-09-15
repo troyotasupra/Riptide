@@ -31,6 +31,8 @@ const LINE_SLACK := 1.04
 @export var water_angular_drag := 2.0
 @export var row_force := 900.0
 @export var row_torque := 700.0
+## Side area the wind pushes on (m²).
+@export var wind_area := 3.0
 
 ## "raft" or "john_boat" — what to rebuild from a save.
 var kind := "raft"
@@ -216,6 +218,9 @@ func _simulate() -> void:
 	var v := linear_velocity
 	apply_central_force(Vector3(-v.x, 0.0, -v.z) * water_drag * mass * wet)
 	apply_torque(-angular_velocity * mass * water_angular_drag * wet)
+	var weather: Weather = GameState.world.weather if GameState.world != null else null
+	if weather != null and wind_area > 0.0:
+		apply_central_force(weather.wind_force_on(wind_area) * wet)
 
 	_rower_check += get_physics_process_delta_time()
 	if _rower_check >= 0.5:

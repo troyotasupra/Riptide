@@ -72,6 +72,14 @@ func swing() -> void:
 	_swing_t = 1.0
 
 
+## Where a point on the held item's model (its own coordinates) is in the world
+## right now, or Vector3.INF when nothing is held — e.g. the fishing rod's tip.
+func held_point(local: Vector3) -> Vector3:
+	if not visible or _held == null or not is_instance_valid(_held) or not _held.is_inside_tree():
+		return Vector3.INF
+	return _held.global_transform * local
+
+
 func animate(delta: float, speed: float) -> void:
 	var moving := clampf(speed / 6.0, 0.0, 1.0)
 	_phase = fmod(_phase + delta * (5.0 + speed), TAU)

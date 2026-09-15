@@ -5,6 +5,8 @@ shader_type spatial;
 render_mode cull_disabled, specular_schlick_ggx;
 
 uniform float wave_time = 0.0;
+// 0 calm .. 1 full storm; must match Waves.storm.
+uniform float storm = 0.0;
 // 0 flattens the surface; used by the coarse far-sea mesh out to the horizon.
 uniform float wave_scale = 1.0;
 uniform vec4 deep_color : source_color = vec4(0.04, 0.26, 0.40, 1.0);
@@ -15,6 +17,8 @@ const float GRAVITY = 9.8;
 const float CALM_ROUGHNESS = 0.35;
 const float MAX_ROUGHNESS = 1.6;
 const float ROUGH_DISTANCE = 1500.0;
+const float STORM_ROUGHNESS = 0.45;
+const float STORM_MAX_ROUGHNESS = 2.0;
 const vec4 WAVES[4] = vec4[4](
 	vec4(1.0, 0.0, 0.18, 38.0),
 	vec4(0.7, 0.7, 0.14, 22.0),
@@ -33,7 +37,8 @@ varying float v_height;
 varying float v_amplitude;
 
 float roughness(vec2 xz) {
-	return clamp(CALM_ROUGHNESS + length(xz) / ROUGH_DISTANCE, CALM_ROUGHNESS, MAX_ROUGHNESS);
+	float base = clamp(CALM_ROUGHNESS + length(xz) / ROUGH_DISTANCE, CALM_ROUGHNESS, MAX_ROUGHNESS);
+	return min(base + storm * STORM_ROUGHNESS, STORM_MAX_ROUGHNESS);
 }
 
 vec3 displacement(vec2 xz, float t) {
@@ -78,7 +83,9 @@ void fragment() {
 	float h = clamp(v_height / v_amplitude * 0.5 + 0.5, 0.0, 1.0);
 	float crest = smoothstep(0.72, 0.95, h);
 	vec3 color = mix(deep_color.rgb, shallow_color.rgb, h);
-	ALBEDO = mix(color, foam_color.rgb, crest * 0.75);
+	// Storms turn the sea grey-green and whip up more foam.
+	color = mix(color, vec3(0.16, 0.24, 0.27), storm * 0.45);
+	ALBEDO = mix(color, foam_color.rgb, clamp(crest * (0.75 + storm * 0.6), 0.0, 1.0));
 	ROUGHNESS = 0.18;
 	SPECULAR = 0.45;
 }

@@ -54,8 +54,13 @@ private networks.
 | Q / E while rowing | LT / RT while rowing | Stroke the left / right oar — both to go straight; hold S (stick back) to back-row |
 | Tab | View | Inventory (gear, pockets/rig/backpack grids, hotbar, open container) |
 | B | D-pad ← | Crafting / survival book |
+| Left click (hold / tap) | RT | Fishing rod: charge and cast · strike · hold to reel |
+| Right click | LT | Fishing rod: pick the bait |
+| F while fighting a fish | Y | Cut the line |
 | Esc | Menu | Pause · settings · save and leave |
 | F3 | — | Debug info |
+| F1 | — | Developer panel (developer mode only) |
+| V | — | Fly (developer mode only) — Space up, C down, Shift fast |
 
 Sharks patrol the open water between the islands and the reef. They only go after
 people in the water — never anyone aboard a boat, never in the shallows. Strike
@@ -70,11 +75,35 @@ Rowing: plain strokes cost no stamina (you even catch your breath slowly); Shift
 pulls harder for about 20 seconds of a full stamina bar. Two crewmates sitting on
 opposite sides each work their own side's oar.
 
+Fishing: with the rod in hand, hold left click to charge a cast and let go over
+water. Right click picks the bait: grubs (found when you chop trees), berries and
+cut bait (knife a sardine or mullet into 4) are used up; a lure or a jig is kept
+unless the line snaps. When the bobber dips, click to strike, then hold to reel and
+ease off while the fish pulls — too much tension snaps the line, too much slack
+and it throws the hook. What bites depends on the water (shore, reef, deep), the
+bait, the time of day and the weather: sardines, mullet and pufferfish near shore,
+snapper, grouper and barracuda on the reef, mahi-mahi and tuna out deep. Every
+species you land goes in the fish log in the book. Out deep a shark may take the
+fish on your line — hold on, or press F to cut it loose.
+
+Weather: clear skies cloud over, rain sets in and storms roll through, each change
+blending in over about 40 seconds. Rain soaks you unless you're under a roof or by a
+fire; storms make the sea rougher and colder; wind pushes boats, so tie up or keep rowing.
+
 Inventory: drag items between grids, the hotbar and containers · R (or RB) rotates
 while dragging · Shift-drag moves half a stack · Ctrl-click or double-click sends an
 item across (pack ⇄ container) · right-click for actions (use, wear, split, drop) ·
 drag outside the panels to drop. On a controller: A pick up/place, Y send across,
 X actions, B cancel.
+
+## Developer mode
+
+Tick **Developer mode when hosting** on the menu (or start with `-- --dev`). While the
+host has it on, everyone in the session gets **F1**, a panel for flying and god
+mode, healing, learning every recipe, time of day, weather and wind, teleports
+(starter beach, fishing shack, castaway camp, wreck reef, open sea), fishing and
+raft kits, spawning or killing sharks, fast bites, and any item by name. **V** flies
+through anything.
 
 ## Tests
 
@@ -85,7 +114,12 @@ C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe --headless --path C:\src\ri
 Scripted in-world checks: `-- --host --profile=teststart --scenario=starter` (starter
 island → raft → rowing → john boat), `-- --host --profile=testhost --spawn=shack --scenario=camp`
 (host) and `-- --join=127.0.0.1 --profile=testcrew --scenario=client` (second copy).
-Screenshots: `--scenario=dock|structures|lineup|inventory` with `--shot=file.png`.
+`-- --host --profile=testout --spawn=shack --scenario=outdoors --dev` (developer
+tools, flying, weather and wind, rain, fishing), `--scenario=sharks --spawn=camp`.
+Start the host with `--dev` and the `client` run checks developer mode from a crew member too.
+Screenshots: `--scenario=dock|structures|lineup|inventory` with `--shot=file.png`, and
+`--scenario=look --face=tree|tree_under|palm|palm_top|bush|fiber|storm|dev|fishing|fish`.
+Add `--mute` to silence a run (`--no-focus` runs are always muted).
 Test runs use their own save file and profiles, never your real ones.
 
 ## Layout

@@ -19,10 +19,17 @@ const WAVES := [
 const CALM_ROUGHNESS := 0.35
 const MAX_ROUGHNESS := 1.6
 const ROUGH_DISTANCE := 1500.0  # metres from origin to reach roughness 1.0
+## A full storm adds this much roughness everywhere, never past STORM_MAX_ROUGHNESS.
+const STORM_ROUGHNESS := 0.45
+const STORM_MAX_ROUGHNESS := 2.0
+
+## 0 calm .. 1 full storm. Set every frame by the weather (the shader gets the same value).
+static var storm := 0.0
 
 
 static func roughness(xz: Vector2) -> float:
-	return clampf(CALM_ROUGHNESS + xz.length() / ROUGH_DISTANCE, CALM_ROUGHNESS, MAX_ROUGHNESS)
+	var base := clampf(CALM_ROUGHNESS + xz.length() / ROUGH_DISTANCE, CALM_ROUGHNESS, MAX_ROUGHNESS)
+	return minf(base + storm * STORM_ROUGHNESS, STORM_MAX_ROUGHNESS)
 
 
 ## Displacement of the undisturbed surface point at `xz` at time `t`.

@@ -28,6 +28,8 @@ var _settings: SettingsPanel
 var _sleep_overlay: ColorRect
 var _downed_overlay: ColorRect
 var _downed_label: Label
+var _dev: DevPanel
+var _fishing_label: Label
 var _message_log: Array = []
 var _lan_addresses := ""
 var _bound: Survivor = null
@@ -68,6 +70,12 @@ func _ready() -> void:
 	_sleep_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sleep_line.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_KEEP_SIZE, 64)
 	_sleep_line.grow_horizontal = Control.GROW_DIRECTION_BOTH
+
+	_fishing_label = _label(17)
+	_fishing_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_fishing_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_KEEP_SIZE, 100)
+	_fishing_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_fishing_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 	_messages = _label(15)
 	_messages.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -114,6 +122,7 @@ func _ready() -> void:
 	_note = _panel(NotePanel.new())
 	_pause = _panel(PauseMenu.new())
 	_settings = _panel(SettingsPanel.new())
+	_dev = _panel(DevPanel.new())
 	_note.close_requested.connect(func() -> void: _close_all())
 	_pause.resume_requested.connect(func() -> void: _close_all())
 	_pause.settings_requested.connect(func() -> void:
@@ -226,6 +235,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	var handled := true
 	if event.is_action_pressed("debug"):
 		Settings.show_debug = not Settings.show_debug
+	elif _dev.visible:
+		if cancel or event.is_action_pressed("dev_menu"):
+			_close_all()
+		else:
+			handled = false
 	elif _settings.visible:
 		if cancel:
 			_settings.close()
@@ -259,6 +273,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("book"):
 		Sound.play("book_open", -6.0)
 		_show_only(_book)
+	elif event.is_action_pressed("dev_menu") and GameState.dev_mode:
+		Sound.play("open", -8.0)
+		_show_only(_dev)
 	elif event.is_action_pressed("pause"):
 		_show_only(_pause)
 	else:
@@ -269,7 +286,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _show_only(panel: Control) -> void:
-	for other: Control in [_inventory, _book, _note, _pause, _settings]:
+	for other: Control in [_inventory, _book, _note, _pause, _settings, _dev]:
 		other.visible = other == panel
 	_hotbar.visible = panel == null
 
@@ -280,10 +297,10 @@ func _close_all() -> void:
 
 
 func _sync_ui_state() -> void:
-	var open := _inventory.visible or _book.visible or _note.visible or _pause.visible or _settings.visible
+	var open := _inventory.visible or _book.visible or _note.visible or _pause.visible or _settings.visible or _dev.visible
 	_hotbar.visible = not open
 	# Full-screen panels get a clean backdrop: no compass, objectives or bars behind them.
-	for overlay: Control in [_info, _clock, _markers, _prompt, _status]:
+	for overlay: Control in [_info, _clock, _markers, _prompt, _status, _fishing_label]:
 		if overlay != null:
 			overlay.visible = not open
 	if open == GameState.ui_open:
@@ -399,7 +416,9 @@ func _process(delta: float) -> void:
 	if player.camera != null:
 		var forward := -player.camera.global_basis.z
 		heading = fposmod(rad_to_deg(atan2(forward.x, -forward.z)), 360.0)
-	_clock.text = "%s    %s %03d°" % [DayNight.clock_text(GameState.time_of_day()), CARDINALS[int(round(heading / 45.0)) % 8], int(heading)]
+	_clock.text = "%s    %s %03d°    %s" % [DayNight.clock_text(GameState.time_of_day()), CARDINALS[int(round(heading / 45.0)) % 8], int(heading),
+		GameState.world.weather.describe() if GameState.world.weather != null else ""]
+	_fishing_label.text = "" if GameState.ui_open or player.angler == null else player.angler.hud_text()
 	if _camp.chart_read:
 		_markers.text = _chart_markers(here)
 	elif not GameState.objectives_done.has("reach_camp") and GameState.world.camp_island != null:

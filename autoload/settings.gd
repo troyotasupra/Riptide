@@ -17,8 +17,12 @@ var ambience_volume := 0.7
 var fullscreen := false
 ## 0 low · 1 medium · 2 high: ambient occlusion, glow, shadow range, antialiasing.
 var graphics := 2
+## Hosting with developer mode on: F1 panel (spawn items, weather, time, teleports), V to fly.
+var developer_mode := false
 ## Not saved: F3 debug overlay.
 var show_debug := false
+## Not saved: silences everything (--mute, and test windows started with --no-focus).
+var muted := false
 
 
 func _ready() -> void:
@@ -34,6 +38,7 @@ func _ready() -> void:
 
 func apply() -> void:
 	AudioServer.set_bus_volume_db(0, linear_to_db(clampf(master_volume, 0.0001, 1.0)))
+	AudioServer.set_bus_mute(0, muted)
 	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("SFX"), linear_to_db(clampf(sfx_volume, 0.0001, 1.0)))
 	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Ambience"), linear_to_db(clampf(ambience_volume, 0.0001, 1.0)))
 	if DisplayServer.get_name() != "headless":
@@ -63,4 +68,4 @@ func load_settings() -> void:
 
 
 static func _keys() -> Array[String]:
-	return ["mouse_sensitivity", "stick_sensitivity", "invert_y", "fov", "deadzone", "master_volume", "sfx_volume", "ambience_volume", "fullscreen", "graphics"]
+	return ["mouse_sensitivity", "stick_sensitivity", "invert_y", "fov", "deadzone", "master_volume", "sfx_volume", "ambience_volume", "fullscreen", "graphics", "developer_mode"]

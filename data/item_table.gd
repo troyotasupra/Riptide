@@ -11,8 +11,9 @@ extends RefCounted
 ##   slot / insulation / armor: wearables · tint: "crew" takes the crew colour
 ##   hint: what the item is for, shown when left click has nothing to do
 
-const GROUPS := {"wood": ["driftwood", "log"]}
-const GROUP_NAMES := {"wood": "Wood"}
+const GROUPS := {"wood": ["driftwood", "log"], "baitfish": ["raw_sardine", "raw_mullet", "raw_fish"]}
+const GROUP_NAMES := {"wood": "Wood", "baitfish": "Small fish"}
+const BAIT_HINT := "Fishing bait — with the rod selected, right click to put it on the hook."
 
 const COMING_SOON := "Not usable yet — fishing and hunting arrive in the next update."
 
@@ -28,6 +29,16 @@ const ITEMS := {
 	"raw_meat": {"name": "Raw meat", "category": "food", "weight": 0.8, "stack": 5, "food": 10.0, "spoil": 900.0, "sickness": 90.0, "sick_chance": 0.5, "cooks_to": "cooked_meat", "dries_to": "dried_meat"},
 	"cooked_meat": {"name": "Cooked meat", "category": "food", "weight": 0.7, "stack": 5, "food": 35.0, "water": 2.0, "spoil": 1800.0},
 	"dried_meat": {"name": "Jerky", "category": "food", "weight": 0.3, "stack": 10, "food": 25.0},
+	"raw_sardine": {"name": "Sardine", "category": "food", "weight": 0.15, "stack": 10, "food": 4.0, "spoil": 900.0, "sickness": 45.0, "sick_chance": 0.25, "cooks_to": "cooked_fish", "dries_to": "dried_fish"},
+	"raw_mullet": {"name": "Mullet", "category": "food", "weight": 0.9, "stack": 5, "food": 7.0, "spoil": 900.0, "sickness": 60.0, "sick_chance": 0.35, "cooks_to": "cooked_fish", "dries_to": "dried_fish"},
+	"raw_pufferfish": {"name": "Pufferfish", "category": "food", "weight": 0.6, "stack": 5, "food": 5.0, "spoil": 900.0, "sickness": 240.0, "sick_chance": 1.0, "cooks_to": "cooked_pufferfish"},
+	"cooked_pufferfish": {"name": "Cooked pufferfish", "category": "food", "weight": 0.5, "stack": 5, "food": 22.0, "water": 1.0, "spoil": 1800.0, "sickness": 150.0, "sick_chance": 0.35},
+	"raw_snapper": {"name": "Red snapper", "category": "food", "weight": 2.5, "stack": 3, "food": 10.0, "spoil": 900.0, "sickness": 60.0, "sick_chance": 0.35, "cooks_to": "fish_steak", "dries_to": "dried_fish"},
+	"raw_grouper": {"name": "Grouper", "category": "food", "weight": 6.0, "stack": 2, "food": 14.0, "spoil": 900.0, "sickness": 60.0, "sick_chance": 0.35, "cooks_to": "fish_steak", "dries_to": "dried_fish"},
+	"raw_barracuda": {"name": "Barracuda", "category": "food", "weight": 4.0, "stack": 2, "food": 12.0, "spoil": 900.0, "sickness": 150.0, "sick_chance": 0.6, "cooks_to": "fish_steak", "dries_to": "dried_fish"},
+	"raw_mahi_mahi": {"name": "Mahi-mahi", "category": "food", "weight": 5.0, "stack": 2, "food": 13.0, "spoil": 900.0, "sickness": 60.0, "sick_chance": 0.35, "cooks_to": "fish_steak", "dries_to": "dried_fish"},
+	"raw_tuna": {"name": "Yellowfin tuna", "category": "food", "weight": 12.0, "stack": 1, "food": 16.0, "spoil": 900.0, "sickness": 45.0, "sick_chance": 0.25, "cooks_to": "fish_steak", "dries_to": "dried_fish"},
+	"fish_steak": {"name": "Fish steak", "category": "food", "weight": 0.7, "stack": 5, "food": 40.0, "water": 3.0, "spoil": 1800.0},
 	"raw_shark_meat": {"name": "Raw shark meat", "category": "food", "weight": 0.9, "stack": 5, "food": 12.0, "spoil": 900.0, "sickness": 90.0, "sick_chance": 0.4, "cooks_to": "cooked_shark", "dries_to": "dried_meat"},
 	"cooked_shark": {"name": "Shark steak", "category": "food", "weight": 0.8, "stack": 5, "food": 32.0, "water": 2.0, "spoil": 1800.0},
 	"spoiled_food": {"name": "Spoiled food", "category": "food", "weight": 0.5, "stack": 20, "food": 2.0, "sickness": 90.0, "sick_chance": 1.0},
@@ -45,7 +56,10 @@ const ITEMS := {
 	"rope": {"name": "Rope", "category": "material", "weight": 0.1, "stack": 20, "hint": "Crafting material for tents, racks and tools (B)."},
 	"tarp": {"name": "Tarp", "category": "material", "weight": 1.2, "stack": 2, "hint": "Crafting material — a lean-to or a tent (B)."},
 	"paracord": {"name": "Paracord", "category": "material", "weight": 0.3, "stack": 5, "hint": "Crafting material — lash together a lean-to (B)."},
-	"lure": {"name": "Fishing lure", "category": "material", "weight": 0.02, "stack": 10, "hint": COMING_SOON},
+	"lure": {"name": "Spoon lure", "category": "material", "weight": 0.02, "stack": 10, "hint": "A shiny metal lure: predators go for it, and it isn't used up by a catch — only lost if the line snaps. With the rod selected, right click to put it on."},
+	"grub": {"name": "Grub", "category": "material", "weight": 0.01, "stack": 30, "spoil": 1800.0, "hint": BAIT_HINT + " Small fish love them. Found when chopping trees and turning driftwood."},
+	"cut_bait": {"name": "Cut bait", "category": "material", "weight": 0.05, "stack": 30, "spoil": 900.0, "hint": BAIT_HINT + " Reef fish and big predators go for it. Cut from small fish (B)."},
+	"jig": {"name": "Hand-tied jig", "category": "material", "weight": 0.03, "stack": 5, "hint": "A feathered jig for open water — mahi-mahi and tuna. Not used up by a catch, only lost if the line snaps. Right click with the rod to put it on."},
 	"pistol_ammo": {"name": "9mm rounds", "category": "material", "weight": 0.012, "stack": 50, "hint": COMING_SOON},
 	"flare": {"name": "Flare", "category": "material", "weight": 0.15, "stack": 6, "hint": COMING_SOON},
 
@@ -57,7 +71,7 @@ const ITEMS := {
 	"lighter": {"name": "Lighter", "category": "tool", "tool": "lighter", "weight": 0.05, "stack": 1, "uses": 20, "hint": "Press E on a campfire or stove that has wood in it to light it."},
 	"torch": {"name": "Torch", "category": "tool", "tool": "torch", "weight": 0.5, "stack": 3, "hint": "Lights your way while it's in your hand."},
 	"canteen": {"name": "Canteen (empty)", "category": "tool", "tool": "canteen", "weight": 0.3, "stack": 1, "hint": "Hold it and press E at the spring (clean) or the stream (boil it first)."},
-	"fishing_rod": {"name": "Fishing rod", "category": "tool", "tool": "fishing_rod", "weight": 1.0, "stack": 1, "hint": COMING_SOON},
+	"fishing_rod": {"name": "Fishing rod", "category": "tool", "tool": "fishing_rod", "weight": 1.0, "stack": 1, "hint": "Hold left click to wind up a cast and let go to throw. When the bobber dips, left click to strike, then hold to reel and ease off before the line snaps. Right click picks your bait."},
 	"spear": {"name": "Spear", "category": "weapon", "tool": "spear", "weight": 1.5, "stack": 1, "hint": "Look at a shark and left click to strike — the best reach and damage you've got."},
 	"pistol": {"name": "Pistol", "category": "weapon", "weight": 0.9, "stack": 1, "hint": COMING_SOON},
 	"flare_gun": {"name": "Flare gun", "category": "weapon", "weight": 0.6, "stack": 1, "hint": COMING_SOON},
@@ -103,7 +117,8 @@ const ITEMS := {
 
 ## Grid footprint [width, height] in inventory cells. Anything missing is 1×1.
 const SIZES := {
-	"raw_fish": [2, 1], "cooked_fish": [2, 1], "raw_shark_meat": [2, 1], "cooked_shark": [2, 1], "peg_leg": [1, 3], "hook_hand": [1, 2], "canteen_clean": [1, 2], "canteen_dirty": [1, 2], "canteen": [1, 2],
+	"raw_fish": [2, 1], "cooked_fish": [2, 1], "raw_mullet": [2, 1], "raw_snapper": [2, 1], "raw_grouper": [3, 2], "raw_barracuda": [3, 1],
+	"raw_mahi_mahi": [3, 2], "raw_tuna": [2, 4], "fish_steak": [2, 1], "raw_shark_meat": [2, 1], "cooked_shark": [2, 1], "peg_leg": [1, 3], "hook_hand": [1, 2], "canteen_clean": [1, 2], "canteen_dirty": [1, 2], "canteen": [1, 2],
 	"driftwood": [2, 1], "log": [3, 1], "tarp": [2, 2],
 	"knife": [1, 2], "machete": [1, 3], "stone_hatchet": [1, 3], "oar": [1, 4], "raft_kit": [3, 3], "torch": [1, 3], "fishing_rod": [1, 4], "spear": [1, 4],
 	"pistol": [2, 1], "flare_gun": [2, 1],
@@ -122,6 +137,7 @@ const RARITY := {
 	"rain_jacket": 1, "wool_sweater": 1, "cargo_pants": 1, "hiking_boots": 1, "wool_beanie": 1, "daypack": 2,
 	"pistol": 3, "plate_carrier": 3, "combat_helmet": 3, "compartment_key": 3,
 	"tent_kit": 1, "storage_crate_kit": 1, "book_page_shelter": 2, "book_page_camp": 2,
+	"raw_snapper": 1, "raw_pufferfish": 1, "raw_grouper": 2, "raw_barracuda": 2, "raw_mahi_mahi": 2, "raw_tuna": 3, "fish_steak": 1, "jig": 1,
 	"cooked_shark": 1, "peg_leg": 2, "hook_hand": 2, "book_page_prosthetics": 2, "oar": 1,
 }
 const RARITY_NAMES := ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Exotic"]

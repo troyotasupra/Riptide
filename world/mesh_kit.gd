@@ -56,13 +56,15 @@ static func tube(points: PackedVector3Array, radii: PackedFloat32Array, sides: i
 		for j in sides:
 			var a := i * row + j
 			var b := a + row
-			indices.append_array([a, b, a + 1, a + 1, b, b + 1])
+			# Wound so the faces point outward (Godot's front faces are clockwise).
+			indices.append_array([a, a + 1, b, a + 1, b + 1, b])
 	# End caps.
 	for end: int in [0, count - 1]:
 		var center := vertices.size()
 		vertices.append(points[end])
 		for j in sides:
 			var a := end * row + j
+			# Clockwise seen from outside the cap, like the sides.
 			if end == 0:
 				indices.append_array([center, a + 1, a])
 			else:
@@ -82,17 +84,66 @@ static func branch(variant: int, length: float, base_radius: float, tip_radius: 
 	var key := "branch_%d_%.2f_%.3f_%.3f_%.2f" % [variant, length, base_radius, tip_radius, bend]
 	if _cache.has(key):
 		return _cache[key]
-	var noise := FastNoiseLite.new()
-	noise.seed = 2000 + variant * 13
-	noise.frequency = 0.8
+	var noise := _branch_noise(variant)
 	var points := PackedVector3Array()
 	var radii := PackedFloat32Array()
 	for i in segments + 1:
 		var t := float(i) / segments
-		var sway := Vector3(noise.get_noise_1d(t * 3.0) * 0.12, 0.0, noise.get_noise_1d(t * 3.0 + 50.0) * 0.12) * length
-		points.append(Vector3(0.0, t * length, 0.0) + Vector3(bend * t * t * length, 0.0, 0.0) + sway * t)
+		points.append(_branch_point(noise, length, bend, t))
 		radii.append(lerpf(base_radius, tip_radius, t) * (1.0 + noise.get_noise_1d(t * 9.0 + 7.0) * 0.12))
 	return tube(points, radii, 9, key)
+
+
+## Where a branch built with the same variant, length and bend runs, `t` (0..1) of
+## the way along it — for hanging leaves on its tip.
+static func branch_point(variant: int, length: float, bend: float, t: float) -> Vector3:
+	return _branch_point(_branch_noise(variant), length, bend, t)
+
+
+static func _branch_noise(variant: int) -> FastNoiseLite:
+	var noise := FastNoiseLite.new()
+	noise.seed = 2000 + variant * 13
+	noise.frequency = 0.8
+	return noise
+
+
+static func _branch_point(noise: FastNoiseLite, length: float, bend: float, t: float) -> Vector3:
+	var sway := Vector3(noise.get_noise_1d(t * 3.0) * 0.12, 0.0, noise.get_noise_1d(t * 3.0 + 50.0) * 0.12) * length
+	return Vector3(0.0, t * length, 0.0) + Vector3(bend * t * t * length, 0.0, 0.0) + sway * t
+
+
+## A palm frond along +Z: a drooping blade whose edges are cut into leaflets that
+## sweep toward the tip (a sawtooth outline), folded by `fold` (negative hangs the
+## leaflets down). Double-sided material recommended.
+static func frond(length: float, width: float, droop: float, segments: int = 20, fold: float = -0.35) -> ArrayMesh:
+	var key := "frond_%.2f_%.2f_%.2f_%d_%.2f" % [length, width, droop, segments, fold]
+	if _cache.has(key):
+		return _cache[key]
+	var vertices := PackedVector3Array()
+	var indices := PackedInt32Array()
+	var step := length / segments
+	for i in segments + 1:
+		var t := float(i) / segments
+		var z := t * length
+		var y := -droop * t * t * length
+		var leaflet := i % 2 == 1 and i < segments
+		var half := width * 0.5 * sin(PI * minf(t * 1.05 + 0.04, 1.0)) * (1.0 if leaflet else 0.12)
+		var edge_z := z + (step * 0.9 if leaflet else 0.0)
+		var edge_y := -droop * pow(edge_z / length, 2.0) * length + half * fold
+		vertices.append(Vector3(-half, edge_y, edge_z))
+		vertices.append(Vector3(0.0, y, z))
+		vertices.append(Vector3(half, edge_y, edge_z))
+	for i in segments:
+		var a := i * 3
+		var b := a + 3
+		indices.append_array([a, b, a + 1, a + 1, b, b + 1, a + 1, b + 1, a + 2, a + 2, b + 1, b + 2])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := _with_normals(arrays)
+	_cache[key] = mesh
+	return mesh
 
 
 ## A leaf or frond blade from the origin along +Z, drooping by `droop`,

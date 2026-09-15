@@ -38,6 +38,10 @@ var recent_bites: Array = []
 ## Limbs lost for good ("leg_l", "arm_r", ...) and the ones fitted with a prosthetic.
 var missing_limbs: Array = []
 var prosthetics: Array = []
+## Developer mode: no hunger, thirst, cold or damage.
+var god := false
+## species id -> {"count", "best" (kg)}
+var fish_log := {}
 
 var _tick_accum := 0.0
 var _push_accum := 0.0
@@ -75,13 +79,25 @@ func host_tick(delta: float) -> void:
 	var dt := _tick_accum
 	_tick_accum = 0.0
 	warmth = camp().warmth_for(player) if camp() != null else 0.0
+	var weather: Weather = GameState.world.weather if GameState.world != null else null
+	var rain: float = weather.current.rain if weather != null else 0.0
+	var sheltered := warmth >= 4.0 or (camp() != null and camp().in_shack(player.world_transform().origin))
 	if player.swimming:
 		wetness = 1.0
+	elif rain > 0.05 and not sheltered:
+		wetness = minf(1.0, wetness + dt * rain / WeatherMath.SOAK_SECONDS)
 	else:
 		var drying := WARM_DRYING if warmth >= 5.0 else 1.0
 		wetness = maxf(0.0, wetness - dt * drying / DRY_OFF_SECONDS)
-	air_temp = EnvironmentTemp.felt_temp(DayNight.daylight(GameState.time_of_day()), wetness, player.swimming, warmth)
+	var chill: float = 0.0 if sheltered or weather == null else float(weather.current.chill)
+	air_temp = EnvironmentTemp.felt_temp(DayNight.daylight(GameState.time_of_day()), wetness, player.swimming, warmth, chill)
 	survival.tick(dt, air_temp, equipment.insulation(), player.exertion)
+	if god:
+		survival.health = Survival.MAX
+		survival.hunger = Survival.MAX
+		survival.thirst = Survival.MAX
+		survival.body_temp = Survival.NORMAL_TEMP
+		survival.sickness = 0.0
 	_spoil_accum += dt
 	if _spoil_accum >= SPOIL_CHECK_SECONDS:
 		_spoil_accum = 0.0
@@ -114,7 +130,7 @@ func push_inventory() -> void:
 	if player.is_local:
 		inventory_changed.emit()
 	else:
-		_set_inventory.rpc_id(player.peer_id, {"pack": inventory.to_dict(), "worn": equipment.to_dict()})
+		_set_inventory.rpc_id(player.peer_id, {"pack": inventory.to_dict(), "worn": equipment.to_dict(), "fish_log": fish_log})
 
 
 ## Host → owner: a short message on their screen.
@@ -160,7 +176,7 @@ func to_save(now: float) -> Dictionary:
 	var boat_name := String(player.platform.name) if player.platform != null else ""
 	var local := player.global_position - player.platform.proxy_xf.origin if player.platform != null else Vector3.ZERO
 	return {"pack": copy.to_dict(), "survival": survival.to_dict(), "worn": equipment.to_dict(), "name": player.display_name,
-		"limbs": missing_limbs.duplicate(), "prosthetics": prosthetics.duplicate(),
+		"limbs": missing_limbs.duplicate(), "prosthetics": prosthetics.duplicate(), "fish_log": fish_log.duplicate(true),
 		"at": player.world_transform().origin, "boat": boat_name, "local": local}
 
 
@@ -182,6 +198,7 @@ func from_save(data: Dictionary, now: float) -> void:
 	if not leftover.is_empty():
 		_drop_overflow.call_deferred(leftover)
 	survival.from_dict(data.get("survival", {}))
+	fish_log = Dictionary(data.get("fish_log", {})).duplicate(true)
 	missing_limbs = Array(data.get("limbs", [])).duplicate()
 	prosthetics = Array(data.get("prosthetics", [])).duplicate()
 	player.apply_limbs(missing_limbs, prosthetics)
@@ -265,6 +282,7 @@ func _set_inventory(data: Dictionary) -> void:
 		return
 	inventory.from_dict(data.get("pack", {}))
 	equipment.from_dict(data.get("worn", {}))
+	fish_log = data.get("fish_log", fish_log)
 	player.carried_weight_kg = total_weight()
 	inventory_changed.emit()
 
@@ -317,6 +335,16 @@ func _request_use(uid: int) -> void:
 			notify("You strap the %s onto your %s. Better than nothing — much better." % [String(item.name).to_lower(), SharkMath.LIMB_NAMES[limb]])
 			push_inventory()
 			push_limbs()
+
+
+## Host: records a catch; true if it beats this crew member's best of that species.
+func log_catch(species: String, kg: float) -> bool:
+	var entry: Dictionary = fish_log.get(species, {"count": 0, "best": 0.0})
+	var beaten := int(entry.count) > 0 and kg > float(entry.best)
+	entry.count = int(entry.count) + 1
+	entry.best = maxf(float(entry.best), kg)
+	fish_log[species] = entry
+	return beaten
 
 
 ## Host: a shark has taken `limb` for good.
