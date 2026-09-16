@@ -440,6 +440,9 @@ func request_interact(target_id: String, slot: int) -> void:
 					return
 			_interact_started.erase(sender)
 			resources.harvest(survivor, parts[1])
+		"fish":
+			if parts.size() > 1:
+				fishing.interact_landed(survivor, parts[1], at)
 		"pickup":
 			var pickup: Node3D = camp.pickup_nodes.get(parts[1]) if parts.size() > 1 else null
 			if pickup != null and at.distance_to(pickup.global_position) <= INTERACT_RANGE:
@@ -581,6 +584,7 @@ func _on_peer_ready(peer_id: int) -> void:
 		camp.sync_to(peer_id)
 		sharks.sync_to(peer_id)
 		weather.sync_to(peer_id)
+		fishing.sync_to(peer_id)
 		dev._set_allowed.rpc_id(peer_id, GameState.dev_mode)
 	var player_name: String = Net.roster[peer_id]["name"]
 	var player_id := Net.player_id_of(peer_id)

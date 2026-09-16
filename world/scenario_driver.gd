@@ -537,9 +537,21 @@ func _outdoors_loop() -> void:
 	await _wait(float(cast.bite) + 1.0)
 	world.fishing.request_result(int(cast.id), "landed")
 	var item: String = FishTable.SPECIES[cast.species].item
-	_check(pack.count_of(item) >= 1 or pack.count_of("cut_bait") > bait_before, "landed it")
-	_check(s.fish_log.has(cast.species), "it goes in the fish log")
+	_check(s.fish_log.has(cast.species), "landed it, and it goes in the fish log")
 	_check(pack.count_of("cut_bait") <= bait_before, "the cut bait was used up")
+	var fish: LandedFish = null
+	for entry: LandedFish in world.fishing.landed.values():
+		fish = entry
+		break
+	_check(fish != null and fish.alive, "it's flopping on the dock, still alive")
+	if fish != null:
+		var fish_at := player.world_transform().origin
+		world.fishing.interact_landed(s, fish.fish_id, fish_at)
+		_check(not fish.alive, "first go kills it")
+		_check(pack.count_of(item) == 0, "it isn't in your pack until you pick it up")
+		world.fishing.interact_landed(s, fish.fish_id, fish_at)
+		_check(pack.count_of(item) >= 1, "second go takes it")
+		_check(world.fishing.landed.is_empty(), "and it's gone from the dock")
 
 	var lures := pack.count_of("lure")
 	world.fishing.request_cast(cast_at, "lure")

@@ -8,9 +8,15 @@ extends Node
 
 ## peer id -> the cast in progress
 var casts := {}
+## Fish lying on the bank right now: id -> LandedFish
+var landed := {}
 ## Developer mode and tests: bites come within a second.
 var fast_bites := false
 var _next_id := 1
+var _next_fish := 1
+
+## How close you have to be to reach a fish on the ground.
+const REACH := 4.5
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -95,17 +101,21 @@ func request_result(id: int, outcome: String) -> void:
 			var info := FishTable.get_species(species)
 			var kg: float = cast.kg
 			var shark_took := float(cast.shark_at) >= 0.0 and elapsed >= float(cast.bite) + float(cast.shark_at) and randf() < 0.5
-			var stack := CampSystems.fresh_stack("cut_bait", 2) if shark_took else CampSystems.fresh_stack(info.item, 1)
-			var left := s.inventory.add_stack(stack)
-			if left > 0:
-				var rest := stack.duplicate()
-				rest.count = left
-				world.camp.drop_items(player, [rest], "%s's catch" % player.display_name)
 			if shark_took:
+				# Only the head comes over the side.
+				var head := CampSystems.fresh_stack("cut_bait", 2)
+				var spare := s.inventory.add_stack(head)
+				if spare > 0:
+					var rest := head.duplicate()
+					rest.count = spare
+					world.camp.drop_items(player, [rest], "%s's catch" % player.display_name)
 				s.notify("A shark tore your %s away — all you land is the head. (Cut bait ×2)" % String(info.name).to_lower())
 			else:
+				# It comes out of the water and lands at your feet, still alive.
+				spawn_landed(player, species, kg)
 				var best := s.log_catch(species, kg)
-				s.notify("Caught a %.1f kg %s!%s" % [kg, String(info.name).to_lower(), "  New personal best!" if best else ""])
+				s.notify("A %.1f kg %s is flopping at your feet — kill it, then take it.%s"
+					% [kg, String(info.name).to_lower(), "  New personal best!" if best else ""])
 			world.sfx_at("splash", cast.pos)
 		"snapped", "cut":
 			_use_bait(s, bait, true)
@@ -121,6 +131,107 @@ func request_result(id: int, outcome: String) -> void:
 
 func forget(peer_id: int) -> void:
 	casts.erase(peer_id)
+
+
+## Host: put a landed fish on the ground just in front of `player`.
+func spawn_landed(player: Player, species: String, kg: float) -> void:
+	var at := player.world_transform().origin
+	var forward := Vector3(-sin(player.yaw), 0.0, -cos(player.yaw))
+	var spot := at + forward * 1.3
+	spot.y = _footing(spot, at.y)
+	var id := "f%d" % _next_fish
+	_next_fish += 1
+	_add_landed(id, species, kg, spot, player.yaw + PI * 0.5)
+	Net.send_to_ready(self, "_add_landed", [id, species, kg, spot, player.yaw + PI * 0.5])
+
+
+## Whatever the fish comes to rest on: a deck or dock underfoot, else the ground.
+func _footing(spot: Vector3, fallback: float) -> float:
+	var space := GameState.world.get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 2.0, spot + Vector3.DOWN * 3.0, Layers.WORLD | Layers.BOATS)
+	var hit := space.intersect_ray(query)
+	if not hit.is_empty():
+		return float(hit.position.y) + 0.12
+	var ground: float = GameState.world.ground_height(spot.x, spot.z)
+	return (ground + 0.12) if ground != -INF else fallback
+
+
+## Host: a crew member reaches for a landed fish — the first go kills it, the second takes it.
+func interact_landed(s: Survivor, id: String, at: Vector3) -> void:
+	var fish: LandedFish = landed.get(id)
+	if fish == null or at.distance_to(fish.global_position) > REACH:
+		return
+	var info := FishTable.get_species(fish.species)
+	var fish_name := String(info.get("name", "fish")).to_lower()
+	if fish.alive:
+		fish.kill()
+		Net.send_to_ready(self, "_kill_landed", [id])
+		GameState.world.sfx_at("cut", fish.global_position)
+		s.notify("You kill the %s." % fish_name)
+		return
+	var stack := CampSystems.fresh_stack(String(info.get("item", "raw_fish")), 1)
+	var left := s.inventory.add_stack(stack)
+	if left > 0:
+		s.notify("No room in your pack for the %s." % fish_name)
+		return
+	s.push_inventory()
+	s.notify("Took the %.1f kg %s." % [fish.kg, fish_name])
+	remove_landed(id)
+
+
+func remove_landed(id: String) -> void:
+	_remove_landed(id)
+	Net.send_to_ready(self, "_remove_landed", [id])
+
+
+## Fish left on the bank tire out, die and eventually spoil away.
+func _process(delta: float) -> void:
+	if not multiplayer.is_server():
+		return
+	for id: String in landed.keys():
+		var fish: LandedFish = landed[id]
+		if fish == null or not is_instance_valid(fish):
+			landed.erase(id)
+			continue
+		if fish.alive and fish.age > LandedFish.SUFFOCATE_SECONDS:
+			fish.kill()
+			Net.send_to_ready(self, "_kill_landed", [id])
+		elif fish.age > LandedFish.ROT_SECONDS:
+			remove_landed(id)
+
+
+## A joining crew member sees the fish already lying about.
+func sync_to(peer_id: int) -> void:
+	for id: String in landed:
+		var fish: LandedFish = landed[id]
+		_add_landed.rpc_id(peer_id, id, fish.species, fish.kg, fish.global_position, fish.rotation.y)
+		if not fish.alive:
+			_kill_landed.rpc_id(peer_id, id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _add_landed(id: String, species: String, kg: float, pos: Vector3, yaw: float) -> void:
+	if landed.has(id):
+		return
+	var fish := LandedFish.new()
+	fish.setup(id, species, kg, pos, yaw)
+	GameState.world.add_child(fish)
+	landed[id] = fish
+
+
+@rpc("authority", "call_remote", "reliable")
+func _kill_landed(id: String) -> void:
+	var fish: LandedFish = landed.get(id)
+	if fish != null and is_instance_valid(fish):
+		fish.kill()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _remove_landed(id: String) -> void:
+	var fish: LandedFish = landed.get(id)
+	landed.erase(id)
+	if fish != null and is_instance_valid(fish):
+		fish.queue_free()
 
 
 ## Natural bait is used up by a catch; lures and jigs only go when the line does.
