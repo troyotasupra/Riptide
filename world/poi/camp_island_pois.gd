@@ -9,6 +9,7 @@ static func build(shape: CampIsland) -> Node3D:
 	root.name = "Landmarks"
 	root.add_child(_spring(shape))
 	root.add_child(_stream(shape))
+	root.add_child(_waterfall(shape))
 	root.add_child(_castaway_camp(shape))
 	root.add_child(_cave(shape))
 	root.add_child(FishingShack.build(shape))
@@ -70,23 +71,97 @@ static func _spring(shape: CampIsland) -> Node3D:
 	spring.text_provider = func(player: Node) -> String: return GameState.world.spring_prompt(player)
 	spring.collision_layer = Layers.INTERACT
 	spring.collision_mask = 0
-	spring.position = Vector3(shape.spring.x, shape.spring_height - 0.2, shape.spring.y)
 	var area := CylinderShape3D.new()
 	area.radius = CampIsland.POND_RADIUS
-	area.height = 1.2
+	area.height = 2.4
 	var collider := CollisionShape3D.new()
 	collider.shape = area
+	collider.position = Vector3(shape.spring.x, shape.spring_height, shape.spring.y)
 	spring.add_child(collider)
 	var water := MeshInstance3D.new()
-	water.mesh = _cylinder(CampIsland.POND_RADIUS * 0.95, CampIsland.POND_RADIUS * 0.95, 0.05, 14)
+	water.mesh = _pool_mesh(shape, shape.spring, CampIsland.POND_RADIUS * 2.4, shape.spring_height)
 	water.material_override = _water_material()
 	spring.add_child(water)
 	return spring
 
 
+## A water surface that fills a basin. The water spreads out from the middle
+## only as far as ground actually holds it, so a pool gets a real shoreline; if
+## it would spill past its banks the level is dropped until it sits still.
+static func _pool_mesh(shape: CampIsland, center: Vector2, extent: float, level: float) -> ArrayMesh:
+	const STEP := 0.4
+	var cells := int(ceil(extent * 2.0 / STEP))
+	var origin := center - Vector2(extent, extent)
+	var filled: Dictionary = {}
+	for attempt in 5:
+		filled = _flood(shape, origin, cells, STEP, level)
+		if not filled.get("spilled", false):
+			break
+		level -= 0.35
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	for key: Vector2i in filled.wet:
+		var x := origin.x + key.x * STEP
+		var z := origin.y + key.y * STEP
+		var a := Vector3(x, level, z)
+		var b := Vector3(x + STEP, level, z)
+		var c := Vector3(x + STEP, level, z + STEP)
+		var d := Vector3(x, level, z + STEP)
+		for v: Vector3 in [a, b, c, a, c, d]:
+			vertices.append(v)
+			normals.append(Vector3.UP)
+	return _surface(vertices, normals)
+
+
+## Spreads water out from the middle of the grid, cell by cell, into anywhere the
+## ground lies below `level`. "spilled" means it reached the edge of the grid —
+## the banks don't hold at that level.
+static func _flood(shape: CampIsland, origin: Vector2, cells: int, step: float, level: float) -> Dictionary:
+	var wet: Dictionary = {}
+	var spilled := false
+	var middle := Vector2i(cells / 2, cells / 2)
+	var queue: Array[Vector2i] = [middle]
+	var seen: Dictionary = {middle: true}
+	while not queue.is_empty():
+		var cell: Vector2i = queue.pop_back()
+		var x := origin.x + cell.x * step
+		var z := origin.y + cell.y * step
+		var dry := false
+		for corner: Vector2 in [Vector2(x, z), Vector2(x + step, z), Vector2(x + step, z + step), Vector2(x, z + step)]:
+			if shape.height_at(corner.x, corner.y) > level - 0.08:
+				dry = true
+				break
+		if dry:
+			continue
+		wet[cell] = true
+		if cell.x <= 0 or cell.y <= 0 or cell.x >= cells - 1 or cell.y >= cells - 1:
+			spilled = true
+			continue
+		for step_to: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var next := cell + step_to
+			if not seen.has(next):
+				seen[next] = true
+				queue.append(next)
+	return {"wet": wet, "spilled": spilled}
+
+
+static func _surface(vertices: PackedVector3Array, normals: PackedVector3Array) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	if vertices.is_empty():
+		return mesh
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+## The stream from the pool down to the sea, lying in its carved bed. The stretch
+## going over the waterfall is left out, because that water is drawn falling.
 static func _stream(shape: CampIsland) -> Node3D:
-	const SEGMENTS := 48
-	const HALF_WIDTH := 1.6
+	const SEGMENTS := 64
+	const HALF_WIDTH := 1.1
 	var stream := Interactable.new()
 	stream.name = "Stream"
 	stream.interact_id = "stream"
@@ -99,16 +174,20 @@ static func _stream(shape: CampIsland) -> Node3D:
 	var previous_left := Vector3.ZERO
 	var previous_right := Vector3.ZERO
 	var previous_center := Vector3.ZERO
+	var had_previous := false
 	for i in SEGMENTS + 1:
 		var t := float(i) / SEGMENTS
+		if t > CampIsland.FALL_T and t < CampIsland.FALL_T + CampIsland.FALL_SPAN:
+			had_previous = false  # the falling stretch
+			continue
 		var p := shape.stream_point(t)
 		var ahead := shape.stream_point(minf(t + 0.01, 1.0)) - shape.stream_point(maxf(t - 0.01, 0.0))
 		var side := ahead.normalized().orthogonal() * HALF_WIDTH
-		var y := shape.height_at(p.x, p.y) + 0.3
+		var y: float = shape.stream_bed(t) + 0.3
 		var center := Vector3(p.x, y, p.y)
 		var left := Vector3(p.x + side.x, y, p.y + side.y)
 		var right := Vector3(p.x - side.x, y, p.y - side.y)
-		if i > 0:
+		if had_previous:
 			for v: Vector3 in [previous_left, previous_right, left, previous_right, right, left]:
 				vertices.append(v)
 				normals.append(Vector3.UP)
@@ -116,7 +195,7 @@ static func _stream(shape: CampIsland) -> Node3D:
 			var along := center - previous_center
 			if along.length() > 0.1:
 				var box := BoxShape3D.new()
-				box.size = Vector3(HALF_WIDTH * 2.0, 0.6, along.length())
+				box.size = Vector3(HALF_WIDTH * 2.0, 0.8, along.length())
 				var collider := CollisionShape3D.new()
 				collider.shape = box
 				collider.transform = Transform3D(Basis.looking_at(along.normalized(), Vector3.UP), (center + previous_center) * 0.5)
@@ -124,21 +203,129 @@ static func _stream(shape: CampIsland) -> Node3D:
 		previous_left = left
 		previous_right = right
 		previous_center = center
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_NORMAL] = normals
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		had_previous = true
 	var water := MeshInstance3D.new()
-	water.mesh = mesh
+	water.mesh = _surface(vertices, normals)
 	water.material_override = _water_material()
 	stream.add_child(water)
 	return stream
 
 
+## The big fall: a sheet of running water down the rock face, wet boulders either
+## side, a pool to catch it and spray where it lands.
+static func _waterfall(shape: CampIsland) -> Node3D:
+	var node := Node3D.new()
+	node.name = "Waterfall"
+	var fall: Dictionary = shape.waterfall()
+	var top: Vector3 = fall.top
+	var foot: Vector3 = fall.foot
+	var direction: Vector2 = fall.direction
+	var forward := Vector3(direction.x, 0.0, direction.y)
+	var across := forward.cross(Vector3.UP).normalized() * CampIsland.STREAM_WIDTH * 0.9
+
+	# The sheet: leaning out from the brink and spreading as it falls.
+	var vertices := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	const STEPS := 10
+	for i in STEPS:
+		var t0 := float(i) / STEPS
+		var t1 := float(i + 1) / STEPS
+		var points: Array[Vector3] = []
+		for t: float in [t0, t1]:
+			var lean := forward * (0.3 + t * 1.1)
+			var y := lerpf(top.y + 0.3, foot.y - 0.15, t * t * 0.4 + t * 0.6)
+			var spread := 1.0 + t * 0.4
+			points.append(Vector3(top.x, y, top.z) + lean - across * spread)
+			points.append(Vector3(top.x, y, top.z) + lean + across * spread)
+		for triangle: Array in [[0, 1, 2], [1, 3, 2]]:
+			for index: int in triangle:
+				vertices.append(points[index])
+				uvs.append(Vector2(float(index % 2), t1 if index >= 2 else t0))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	var sheet_mesh := ArrayMesh.new()
+	sheet_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var sheet := MeshInstance3D.new()
+	sheet.mesh = sheet_mesh
+	sheet.material_override = _falling_water_material()
+	sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.add_child(sheet)
+
+	var plunge := MeshInstance3D.new()
+	plunge.mesh = _pool_mesh(shape, Vector2(foot.x, foot.z), CampIsland.PLUNGE_RADIUS * 2.0, foot.y + 0.3)
+	plunge.material_override = _water_material()
+	node.add_child(plunge)
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("waterfall:%d" % shape.island_seed)
+	for i in 22:
+		var at := top.lerp(foot, rng.randf()) + forward * rng.randf_range(-1.0, 2.5)
+		var sideways := across.normalized() * (CampIsland.STREAM_WIDTH * rng.randf_range(1.0, 2.4) * (1.0 if i % 2 == 0 else -1.0))
+		var spot := at + sideways
+		spot.y = shape.height_at(spot.x, spot.z) - 0.3
+		var size := rng.randf_range(0.9, 2.4)
+		_mesh(node, MeshKit.rock(70 + i, 0.4, 0.8), "fall_rock", Color(0.38, 0.37, 0.36), spot,
+			Vector3(rng.randf() * 0.4, rng.randf() * TAU, rng.randf() * 0.4)).scale = Vector3(size * 1.3, size, size * 1.1)
+
+	var spray := GPUParticles3D.new()
+	spray.name = "Spray"
+	spray.amount = 220
+	spray.lifetime = 1.4
+	spray.position = foot + Vector3.UP * 0.4 + forward * 0.6
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.7, 0.7)
+	spray.draw_pass_1 = quad
+	spray.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var process := ParticleProcessMaterial.new()
+	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	process.emission_sphere_radius = CampIsland.STREAM_WIDTH
+	process.direction = Vector3.UP
+	process.spread = 55.0
+	process.initial_velocity_min = 1.0
+	process.initial_velocity_max = 3.0
+	process.gravity = Vector3(0.0, -3.0, 0.0)
+	process.scale_min = 0.5
+	process.scale_max = 1.6
+	spray.process_material = process
+	var mist := StandardMaterial3D.new()
+	mist.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mist.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mist.albedo_color = Color(0.92, 0.96, 1.0, 0.16)
+	mist.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	spray.material_override = mist
+	node.add_child(spray)
+	return node
+
+
+static var _falling_water: ShaderMaterial
+
+
+static func _falling_water_material() -> ShaderMaterial:
+	if _falling_water != null:
+		return _falling_water
+	var shader := Shader.new()
+	shader.code = """shader_type spatial;
+render_mode cull_disabled, depth_draw_always;
+
+void fragment() {
+	// Streaks of water running down the face, breaking up as they fall.
+	float run = UV.y * 5.0 + TIME * 1.6;
+	float streak = 0.5 + 0.5 * sin(run * 6.2831 + sin(UV.x * 26.0) * 1.7);
+	float foam = smoothstep(0.55, 1.0, UV.y);
+	ALBEDO = mix(vec3(0.62, 0.78, 0.86), vec3(1.0), clamp(streak * 0.7 + foam * 0.6, 0.0, 1.0));
+	ALPHA = clamp(0.72 + foam * 0.25, 0.0, 1.0);
+	ROUGHNESS = 0.12;
+	SPECULAR = 0.6;
+}"""
+	_falling_water = ShaderMaterial.new()
+	_falling_water.shader = shader
+	return _falling_water
+
+
 static func _water_material() -> StandardMaterial3D:
-	var m := Props.material("fresh_water", Color(0.22, 0.52, 0.62, 0.82))
+	var m := Props.material("fresh_water", Color(0.34, 0.66, 0.74, 0.8))
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	m.roughness = 0.1

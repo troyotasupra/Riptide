@@ -700,6 +700,13 @@ func _look() -> void:
 			var eye3 := island2.spring + from_hill * 15.0
 			_fixed_camera(Vector3(eye3.x, island2.spring_height + 7.0, eye3.y),
 				Vector3(island2.spring.x, island2.spring_height, island2.spring.y))
+		"waterfall":
+			var fall: Dictionary = world.camp_island.waterfall()
+			var foot: Vector3 = fall.foot
+			var top: Vector3 = fall.top
+			var out3 := Vector3(float(fall.direction.x), 0.0, float(fall.direction.y))
+			var side3 := out3.cross(Vector3.UP)
+			_fixed_camera(foot + out3 * 26.0 + side3 * 10.0 + Vector3.UP * 9.0, top.lerp(foot, 0.55))
 		"shackdoor":
 			var xf2: Transform3D = camp.shack.xf
 			_fixed_camera(xf2 * Vector3(0.0, 1.5, -5.0), xf2 * Vector3(0.0, 0.6, 0.5))

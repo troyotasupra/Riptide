@@ -11,12 +11,12 @@ const STREAM_CLEARANCE := 5.0
 
 ## Per-try chance of each kind, by biome.
 const TABLE := {
-	CampIsland.Biome.BEACH: [["palm", 0.10], ["driftwood", 0.12], ["stone", 0.04]],
-	CampIsland.Biome.ROCK_SHORE: [["stone", 0.22], ["flint", 0.12], ["rock", 0.08]],
-	CampIsland.Biome.PALM_COAST: [["palm", 0.32], ["fiber", 0.14], ["berry_bush", 0.06], ["stone", 0.04]],
-	CampIsland.Biome.JUNGLE: [["tree", 0.38], ["fiber", 0.14], ["berry_bush", 0.07], ["red_berry_bush", 0.08], ["palm", 0.04]],
-	CampIsland.Biome.MEADOW: [["fiber", 0.20], ["berry_bush", 0.12], ["red_berry_bush", 0.05], ["tree", 0.06], ["stone", 0.05]],
-	CampIsland.Biome.HILLS: [["rock", 0.22], ["stone", 0.14], ["flint", 0.12], ["tree", 0.05]],
+	CampIsland.Biome.BEACH: [["palm", 0.10], ["driftwood", 0.12], ["stone", 0.05], ["rock", 0.03]],
+	CampIsland.Biome.ROCK_SHORE: [["stone", 0.22], ["flint", 0.12], ["rock", 0.18]],
+	CampIsland.Biome.PALM_COAST: [["palm", 0.32], ["fiber", 0.14], ["berry_bush", 0.06], ["stone", 0.06], ["rock", 0.05]],
+	CampIsland.Biome.JUNGLE: [["tree", 0.38], ["fiber", 0.14], ["berry_bush", 0.07], ["red_berry_bush", 0.08], ["palm", 0.04], ["rock", 0.06]],
+	CampIsland.Biome.MEADOW: [["fiber", 0.20], ["berry_bush", 0.12], ["red_berry_bush", 0.05], ["tree", 0.06], ["stone", 0.06], ["rock", 0.07]],
+	CampIsland.Biome.HILLS: [["rock", 0.34], ["stone", 0.18], ["flint", 0.12], ["tree", 0.05]],
 }
 
 

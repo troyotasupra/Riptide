@@ -13,8 +13,16 @@ const DEEP_SEABED := -30.0
 const BEACH_HEIGHT := 1.2
 const HILL_PEAK := 48.0
 const HILL_RADIUS := 110.0
-const POND_RADIUS := 9.0
-const STREAM_WIDTH := 2.5
+const POND_RADIUS := 7.0
+const STREAM_WIDTH := 1.6
+## The stream drops over one big waterfall on its way down: where along the run,
+## how tall the rock band it falls over is, how wide that band runs across the
+## hillside, and how big the plunge pool at its foot is.
+const FALL_T := 0.22
+const FALL_SPAN := 0.05
+const FALL_HEIGHT := 9.0
+const FALL_BAND := 26.0
+const PLUNGE_RADIUS := 4.5
 ## The reef raises the seabed to this depth around the shipwreck, so it's always diveable.
 const WRECK_DEPTH := -8.0
 const REEF_RADIUS := 45.0
@@ -45,6 +53,10 @@ var shipwreck := Vector2.ZERO
 var _cove_angle := 0.0
 var _rock_angle := 0.0
 var _stream_ready := false
+## Direction the stream leaves the pool (the notch in its rim).
+var _outflow := Vector2.RIGHT
+## Bed height along the stream, sampled evenly from the pool to the sea.
+var _bed: Array[float] = []
 var _terrain := FastNoiseLite.new()
 var _outline := FastNoiseLite.new()
 var _biomes := FastNoiseLite.new()
@@ -70,12 +82,21 @@ func _init(p_seed: int) -> void:
 	cove_bearing = _cove_angle
 	camp = center + Vector2.from_angle(hill_angle - side * PI * 0.62) * RADIUS * 0.38
 	cave = hill + (center - hill).normalized() * 40.0
-	spring = hill + Vector2.from_angle(hill_angle + side * PI * 0.5) * 48.0
+	# The pool sits high on the hill's flank, on the flattest bench we can find so
+	# it has somewhere to sit, and far enough up that its stream can fall a long way.
+	spring = _flattest_bench(hill, hill_angle + side * PI * 0.5)
 	shipwreck = center + Vector2.from_angle(_rock_angle + side * 0.45) * RADIUS * 1.18
 
 	# The spring feeds a stream running away from the hill down to the sea.
-	spring_height = _base_height(spring.x, spring.y) - 1.0
+	# The pool can only stand as high as the lowest point of its rim, or it would
+	# simply run out down the hill.
+	var rim := INF
+	for j in 12:
+		var edge := spring + Vector2.from_angle(TAU * j / 12.0) * POND_RADIUS
+		rim = minf(rim, _base_height(edge.x, edge.y))
+	spring_height = rim - 0.25
 	var away := (spring - hill).normalized()
+	_outflow = away
 	stream_mouth = spring
 	var r := 0.0
 	while r < RADIUS * 1.5:
@@ -85,6 +106,7 @@ func _init(p_seed: int) -> void:
 		stream_mouth = p
 		r += 2.0
 	stream_mouth += away * 6.0
+	_build_bed()
 	_stream_ready = true
 
 	# The cove beach: walk in from the sea along its bearing until we reach sand.
@@ -112,19 +134,127 @@ func height_at(x: float, z: float) -> float:
 	if not _stream_ready:
 		return h
 	var p := Vector2(x, z)
+	# A band of rock crosses the hillside; the stream falls over it.
+	h = _after_scarp(h, FALL_HEIGHT * _scarp(p))
 	var pond_distance := p.distance_to(spring)
-	if pond_distance < POND_RADIUS * 2.0:
+	if pond_distance < POND_RADIUS * 2.6:
+		# A low rim holds the pool in its bench, notched where the stream leaves.
+		var outlet := 1.0 - smoothstep(0.3, 1.0, absf(angle_difference((p - spring).angle(), _outflow.angle())))
+		var lip := smoothstep(POND_RADIUS * 2.6, POND_RADIUS * 1.1, pond_distance) * (1.0 - outlet)
+		h = lerpf(h, maxf(h, minf(spring_height + 0.6, h + 1.0)), lip)
 		var pond_bed := spring_height - 1.3
-		h = minf(h, lerpf(pond_bed, h, smoothstep(POND_RADIUS * 0.7, POND_RADIUS * 2.0, pond_distance)))
+		h = minf(h, lerpf(pond_bed, h, smoothstep(POND_RADIUS * 0.7, POND_RADIUS * 1.3, pond_distance)))
+		# A notch where the stream leaves, so the pool has an outflow.
+		h = minf(h, lerpf(spring_height - 0.15, h, smoothstep(STREAM_WIDTH, STREAM_WIDTH * 2.5,
+			absf((p - spring).dot(_outflow.orthogonal())))) if outlet > 0.5 else h)
+	var plunge_distance := p.distance_to(stream_point(FALL_T + FALL_SPAN))
+	if plunge_distance < PLUNGE_RADIUS * 1.4:
+		var plunge_bed := stream_bed(FALL_T + FALL_SPAN) - 0.6
+		h = minf(h, lerpf(plunge_bed, h, smoothstep(PLUNGE_RADIUS * 0.5, PLUNGE_RADIUS * 1.4, plunge_distance)))
 	var along := _stream_param(p)
 	if along.x > 0.0 and along.x < 1.0 and along.y < STREAM_WIDTH * 3.0:
 		h = minf(h, lerpf(stream_bed(along.x), h, smoothstep(STREAM_WIDTH, STREAM_WIDTH * 3.0, along.y)))
 	return h
 
 
-## Stream bed height at fraction `t` from the spring (0) to the sea (1).
+## How much of the rock step's drop applies at `p`: the ground falls away just
+## past the brink, hollowing out a basin, then climbs back to the hillside below
+## it, and it fades out to either side. The island's shape is otherwise untouched.
+func _scarp(p: Vector2) -> float:
+	if not _stream_ready:
+		return 0.0
+	return _scarp_at(p, stream_point(FALL_T))
+
+
+## Stream bed height at fraction `t` from the pool (0) to the sea (1), read from
+## the profile worked out when the island was made.
 func stream_bed(t: float) -> float:
-	return lerpf(spring_height - 0.6, -1.2, t)
+	if _bed.is_empty():
+		return spring_height - 0.5
+	var at := clampf(t, 0.0, 1.0) * (_bed.size() - 1)
+	var i := mini(int(at), _bed.size() - 2)
+	return lerpf(_bed[i], _bed[i + 1], at - i)
+
+
+## Works out the stream's bed once: it follows the hillside a little under the
+## surface, only ever runs downhill, keeps a level shelf at the brink of the
+## waterfall, and meets the sea at the bottom.
+func _build_bed() -> void:
+	const STEPS := 96
+	_bed.clear()
+	var lowest := spring_height - 0.5
+	for i in STEPS + 1:
+		var t := float(i) / STEPS
+		var p := stream_point(t)
+		var natural := _after_scarp(_base_height(p.x, p.y), FALL_HEIGHT * _raw_scarp(p))
+		var bed := minf(lowest, natural - 0.3)
+		if t > FALL_T - 0.05 and t <= FALL_T:
+			bed = lowest  # a level shelf running out to the brink
+		lowest = bed
+		_bed.append(bed)
+	# Ease the last stretch into the sea so it doesn't end on a step.
+	for i in range(STEPS + 1):
+		var t := float(i) / STEPS
+		if t > 0.88:
+			_bed[i] = lerpf(_bed[i], -1.2, smoothstep(0.88, 1.0, t))
+
+
+## The step before the bed exists (used while working the bed out).
+func _raw_scarp(p: Vector2) -> float:
+	return _scarp_at(p, spring + _outflow * (stream_mouth - spring).length() * FALL_T)
+
+
+## The rock step never cuts the hillside below this, so it can't gouge a hole in
+## the island or let the sea in behind the beach.
+const SCARP_FLOOR := 3.0
+
+
+static func _after_scarp(h: float, step: float) -> float:
+	if step <= 0.0:
+		return h
+	return maxf(h - step, minf(h, SCARP_FLOOR))
+
+
+func _scarp_at(p: Vector2, brink: Vector2) -> float:
+	var ahead := (p - brink).dot(_outflow)
+	var across := absf((p - brink).dot(_outflow.orthogonal()))
+	if ahead < -2.0 or ahead > 30.0 or across > FALL_BAND:
+		return 0.0
+	var down := smoothstep(0.0, 5.0, ahead) * (1.0 - smoothstep(13.0, 30.0, ahead))
+	return down * (1.0 - smoothstep(FALL_BAND * 0.5, FALL_BAND, across))
+
+
+## The flattest patch of hillside near the top, for the pool to sit in.
+func _flattest_bench(from: Vector2, bearing: float) -> Vector2:
+	var best := from + Vector2.from_angle(bearing) * 32.0
+	var best_score := INF
+	for i in 24:
+		var angle := bearing + (i % 6 - 2.5) * 0.22
+		var radius := 26.0 + float(i / 6) * 7.0
+		var spot := from + Vector2.from_angle(angle) * radius
+		var middle := _base_height(spot.x, spot.y)
+		var score := 0.0
+		for j in 8:
+			var edge := spot + Vector2.from_angle(TAU * j / 8.0) * POND_RADIUS
+			score += absf(_base_height(edge.x, edge.y) - middle)
+		if score < best_score:
+			best_score = score
+			best = spot
+	return best
+
+
+## The brink and the foot of the waterfall, and which way the water is falling.
+func waterfall() -> Dictionary:
+	var top := stream_point(FALL_T)
+	var foot := stream_point(FALL_T + FALL_SPAN)
+	var direction := (foot - top)
+	if direction.length() < 0.01:
+		direction = _outflow
+	return {
+		"top": Vector3(top.x, stream_bed(FALL_T), top.y),
+		"foot": Vector3(foot.x, stream_bed(FALL_T + FALL_SPAN), foot.y),
+		"direction": direction.normalized(),
+	}
 
 
 ## World position of the stream's centre line at fraction `t`.
