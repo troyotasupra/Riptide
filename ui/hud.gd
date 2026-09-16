@@ -29,6 +29,8 @@ var _sleep_overlay: ColorRect
 var _downed_overlay: ColorRect
 var _downed_label: Label
 var _dev: DevPanel
+var _breath_row: HBoxContainer
+var _underwater: ColorRect
 var _fishing_label: Label
 var _message_log: Array = []
 var _lan_addresses := ""
@@ -82,6 +84,7 @@ func _ready() -> void:
 	_messages.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_KEEP_SIZE, 16)
 	_messages.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 
+	_build_underwater()
 	_build_bars()
 	_build_hotbar()
 
@@ -175,6 +178,16 @@ func _label(font_size: int) -> Label:
 	return label
 
 
+## A wash of blue-green over the screen while your head is under the surface.
+func _build_underwater() -> void:
+	_underwater = ColorRect.new()
+	_underwater.color = Color(0.05, 0.22, 0.32, 0.2)
+	_underwater.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_underwater.visible = false
+	add_child(_underwater)
+	_underwater.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+
 func _build_bars() -> void:
 	var bars := VBoxContainer.new()
 	bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -184,7 +197,8 @@ func _build_bars() -> void:
 			["health", "Health", Color(0.85, 0.25, 0.25)],
 			["hunger", "Food", Color(0.90, 0.60, 0.20)],
 			["thirst", "Water", Color(0.30, 0.60, 0.95)],
-			["stamina", "Stamina", Color(0.90, 0.90, 0.40)]]:
+			["stamina", "Stamina", Color(0.90, 0.90, 0.40)],
+			["breath", "Breath", Color(0.60, 0.85, 1.00)]]:
 		var row := HBoxContainer.new()
 		bars.add_child(row)
 		var name_label := Label.new()
@@ -203,6 +217,10 @@ func _build_bars() -> void:
 		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(bar)
 		_bars[spec[0]] = bar
+		if spec[0] == "breath":
+			# Only shown when you're holding your breath or getting it back.
+			_breath_row = row
+			row.visible = false
 	_temperature = Label.new()
 	_temperature.add_theme_constant_override("outline_size", 5)
 	_temperature.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.8))
@@ -391,6 +409,14 @@ func _process(delta: float) -> void:
 	_bars["hunger"].value = survival.hunger
 	_bars["thirst"].value = survival.thirst
 	_bars["stamina"].value = player.stamina
+	_bars["breath"].value = survival.breath
+	_breath_row.visible = survival.breath < Survival.MAX - 0.5
+	_underwater.visible = player.underwater and not GameState.ui_open
+	if player.underwater and survival.breath < 25.0:
+		# The screen closes in as the air runs out.
+		_underwater.color = Color(0.05, 0.22, 0.32, lerpf(0.5, 0.2, survival.breath / 25.0))
+	else:
+		_underwater.color = Color(0.05, 0.22, 0.32, 0.2)
 	_downed_overlay.visible = player.downed
 	if player.downed:
 		_downed_label.text = "YOU'RE DOWN\nBleeding out in %ds — a crewmate can revive you (hold E on you)" % ceili(player.bleed_left)

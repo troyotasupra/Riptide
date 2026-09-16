@@ -18,6 +18,12 @@ const COLD_FACTOR := 0.4       # degrees of body temp lost per degree of cold, u
 const HEAT_FACTOR := 0.8       # degrees gained per degree of heat, fully insulated
 const TEMP_CHANGE_RATE := 0.05 # fraction of the gap to equilibrium closed per second
 
+## A full lungful lasts this long under water; you get it back three times as
+## fast at the surface, and drown once it's gone.
+const BREATH_SECONDS := 45.0
+const BREATH_RECOVER := 3.0
+const DROWN_DAMAGE := 6.0
+
 const STARVING_DAMAGE := 1.0
 const TEMP_DAMAGE := 1.5
 const REGEN_PER_SEC := 0.5
@@ -30,6 +36,8 @@ var health := MAX
 var hunger := MAX
 var thirst := MAX
 var body_temp := NORMAL_TEMP
+## Air left in your lungs, 0..MAX.
+var breath := MAX
 ## Seconds of sickness left (food poisoning, bad water).
 var sickness := 0.0
 
@@ -70,6 +78,17 @@ func tick(dt: float, env_temp_c: float, insulation: float, exertion: float) -> v
 		health = minf(MAX, health + REGEN_PER_SEC * dt)
 
 
+## Advance breath by `dt`: underwater it runs down and then you drown; at the
+## surface it comes back quickly.
+func breathe(dt: float, underwater: bool) -> void:
+	if underwater:
+		breath = maxf(0.0, breath - MAX / BREATH_SECONDS * dt)
+		if breath <= 0.0:
+			health = maxf(0.0, health - DROWN_DAMAGE * dt)
+	else:
+		breath = minf(MAX, breath + MAX / BREATH_SECONDS * BREATH_RECOVER * dt)
+
+
 func make_sick(seconds: float) -> void:
 	sickness = maxf(sickness, seconds)
 
@@ -95,7 +114,7 @@ func is_dead() -> bool:
 
 
 func to_dict() -> Dictionary:
-	return {"health": health, "hunger": hunger, "thirst": thirst, "body_temp": body_temp, "sickness": sickness}
+	return {"health": health, "hunger": hunger, "thirst": thirst, "body_temp": body_temp, "sickness": sickness, "breath": breath}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -104,3 +123,4 @@ func from_dict(d: Dictionary) -> void:
 	thirst = d.get("thirst", MAX)
 	body_temp = d.get("body_temp", NORMAL_TEMP)
 	sickness = d.get("sickness", 0.0)
+	breath = d.get("breath", MAX)

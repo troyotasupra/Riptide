@@ -40,6 +40,8 @@ var missing_limbs: Array = []
 var prosthetics: Array = []
 ## Developer mode: no hunger, thirst, cold or damage.
 var god := false
+## Host: is this crew member's head under water right now?
+var underwater := false
 ## species id -> {"count", "best" (kg)}
 var fish_log := {}
 
@@ -92,12 +94,16 @@ func host_tick(delta: float) -> void:
 	var chill: float = 0.0 if sheltered or weather == null else float(weather.current.chill)
 	air_temp = EnvironmentTemp.felt_temp(DayNight.daylight(GameState.time_of_day()), wetness, player.swimming, warmth, chill)
 	survival.tick(dt, air_temp, equipment.insulation(), player.exertion)
+	var head := player.world_transform().origin
+	underwater = player.platform == null and Waves.height_at(Vector2(head.x, head.z), Ocean.time) > head.y + Player.EYE_HEIGHT
+	survival.breathe(dt, underwater)
 	if god:
 		survival.health = Survival.MAX
 		survival.hunger = Survival.MAX
 		survival.thirst = Survival.MAX
 		survival.body_temp = Survival.NORMAL_TEMP
 		survival.sickness = 0.0
+		survival.breath = Survival.MAX
 	_spoil_accum += dt
 	if _spoil_accum >= SPOIL_CHECK_SECONDS:
 		_spoil_accum = 0.0

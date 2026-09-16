@@ -12,6 +12,9 @@ const WALK_SPEED := 4.5
 const SPRINT_SPEED := 7.0
 const CROUCH_SPEED := 2.2
 const SWIM_SPEED := 2.8
+## Swimming hard, and how fast you sink or rise while diving.
+const SWIM_SPRINT := 1.7
+const DIVE_SPEED := 2.8
 const GROUND_ACCEL := 14.0
 const AIR_ACCEL := 2.5
 const JUMP_VELOCITY := MovementTuning.JUMP_VELOCITY
@@ -67,6 +70,8 @@ var yaw := 0.0
 var pitch := 0.0
 var stamina := STAMINA_MAX
 var swimming := false
+## The local crew member's eyes are under the surface.
+var underwater := false
 var crouching := false
 var paddling := false
 ## 0 resting .. 1 sprinting or swimming hard; drives hunger and thirst on the host.
@@ -585,6 +590,8 @@ func _local_physics(delta: float) -> void:
 		swimming = depth > SWIM_EXIT_DEPTH
 	else:
 		swimming = depth > SWIM_DEPTH
+	# The same rule the host uses: your eyes, at standing height, are under the surface.
+	underwater = platform == null and depth > EYE_HEIGHT
 	if swimming and not _was_swimming:
 		Sound.play("splash", -4.0)
 	_was_swimming = swimming
@@ -596,7 +603,7 @@ func _local_physics(delta: float) -> void:
 		and not crouching and not swimming and stamina > 0.0 and not downed and limb_speed > 0.8
 	var speed := WALK_SPEED
 	if swimming:
-		speed = SWIM_SPEED
+		speed = SWIM_SPEED * (SWIM_SPRINT if sprinting else 1.0)
 	elif crouching:
 		speed = CROUCH_SPEED
 	elif sprinting:
@@ -611,7 +618,7 @@ func _local_physics(delta: float) -> void:
 	elif power_stroke:
 		stamina -= RowMath.POWER_STAMINA_COST * drain * delta
 	elif swimming and moving:
-		stamina -= SWIM_COST * drain * delta
+		stamina -= SWIM_COST * drain * delta * (2.0 if sprinting else 1.0)
 	elif rowing_now:
 		stamina += RowMath.ROWING_STAMINA_REGEN * delta
 	else:
@@ -637,8 +644,17 @@ func _local_physics(delta: float) -> void:
 
 	var jump := (active and not downed and Input.is_action_just_pressed("jump")) or (not GameState.autopilot.is_empty() and swimming)
 	if swimming:
-		velocity.y = lerpf(velocity.y, (depth - SWIM_FLOAT_DEPTH) * 3.0, 1.0 - exp(-4.0 * delta))
-		if jump and stamina > SWIM_JUMP_COST:
+		var diving := active and Input.is_action_pressed("crouch")
+		var deep := depth > _eye_height + 0.3
+		if diving:
+			velocity.y = lerpf(velocity.y, -DIVE_SPEED, 1.0 - exp(-5.0 * delta))
+		elif deep and Input.is_action_pressed("jump") and active:
+			velocity.y = lerpf(velocity.y, DIVE_SPEED, 1.0 - exp(-5.0 * delta))
+		else:
+			# Float back up to the surface, but never rocket out of a deep dive.
+			velocity.y = lerpf(velocity.y, clampf((depth - SWIM_FLOAT_DEPTH) * 3.0, -4.0, 4.0), 1.0 - exp(-4.0 * delta))
+		# At the surface, jump is the heave out of the water onto a deck or rock.
+		if jump and not deep and stamina > SWIM_JUMP_COST:
 			velocity.y = SWIM_JUMP_VELOCITY
 			stamina -= SWIM_JUMP_COST
 			swimming = false

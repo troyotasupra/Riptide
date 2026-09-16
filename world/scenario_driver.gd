@@ -592,6 +592,21 @@ func _walk_loop() -> void:
 	player.unstuck()
 	_check(not player._overlapping(), "and the Unstuck button frees them at once")
 
+	# Diving: down, breath running out, and back up.
+	var s := player.survivor
+	var sea: Vector2 = world.camp_island.center * 0.5
+	player.teleport(Vector3(sea.x, 0.6, sea.y))
+	await _wait(2.5)
+	_check(player.swimming, "swimming out in open water")
+	var air := s.survival.breath
+	await _hold("crouch", 8.0)
+	_check(player.underwater, "holding crouch takes you under the surface")
+	_check(s.survival.breath < air - 12.0, "and your breath runs down (%.0f)" % s.survival.breath)
+	var spent := s.survival.breath
+	await _wait(12.0)
+	_check(not player.underwater, "let go and you come back up")
+	_check(s.survival.breath > spent + 6.0, "and get your breath back (%.0f)" % s.survival.breath)
+
 	var low: float = await _ledge_walk(0.45)
 	_check(low > 3.0, "stepped up over a 45 cm ledge (walked %.1f m)" % low)
 	var wall: float = await _ledge_walk(1.4)
