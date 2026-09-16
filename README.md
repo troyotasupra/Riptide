@@ -41,8 +41,8 @@ private networks.
 | Keyboard / mouse | Controller | Action |
 | --- | --- | --- |
 | WASD / mouse | Left / right stick | Move / look |
-| Space | A | Jump · climb out of water |
-| C | B | Crouch |
+| Space | A | Jump · swim up when deep · climb out of water |
+| C | B | Crouch · dive while swimming |
 | Shift | L3 | Sprint · pull hard while rowing |
 | E (hold) | X (hold) | Interact · gather |
 | Left click | RT | Use item · swing a tool · build |
@@ -62,6 +62,10 @@ private networks.
 | F1 | — | Developer panel (developer mode only) |
 | V | — | Fly (developer mode only) — Space up, C down, Shift fast |
 
+The sea is calm in the shallows — coves, the dock, the beach — and gets rougher the
+further out you go, roughest of all in a storm. On the camp island a pool sits high
+on the hill and its stream falls over a rock band all the way down to the sea.
+
 Sharks patrol the open water between the islands and the reef. They only go after
 people in the water — never anyone aboard a boat, never in the shallows. Strike
 them with a spear, machete, hatchet or knife (look at one, left click); a dead
@@ -75,12 +79,23 @@ Rowing: plain strokes cost no stamina (you even catch your breath slowly); Shift
 pulls harder for about 20 seconds of a full stamina bar. Two crewmates sitting on
 opposite sides each work their own side's oar.
 
+Swimming: hold C to dive and Space to swim back up, Shift to swim hard. Your breath
+lasts about 45 seconds under water and comes back quickly at the surface — run out
+and you drown. Stuck in the ground? Esc → Unstuck (and anyone wedged by terrain
+loading around them is freed automatically).
+
+Cooking: press E on a fire, the stove or a drying rack with an empty hand to see
+what's on it — each slot shows what it's becoming and how long it has left, and you
+can take one thing or everything. Hold food, water or firewood and press E to put
+something on, or to light it.
+
 Fishing: with the rod in hand, hold left click to charge a cast and let go over
 water. Right click picks the bait: grubs (found when you chop trees), berries and
 cut bait (knife a sardine or mullet into 4) are used up; a lure or a jig is kept
 unless the line snaps. When the bobber dips, click to strike, then hold to reel and
 ease off while the fish pulls — too much tension snaps the line, too much slack
-and it throws the hook. What bites depends on the water (shore, reef, deep), the
+and it throws the hook. Reel it all the way in and it lands at your feet, flopping:
+press E once to kill it, again to take it. What bites depends on the water (shore, reef, deep), the
 bait, the time of day and the weather: sardines, mullet and pufferfish near shore,
 snapper, grouper and barracuda on the reef, mahi-mahi and tuna out deep. Every
 species you land goes in the fish log in the book. Out deep a shark may take the
@@ -118,7 +133,9 @@ island → raft → rowing → john boat), `-- --host --profile=testhost --spawn
 tools, flying, weather and wind, rain, fishing), `--scenario=sharks --spawn=camp`.
 Start the host with `--dev` and the `client` run checks developer mode from a crew member too.
 Screenshots: `--scenario=dock|structures|lineup|inventory` with `--shot=file.png`, and
-`--scenario=look --face=tree|tree_under|palm|palm_top|bush|fiber|storm|dev|fishing|fish`.
+`--scenario=look --face=tree|tree_under|palm|palm_top|bush|fiber|shore|spring|waterfall|shackdoor|storm|dev|fishing|fish|cooking`.
+`--scenario=walk` covers getting about on foot: stepping over ledges, the shack door,
+being freed when stuck, diving and breath.
 Add `--mute` to silence a run (`--no-focus` runs are always muted).
 Test runs use their own save file and profiles, never your real ones.
 
