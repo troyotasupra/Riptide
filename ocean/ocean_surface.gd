@@ -36,6 +36,10 @@ func _process(_delta: float) -> void:
 		_far.global_position = Vector3(snappedf(p.x, FAR_STEP), FAR_DEPTH, snappedf(p.z, FAR_STEP))
 	_near_material.set_shader_parameter("wave_time", Ocean.time)
 	_near_material.set_shader_parameter("storm", Waves.storm)
+	if ShelterMap.texture != null:
+		_near_material.set_shader_parameter("shelter_map", ShelterMap.texture)
+		_near_material.set_shader_parameter("shelter_rect", Vector4(
+			ShelterMap.rect.position.x, ShelterMap.rect.position.y, ShelterMap.rect.size.x, ShelterMap.rect.size.y))
 	_update_hull_masks()
 
 

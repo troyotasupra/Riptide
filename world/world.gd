@@ -93,6 +93,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	ShelterMap.clear()
 	if GameState.world == self:
 		GameState.world = null
 	GameState.ui_open = false
@@ -264,6 +265,14 @@ func _generate() -> void:
 	add_child(sharks)
 
 	camp.create_pickups(camp_island)
+	_build_shelter_map()
+
+
+## Calms the sea in the shallows around both islands (see ShelterMap).
+func _build_shelter_map() -> void:
+	var reach := CampIsland.DISTANCE_FROM_START + CampIsland.RADIUS * 2.0
+	var size := reach * 2.0
+	ShelterMap.build(ground_height, Rect2(-reach, -reach, size, size), 256)
 
 
 func _on_welcomed() -> void:

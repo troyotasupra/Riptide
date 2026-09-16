@@ -31,6 +31,8 @@ func _run() -> void:
 			await _shark_loop()
 		"outdoors":
 			await _outdoors_loop()
+		"walk":
+			await _walk_loop()
 		"dock":
 			_dock_view()
 			return  # stays up for a --shot screenshot
@@ -560,8 +562,81 @@ func _outdoors_loop() -> void:
 	_check(Dictionary(saved.get("players", {}).get(player.player_id, {}).get("fish_log", {})).has(cast.get("species", "")) or not s.fish_log.is_empty(), "and your fish log")
 
 
+## Getting about on foot: in through the shack door, over a low ledge, and stopped
+## by a real wall.
+func _walk_loop() -> void:
+	var world := GameState.world
+	var camp: CampSystems = world.camp
+	var player := GameState.local_player as Player
+	var xf: Transform3D = camp.shack.xf
+	player.teleport(xf * Vector3(0.0, 0.8, -4.4))
+	var facing: Vector3 = xf.basis * Vector3(0.0, 0.0, 1.0)
+	player.yaw = atan2(-facing.x, -facing.z)
+	await _wait(1.5)
+	_check(not camp.in_shack(player.world_transform().origin), "start outside the shack, on the sand")
+	await _hold("move_forward", 3.5)
+	_check(camp.in_shack(player.world_transform().origin), "walked in through the door without jumping")
+
+	# Buried in the hillside: freed without touching anything.
+	var hill: Vector2 = world.camp_island.hill
+	player.teleport(Vector3(hill.x, world.camp_island.height_at(hill.x, hill.y) - 2.5, hill.y))
+	await _wait(2.0)
+	_check(not player._overlapping(), "someone buried in the hill is freed automatically")
+	var stand_ground: float = world.camp_island.height_at(player.global_position.x, player.global_position.z)
+	# The collision mesh is tessellated, so on a steep slope it sits a little below
+	# the analytic height; what matters is being out of the rock and on your feet.
+	_check(player.global_position.y > stand_ground - 1.5 and player.is_on_floor(),
+		"and ends up standing on top of it (y %.2f, ground %.2f)" % [player.global_position.y, stand_ground])
+	player.teleport(Vector3(hill.x, world.camp_island.height_at(hill.x, hill.y) - 2.5, hill.y))
+	await _wait(0.2)
+	player.unstuck()
+	_check(not player._overlapping(), "and the Unstuck button frees them at once")
+
+	var low: float = await _ledge_walk(0.45)
+	_check(low > 3.0, "stepped up over a 45 cm ledge (walked %.1f m)" % low)
+	var wall: float = await _ledge_walk(1.4)
+	_check(wall < 2.6, "but a 1.4 m wall still stops you (walked %.1f m)" % wall)
+
+
+func _hold(action: String, seconds: float) -> void:
+	Input.action_press(action)
+	await _wait(seconds)
+	Input.action_release(action)
+
+
+## Drops a `height` step in the player's path on the beach and walks into it for
+## three seconds; returns how far they got.
+func _ledge_walk(height: float) -> float:
+	var world := GameState.world
+	var player := GameState.local_player as Player
+	player.teleport(world.camp_beach_point(0) + Vector3.UP * 0.6)
+	await _wait(1.2)
+	var start := player.global_position
+	var inland := Vector3(world.camp_island.center.x, start.y, world.camp_island.center.y) - start
+	inland.y = 0.0
+	inland = inland.normalized()
+	player.yaw = atan2(-inland.x, -inland.z)
+	var body := StaticBody3D.new()
+	body.collision_layer = Layers.WORLD
+	body.collision_mask = 0
+	var box := BoxShape3D.new()
+	box.size = Vector3(8.0, height, 0.6)
+	var collider := CollisionShape3D.new()
+	collider.shape = box
+	body.add_child(collider)
+	world.add_child(body)
+	# start is the capsule's centre, so the ground is half the player's height below it.
+	body.global_position = start + inland * 2.2 + Vector3.UP * (height * 0.5 - 0.9)
+	body.global_rotation.y = player.yaw
+	await _hold("move_forward", 3.0)
+	var travelled := Vector2(player.global_position.x - start.x, player.global_position.z - start.z).length()
+	body.queue_free()
+	return travelled
+
+
 ## Visual checks, one per --face: tree, tree_under, palm, palm_top, bush, fiber
-## (props up close, at midday), storm (rain and rough water from the dock), dev (the
+## (props up close, at midday), shore (the waterline), spring (the pond), shackdoor
+## (the way in), storm (rain and rough water from the dock), dev (the
 ## developer panel), fishing (a line out off the dock, first person), fish (every
 ## species and bait in the inventory).
 func _look() -> void:
@@ -606,6 +681,28 @@ func _look() -> void:
 			get_tree().process_frame.connect(func() -> void:
 				if player.angler.state == Angler.State.WAITING:
 					player.angler._bite_in = INF)
+		"shore":
+			var island: CampIsland = world.camp_island
+			for label: Array in [["dock end", Vector2(camp.shack.dock_end.x, camp.shack.dock_end.z)],
+					["cove", island.cove], ["100 m out", island.cove + Vector2.from_angle(island.cove_bearing) * 100.0],
+					["open sea", island.center * 0.5]]:
+				var at: Vector2 = label[1]
+				print("[shelter] %s: depth %.1f m, openness %.2f, roughness %.2f" % [label[0],
+					-world.ground_height(at.x, at.y), ShelterMap.value(at), Waves.roughness(at)])
+			var out2 := Vector2.from_angle(island.cove_bearing)
+			var beach := island.cove + out2.orthogonal() * 16.0
+			var eye2 := beach - out2 * 5.0
+			_fixed_camera(Vector3(eye2.x, island.height_at(eye2.x, eye2.y) + 3.5, eye2.y),
+				Vector3(island.cove.x + out2.x * 16.0, -0.4, island.cove.y + out2.y * 16.0))
+		"spring":
+			var island2: CampIsland = world.camp_island
+			var from_hill := (island2.spring - island2.hill).normalized()
+			var eye3 := island2.spring + from_hill * 15.0
+			_fixed_camera(Vector3(eye3.x, island2.spring_height + 7.0, eye3.y),
+				Vector3(island2.spring.x, island2.spring_height, island2.spring.y))
+		"shackdoor":
+			var xf2: Transform3D = camp.shack.xf
+			_fixed_camera(xf2 * Vector3(0.0, 1.5, -5.0), xf2 * Vector3(0.0, 0.6, 0.5))
 		"fish":
 			s.equipment.wear({"id": "daypack", "count": 1, "spoils_at": 0.0})
 			s.refresh_storage()

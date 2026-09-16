@@ -19,6 +19,11 @@ func _ready() -> void:
 	_invite = UiKit.label(box, "", true)
 	UiKit.button(box, "Resume", func() -> void: resume_requested.emit())
 	UiKit.button(box, "Settings", func() -> void: settings_requested.emit())
+	UiKit.button(box, "Unstuck", func() -> void:
+		var player := GameState.local_player as Player
+		if player != null:
+			player.unstuck()
+		resume_requested.emit())
 	UiKit.button(box, "Controls", func() -> void: _controls.visible = not _controls.visible)
 	_controls = UiKit.label(box, "")
 	_controls.visible = false

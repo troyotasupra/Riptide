@@ -22,6 +22,10 @@ const ROUGH_DISTANCE := 1500.0  # metres from origin to reach roughness 1.0
 ## A full storm adds this much roughness everywhere, never past STORM_MAX_ROUGHNESS.
 const STORM_ROUGHNESS := 0.45
 const STORM_MAX_ROUGHNESS := 2.0
+## How much of the open sea's swell reaches fully sheltered water (a cove, the
+## dock, the shallows). A storm pushes a little more of it in.
+const SHELTER_CALM := 0.1
+const SHELTER_STORM := 0.3
 
 ## 0 calm .. 1 full storm. Set every frame by the weather (the shader gets the same value).
 static var storm := 0.0
@@ -29,7 +33,9 @@ static var storm := 0.0
 
 static func roughness(xz: Vector2) -> float:
 	var base := clampf(CALM_ROUGHNESS + xz.length() / ROUGH_DISTANCE, CALM_ROUGHNESS, MAX_ROUGHNESS)
-	return minf(base + storm * STORM_ROUGHNESS, STORM_MAX_ROUGHNESS)
+	var open := minf(base + storm * STORM_ROUGHNESS, STORM_MAX_ROUGHNESS)
+	var lee := minf(1.0, SHELTER_CALM + storm * SHELTER_STORM)
+	return open * lerpf(lee, 1.0, ShelterMap.value(xz))
 
 
 ## Displacement of the undisturbed surface point at `xz` at time `t`.

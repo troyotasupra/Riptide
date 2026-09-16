@@ -47,6 +47,9 @@ const SWING_TOOLS := ["knife", "machete", "hatchet", "spear"]
 const SWING_SECONDS := 0.55
 const CRAWL_SPEED := 1.1
 const FLY_SPEED := 9.0
+## Anything up to this high is stepped over rather than walked into: doorsills,
+## kerbs, rocks, the shack's steps.
+const STEP_HEIGHT := 0.55
 const DOWNED_EYE_HEIGHT := 0.45
 ## After running out of breath, hard strokes wait until stamina is back to this.
 const WINDED_RECOVER := 20.0
@@ -97,6 +100,7 @@ var missing_limbs: Array = []
 var prosthetics: Array = []
 ## Developer mode: flying through everything, and god mode's endless stamina.
 var flying := false
+var _wedged_for := 0.0
 var god := false
 var angler: Angler
 var _target_pos := Vector3.ZERO
@@ -645,7 +649,10 @@ func _local_physics(delta: float) -> void:
 		var gravity := GRAVITY * (FALL_MULTIPLIER if velocity.y < 0.0 else 1.0)
 		velocity.y -= gravity * delta
 
+	# Walking into a wall zeroes the velocity, so remember where we meant to go.
+	var intent := Vector3(velocity.x, 0.0, velocity.z) * delta
 	move_and_slide()
+	_step_up(intent)
 
 	if platform != null:
 		_check_leave_deck()
@@ -653,12 +660,92 @@ func _local_physics(delta: float) -> void:
 		_try_board()
 	if GameState.autopilot == "stress":
 		_track_stress(delta)
+	_check_wedged(delta)
 	_footsteps(delta, Vector2(velocity.x, velocity.z).length(), is_on_floor() and not swimming)
 	_update_focus()
 	_update_give_target()
 	_update_hold(delta)
 	_update_placement()
 	_finish_tick()
+
+
+## Is the body wedged inside something right now?
+func _overlapping() -> bool:
+	return test_move(global_transform, Vector3.UP * 0.001, null, 0.001, true)
+
+
+## Frees a crew member stuck inside terrain or scenery: the nearest clear spot,
+## searching around and above them, else the nearest beach. The Esc menu's
+## Unstuck button calls this, and a wedged player is freed automatically.
+func unstuck() -> void:
+	if platform != null:
+		leave_platform()
+	var world := GameState.world
+	var here := global_position
+	for radius: float in [0.0, 1.2, 2.5, 4.0, 7.0]:
+		var steps := 1 if radius == 0.0 else 8
+		for i in steps:
+			var angle := TAU * i / float(steps)
+			var xz := Vector2(here.x, here.z) + Vector2.from_angle(angle) * radius
+			var ground: float = world.ground_height(xz.x, xz.y) if world != null else -INF
+			if ground == -INF or ground < 0.2:
+				continue  # water, not somewhere to stand
+			for up: float in [0.1, 0.6, 1.5, 3.0]:
+				var candidate := Vector3(xz.x, ground + up, xz.y)
+				if not test_move(Transform3D(global_transform.basis, candidate), Vector3.UP * 0.001, null, 0.001, true):
+					_place_at(candidate)
+					return
+	if world != null:
+		_place_at(world.spawn_point(0) + Vector3.UP * 0.5)
+
+
+func _place_at(position: Vector3) -> void:
+	global_position = position
+	velocity = Vector3.ZERO
+	reset_physics_interpolation()
+	if survivor != null:
+		survivor.notified.emit("Unstuck.")
+
+
+## Character bodies slide along anything vertical, so a 15 cm doorsill or a rock
+## stops you dead. When a wall blocks us at foot height, try lifting over it:
+## up, forward, then back down onto whatever is there.
+func _step_up(motion: Vector3) -> void:
+	if platform != null or swimming or flying or downed or not is_on_floor():
+		return
+	if motion.length() < 0.004:
+		return
+	var from := global_transform
+	if not test_move(from, motion):
+		return  # the way ahead is clear
+	var lift := Vector3.UP * STEP_HEIGHT
+	if test_move(from, lift):
+		return  # no headroom to step up into
+	var lifted := from.translated(lift)
+	if test_move(lifted, motion):
+		return  # it's a wall, not a step
+	var landing := KinematicCollision3D.new()
+	if not test_move(lifted.translated(motion), Vector3.DOWN * (STEP_HEIGHT + 0.02), landing):
+		return  # a gap, not a step: let the fall happen normally
+	if landing.get_normal().y < cos(floor_max_angle):
+		return  # the far side is too steep to stand on
+	global_position = lifted.origin + motion + Vector3.DOWN * landing.get_travel().length()
+	# Keep walking: the wall we just climbed took our speed away.
+	velocity.x = motion.x / maxf(get_physics_process_delta_time(), 0.0001)
+	velocity.z = motion.z / maxf(get_physics_process_delta_time(), 0.0001)
+
+
+## Props and terrain build over the first few frames after a world loads, and a
+## collider can appear around someone standing there. Anyone left inside solid
+## ground for a moment is freed rather than left to wriggle.
+func _check_wedged(delta: float) -> void:
+	if flying or platform != null or not _overlapping():
+		_wedged_for = 0.0
+		return
+	_wedged_for += delta
+	if _wedged_for > 0.75:
+		_wedged_for = 0.0
+		unstuck()
 
 
 func _finish_tick() -> void:

@@ -16,6 +16,7 @@ var _port_edit: LineEdit
 var _status: Label
 var _creator: CharacterCreator
 var _settings: SettingsPanel
+var _dev_toggle: CheckBox
 var _seed_override := 0
 
 
@@ -54,6 +55,7 @@ func _build_ui() -> void:
 	UiKit.button(profile_row, "Character", _open_creator).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UiKit.button(profile_row, "Settings", _open_settings).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var dev_toggle := CheckBox.new()
+	_dev_toggle = dev_toggle
 	dev_toggle.text = "Developer mode when hosting  (F1 menu · V fly)"
 	dev_toggle.button_pressed = Settings.developer_mode
 	dev_toggle.toggled.connect(func(on: bool) -> void:
@@ -174,7 +176,9 @@ func _apply_command_line() -> void:
 		Settings.apply()
 	GameState.free_mouse = args.has("free-mouse")
 	if args.has("dev"):
+		# Show it ticked for this run, but don't save it: --dev is for one launch.
 		Settings.developer_mode = true
+		_dev_toggle.set_pressed_no_signal(true)
 	if args.has("autopilot"):
 		GameState.autopilot = "board" if String(args["autopilot"]).is_empty() else String(args["autopilot"])
 	GameState.spawn_override = args.get("spawn", "")

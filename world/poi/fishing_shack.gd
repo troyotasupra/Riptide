@@ -83,7 +83,7 @@ static func build(shape: CampIsland) -> Node3D:
 	var shack := layout(shape)
 	var root := Node3D.new()
 	root.name = "FishingShack"
-	root.add_child(_hut(shack))
+	root.add_child(_hut(shape, shack))
 	root.add_child(_dock(shape, shack))
 	return root
 
@@ -119,7 +119,7 @@ static func _post(parent: Node3D, from: Vector3, to: Vector3, radius: float, mat
 	parent.add_child(visual)
 
 
-static func _hut(shack: Dictionary) -> Node3D:
+static func _hut(shape: CampIsland, shack: Dictionary) -> Node3D:
 	var node := Node3D.new()
 	node.name = "Hut"
 	node.transform = shack.xf
@@ -136,8 +136,18 @@ static func _hut(shack: Dictionary) -> Node3D:
 	for cx: float in [-1.0, 1.0]:
 		for cz: float in [-1.0, 1.0]:
 			_post(node, Vector3(cx * (half.x - 0.1), -lift - 0.4, cz * (half.z - 0.1)), Vector3(cx * (half.x - 0.1), 0.0, cz * (half.z - 0.1)), 0.09, dark)
-	_box(node, Vector3(1.3, 0.1, 0.45), Vector3(0.0, -0.2, -half.z - 0.3), dark, true)
-	_box(node, Vector3(1.3, 0.1, 0.45), Vector3(0.0, -0.42, -half.z - 0.7), dark, true, Vector3.ZERO)
+	# Steps out from the door, following the sand down however far it falls away,
+	# so you walk in instead of jumping the doorsill.
+	var base := Transform3D(shack.xf)
+	var tread := 0.0
+	for i in 10:
+		var z := -half.z - 0.28 - i * 0.44
+		var spot: Vector3 = base * Vector3(0.0, 0.0, z)
+		var sand: float = shape.height_at(spot.x, spot.z) - base.origin.y
+		tread = maxf(tread - 0.24, sand + 0.1)
+		_box(node, Vector3(1.4, 0.14, 0.52), Vector3(0.0, tread - 0.07, z), dark, true)
+		if tread <= sand + 0.14:
+			break
 
 	# Walls: plank siding with battens, a doorway facing the sea, a window.
 	var wall := 0.1

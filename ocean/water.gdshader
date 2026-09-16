@@ -19,6 +19,25 @@ const float MAX_ROUGHNESS = 1.6;
 const float ROUGH_DISTANCE = 1500.0;
 const float STORM_ROUGHNESS = 0.45;
 const float STORM_MAX_ROUGHNESS = 2.0;
+// Sheltered water (coves, the dock, the shallows); must match Waves.
+const float SHELTER_CALM = 0.1;
+const float SHELTER_STORM = 0.3;
+
+// Openness of the sea: 0 in the shallows, 1 out in open water. Built by ShelterMap.
+uniform sampler2D shelter_map : filter_linear, repeat_disable, hint_default_white;
+// World area the map covers: x, z, size_x, size_z (size 0 = no map, all open sea).
+uniform vec4 shelter_rect = vec4(0.0);
+
+float shelter(vec2 xz) {
+	if (shelter_rect.z <= 0.0 || shelter_rect.w <= 0.0) {
+		return 1.0;
+	}
+	vec2 uv = (xz - shelter_rect.xy) / shelter_rect.zw;
+	if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) {
+		return 1.0;
+	}
+	return texture(shelter_map, uv).r;
+}
 const vec4 WAVES[4] = vec4[4](
 	vec4(1.0, 0.0, 0.18, 38.0),
 	vec4(0.7, 0.7, 0.14, 22.0),
@@ -35,10 +54,13 @@ uniform vec3 hull_max[4];
 
 varying float v_height;
 varying float v_amplitude;
+varying float v_shelter;
 
 float roughness(vec2 xz) {
 	float base = clamp(CALM_ROUGHNESS + length(xz) / ROUGH_DISTANCE, CALM_ROUGHNESS, MAX_ROUGHNESS);
-	return min(base + storm * STORM_ROUGHNESS, STORM_MAX_ROUGHNESS);
+	float open = min(base + storm * STORM_ROUGHNESS, STORM_MAX_ROUGHNESS);
+	float lee = min(1.0, SHELTER_CALM + storm * SHELTER_STORM);
+	return open * mix(lee, 1.0, shelter(xz));
 }
 
 vec3 displacement(vec2 xz, float t) {
@@ -67,7 +89,8 @@ void vertex() {
 	for (int i = 0; i < 4; i++) {
 		amplitude += WAVES[i].z * WAVES[i].w / TAU;
 	}
-	v_amplitude = amplitude * roughness(world.xz);
+	v_amplitude = max(amplitude * roughness(world.xz), 0.05);
+	v_shelter = shelter(world.xz);
 }
 
 void fragment() {
@@ -83,6 +106,8 @@ void fragment() {
 	float h = clamp(v_height / v_amplitude * 0.5 + 0.5, 0.0, 1.0);
 	float crest = smoothstep(0.72, 0.95, h);
 	vec3 color = mix(deep_color.rgb, shallow_color.rgb, h);
+	// Sheltered shallows read as clear turquoise over sand.
+	color = mix(color, shallow_color.rgb * 1.35, (1.0 - v_shelter) * 0.85);
 	// Storms turn the sea grey-green and whip up more foam.
 	color = mix(color, vec3(0.16, 0.24, 0.27), storm * 0.45);
 	ALBEDO = mix(color, foam_color.rgb, clamp(crest * (0.75 + storm * 0.6), 0.0, 1.0));
