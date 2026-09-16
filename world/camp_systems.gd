@@ -8,6 +8,7 @@ extends Node3D
 ## applies every drag-and-drop item move. Clients keep mirrors and send requests.
 
 signal container_opened(id: String, title: String)
+signal cooking_opened(station_id: String, title: String)
 signal container_changed(id: String)
 signal container_closed(id: String)
 signal recipes_changed
@@ -20,6 +21,10 @@ const STATION_TICK := 1.0
 const SPOIL_CHECK := 5.0
 const AUTOSAVE_SECONDS := 120.0
 const STRUCTURE_REACH := 7.0
+## Pushing a finished boat in: how far back up the beach it can start, and how
+## hard the crew shove it.
+const LAUNCH_RUN := 9.0
+const LAUNCH_SPEED := 5.5
 const SLEEP_HUNGER := 15.0
 const SLEEP_THIRST := 20.0
 const SLEEP_HEAL := 30.0
@@ -596,6 +601,84 @@ func open_container_for(survivor: Survivor, id: String) -> void:
 	_send_container(id, peer, true)
 
 
+## Shows `survivor` what's cooking at `id`.
+func open_cooking_for(survivor: Survivor, id: String, title: String = "") -> void:
+	if not stations.has(id):
+		return
+	if title.is_empty():
+		title = station_title(id)
+	var peer := survivor.player.peer_id
+	if peer == multiplayer.get_unique_id():
+		cooking_opened.emit(id, title)
+	else:
+		_open_cooking.rpc_id(peer, id, title)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _open_cooking(id: String, title: String) -> void:
+	cooking_opened.emit(id, title)
+
+
+## Takes one finished thing off a station (index -1 takes everything that's ready).
+@rpc("any_peer", "call_local", "reliable")
+func request_take_cooked(id: String, index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender == 0:
+		sender = multiplayer.get_unique_id()
+	var player := world.players_root.get_node_or_null(str(sender)) as Player
+	var station: CookStation = stations.get(id)
+	if player == null or player.survivor == null or station == null:
+		return
+	var at := player.world_transform().origin
+	var where := station_position(id)
+	if where != Vector3.INF and at.distance_to(where) > STRUCTURE_REACH:
+		return
+	var survivor := player.survivor
+	var now: float = Ocean.time
+	var taken: PackedStringArray = []
+	for i in CookStation.SLOTS:
+		if index >= 0 and i != index:
+			continue
+		var slot = station.slots[i]
+		if slot == null or now < float(slot.done_at):
+			continue
+		var result := String(slot.result)
+		if survivor.inventory.add(result, 1, now) > 0:
+			survivor.notify("You have no room for the %s." % ItemTable.display_name(result).to_lower())
+			continue
+		station.slots[i] = null
+		taken.append(ItemTable.display_name(result))
+	if taken.is_empty():
+		return
+	survivor.notify("Took " + ", ".join(taken))
+	world.sfx_at("pot", where if where != Vector3.INF else at)
+	survivor.push_inventory()
+	_broadcast_station(id)
+
+
+## What to call a station in the cooking panel.
+func station_title(id: String) -> String:
+	if id == "shack:stove":
+		return "Wood stove"
+	if id.begins_with("struct:"):
+		var structure: Dictionary = structures.get(id.substr(7), {})
+		var kind: String = structure.get("type", "")
+		return String(StructureTable.TYPES.get(kind, {}).get("name", "Fire"))
+	return "Fire"
+
+
+## Where a station stands, or Vector3.INF if we can't say.
+func station_position(id: String) -> Vector3:
+	if id.begins_with("struct:"):
+		var node: Node3D = structure_nodes.get(id.substr(7))
+		return node.global_position if node != null else Vector3.INF
+	if id == "shack:stove" and not shack.is_empty():
+		return shack.parts.get("stove", Vector3.INF)
+	return Vector3.INF
+
+
 func forget_peer(peer_id: int) -> void:
 	sleeping.erase(peer_id)
 	_open_by_peer.erase(peer_id)
@@ -688,20 +771,12 @@ func _use_station(survivor: Survivor, id: String, slot: int, at: Vector3) -> voi
 		return
 	var now: float = Ocean.time
 	var pack := survivor.inventory
-	if station.has_done(now):
-		var names: PackedStringArray = []
-		for result in station.take_done(now):
-			if pack.add(result, 1, now) > 0:
-				survivor.notify("You have no room — the %s is ruined." % ItemTable.display_name(result).to_lower())
-			else:
-				names.append(ItemTable.display_name(result))
-		if not names.is_empty():
-			survivor.notify("Took " + ", ".join(names))
-			world.sfx_at("pot", at)
-		survivor.push_inventory()
-		_broadcast_station(id)
-		return
 	var held = pack.hotbar[slot]
+	if held == null:
+		# Empty-handed: strike a light if it needs one, otherwise see what's on.
+		if not _light_station(survivor, station, id, at, true):
+			open_cooking_for(survivor, id)
+		return
 	var held_id: String = "" if held == null else held.id
 	var item := ItemTable.get_item(held_id)
 	if station.needs_fire() and item.has("fuel"):
@@ -727,25 +802,37 @@ func _use_station(survivor: Survivor, id: String, slot: int, at: Vector3) -> voi
 			survivor.notify("There's no room for more.")
 		return
 	if station.needs_fire() and not station.lit:
-		if station.fuel <= 0.0:
-			survivor.notify("Hold driftwood or a log and press on it to add fuel.")
-			return
-		var lighter := pack.find_first("lighter")
-		if lighter.is_empty():
-			survivor.notify("You need something to light it with.")
-			return
-		station.light()
-		lighter.uses = int(lighter.get("uses", 1)) - 1
-		if lighter.uses <= 0:
-			pack.take(int(lighter.uid))
-			survivor.notify("The fire catches — and the lighter sputters out for good.")
-		else:
-			survivor.notify("The fire catches. (Lighter: %d uses left)" % lighter.uses)
-		world.sfx_at("stone", at)
-		survivor.push_inventory()
-		_broadcast_station(id)
+		_light_station(survivor, station, id, at, false)
 		return
 	survivor.notify("Hold food to cook, water to boil, or wood to burn — then press on it.")
+
+
+## Tries to light `station` with a lighter from the pack. `quiet` keeps it silent
+## when there's nothing to light, so pressing on a burning fire opens it instead.
+func _light_station(survivor: Survivor, station: CookStation, id: String, at: Vector3, quiet: bool) -> bool:
+	if not station.needs_fire() or station.lit:
+		return false
+	var pack := survivor.inventory
+	if station.fuel <= 0.0:
+		if not quiet:
+			survivor.notify("Hold driftwood or a log and press on it to add fuel.")
+		return false
+	var lighter := pack.find_first("lighter")
+	if lighter.is_empty():
+		if not quiet:
+			survivor.notify("You need something to light it with.")
+		return false
+	station.light()
+	lighter.uses = int(lighter.get("uses", 1)) - 1
+	if lighter.uses <= 0:
+		pack.take(int(lighter.uid))
+		survivor.notify("The fire catches — and the lighter sputters out for good.")
+	else:
+		survivor.notify("The fire catches. (Lighter: %d uses left)" % lighter.uses)
+	world.sfx_at("stone", at)
+	survivor.push_inventory()
+	_broadcast_station(id)
+	return true
 
 
 func _check_sleep() -> void:
@@ -1260,11 +1347,19 @@ func _launch(survivor: Survivor, id: String, entry: Dictionary) -> void:
 		if clear:
 			break
 		pos += sideways * 4.5
-	var xf := Transform3D(Basis(Vector3.UP, atan2(-dir.x, -dir.y)), pos)
-	world.launch_boat(StructureTable.get_type(entry.type).get("launches", "raft"), xf)
+	# It starts where it was built and is shoved down the sand into the water,
+	# rather than appearing out there already afloat.
+	var start: Vector3 = entry.pos
+	start.y = maxf(start.y, pos.y) + 0.25
+	if Vector2(start.x - pos.x, start.z - pos.z).length() > LAUNCH_RUN:
+		start = pos + Vector3(-dir.x, 0.0, -dir.y) * LAUNCH_RUN + Vector3.UP * 0.25
+	var xf := Transform3D(Basis(Vector3.UP, atan2(-dir.x, -dir.y)), start)
+	var boat: Boat = world.launch_boat(StructureTable.get_type(entry.type).get("launches", "raft"), xf)
+	if boat != null:
+		boat.shove(Vector3(dir.x, 0.0, dir.y) * LAUNCH_SPEED)
 	_remove_structure(id)
 	Net.send_to_ready(self, "_remove_structure", [id])
-	world.sfx_at("splash", spot.pos)
+	world.sfx_at("thud", entry.pos)
 	_notify_crew("%s pushed the raft into the water! Climb aboard with an oar and press F to row — Q and E stroke." % survivor.player.display_name)
 
 

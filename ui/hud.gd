@@ -29,6 +29,7 @@ var _sleep_overlay: ColorRect
 var _downed_overlay: ColorRect
 var _downed_label: Label
 var _dev: DevPanel
+var _cooking: CookingPanel
 var _breath_row: HBoxContainer
 var _underwater: ColorRect
 var _fishing_label: Label
@@ -126,6 +127,7 @@ func _ready() -> void:
 	_pause = _panel(PauseMenu.new())
 	_settings = _panel(SettingsPanel.new())
 	_dev = _panel(DevPanel.new())
+	_cooking = _panel(CookingPanel.new())
 	_note.close_requested.connect(func() -> void: _close_all())
 	_pause.resume_requested.connect(func() -> void: _close_all())
 	_pause.settings_requested.connect(func() -> void:
@@ -145,6 +147,7 @@ func _ready() -> void:
 	_inventory.camp = _camp
 	_book.camp = _camp
 	_camp.container_opened.connect(_on_container_opened)
+	_camp.cooking_opened.connect(_on_cooking_opened)
 	_camp.container_changed.connect(func(id: String) -> void:
 		if _inventory.container_id == id:
 			_inventory.refresh())
@@ -258,6 +261,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			_close_all()
 		else:
 			handled = false
+	elif _cooking.visible:
+		if cancel or event.is_action_pressed("interact") or event.is_action_pressed("inventory"):
+			_close_all()
+		else:
+			handled = false
 	elif _settings.visible:
 		if cancel:
 			_settings.close()
@@ -304,7 +312,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _show_only(panel: Control) -> void:
-	for other: Control in [_inventory, _book, _note, _pause, _settings, _dev]:
+	for other: Control in [_inventory, _book, _note, _pause, _settings, _dev, _cooking]:
 		other.visible = other == panel
 	_hotbar.visible = panel == null
 
@@ -315,7 +323,7 @@ func _close_all() -> void:
 
 
 func _sync_ui_state() -> void:
-	var open := _inventory.visible or _book.visible or _note.visible or _pause.visible or _settings.visible or _dev.visible
+	var open := _inventory.visible or _book.visible or _note.visible or _pause.visible or _settings.visible or _dev.visible or _cooking.visible
 	_hotbar.visible = not open
 	# Full-screen panels get a clean backdrop: no compass, objectives or bars behind them.
 	for overlay: Control in [_info, _clock, _markers, _prompt, _status, _fishing_label]:
@@ -328,6 +336,12 @@ func _sync_ui_state() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif not GameState.free_mouse:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _on_cooking_opened(id: String, title: String) -> void:
+	_cooking.show_station(id, title)
+	_show_only(_cooking)
+	_sync_ui_state()
 
 
 func _on_container_opened(id: String, title: String) -> void:

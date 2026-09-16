@@ -157,9 +157,16 @@ func _camp_loop() -> void:
 	camp.interact_structure(s, fire_id, 3)
 	camp.interact_structure(s, fire_id, 4)
 	_check(station.is_busy() and pack.hotbar[3] == null, "fish and dirty water go on the fire")
-	await _wait(CookStation.COOK_SECONDS + 2.0)
+	var opened := [""]
+	camp.cooking_opened.connect(func(station_id: String, _title: String) -> void: opened[0] = station_id)
+	pack.hotbar[7] = null
 	camp.interact_structure(s, fire_id, 7)
-	_check(pack.count_of("cooked_fish") == 1 and pack.count_of("canteen_clean") == 1, "took cooked fish and boiled water")
+	_check(opened[0] == "struct:" + fire_id, "pressing on the fire empty-handed opens what's cooking")
+	await _wait(CookStation.COOK_SECONDS + 2.0)
+	camp.request_take_cooked("struct:" + fire_id, 0)
+	_check(pack.count_of("cooked_fish") + pack.count_of("canteen_clean") == 1, "took one thing off the fire on its own")
+	camp.request_take_cooked("struct:" + fire_id, -1)
+	_check(pack.count_of("cooked_fish") == 1 and pack.count_of("canteen_clean") == 1, "and the rest with one press")
 
 	var tree: ResourceNode = null
 	for node: ResourceNode in world.resources.nodes.values():
@@ -333,7 +340,7 @@ func _starter_loop() -> void:
 	camp.interact_structure(s, site_id, 0)
 	_check(StructureTable.next_stage("raft_site", camp.structures[site_id].progress).is_empty(), "lashed them with rope — the raft is ready")
 	camp.interact_structure(s, site_id, 0)
-	await _wait(3.0)
+	await _wait(6.0)  # it slides down the sand into the water
 	var raft: Boat = null
 	for boat: Boat in world.boats_root.get_children():
 		if boat.kind == "raft":
@@ -734,6 +741,19 @@ func _look() -> void:
 			var out3 := Vector3(float(fall.direction.x), 0.0, float(fall.direction.y))
 			var side3 := out3.cross(Vector3.UP)
 			_fixed_camera(foot + out3 * 26.0 + side3 * 10.0 + Vector3.UP * 9.0, top.lerp(foot, 0.55))
+		"cooking":
+			var stove: CookStation = camp.stations["shack:stove"]
+			stove.add_fuel(400.0)
+			stove.light()
+			stove.start("raw_fish", Ocean.time)
+			stove.start("canteen_dirty", Ocean.time - CookStation.COOK_SECONDS)
+			camp._broadcast_station("shack:stove")
+			var stove_at: Vector3 = camp.shack.parts.stove
+			player.teleport(stove_at + Vector3(1.6, 0.2, 0.6))
+			player.yaw = atan2(-(stove_at.x - player.global_position.x), -(stove_at.z - player.global_position.z))
+			await _wait(0.6)
+			var hud3 := _hud()
+			hud3._on_cooking_opened("shack:stove", camp.station_title("shack:stove"))
 		"shackdoor":
 			var xf2: Transform3D = camp.shack.xf
 			_fixed_camera(xf2 * Vector3(0.0, 1.5, -5.0), xf2 * Vector3(0.0, 0.6, 0.5))

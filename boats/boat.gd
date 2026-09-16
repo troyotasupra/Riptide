@@ -64,12 +64,26 @@ var _tick := 0
 static var _rope_mesh: CylinderMesh
 
 
+## Host: shove a boat along, for pushing one off the beach.
+func shove(velocity: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	freeze = false
+	linear_velocity = velocity
+	angular_velocity = Vector3.ZERO
+
+
 static func create_raft(index: int) -> Boat:
 	var boat := Boat.new()
 	boat.name = "Raft"
 	boat.kind = "raft"
 	boat.proxy_index = index
 	boat.mass = HullSpecs.RAFT_MASS
+	# Slippery, so a shove carries it down the sand and into the water.
+	var slide := PhysicsMaterial.new()
+	slide.friction = 0.05
+	slide.rough = false
+	boat.physics_material_override = slide
 	var size := RAFT_SIZE
 	boat.deck_top = size.y
 	boat.hull_aabb = AABB(Vector3(-size.x * 0.5, 0.0, -size.z * 0.5), size)

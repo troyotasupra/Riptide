@@ -204,14 +204,15 @@ static func _hut(shape: CampIsland, shack: Dictionary) -> Node3D:
 	_box(node, Vector3(0.08, 0.1, 0.02), Vector3(-1.35, 0.26, 0.48), Materials.metal(Color(0.8, 0.65, 0.28), 0.35))
 	# Wood stove with its flue out through the roof.
 	_box(node, Vector3(0.55, 0.75, 0.55), Vector3(-1.95, 0.375, -1.2), iron, true)
-	_box(node, Vector3(0.3, 0.2, 0.02), Vector3(-1.95, 0.35, -1.48), Materials.glow(Color(1.0, 0.45, 0.15), 0.4))
+	# The firebox faces into the room, not the wall.
+	_box(node, Vector3(0.02, 0.2, 0.3), Vector3(-1.67, 0.35, -1.2), Materials.glow(Color(1.0, 0.45, 0.15), 0.4))
 	_post(node, Vector3(-1.95, 0.75, -1.2), Vector3(-1.95, SIZE.y + 0.6, -1.2), 0.06, iron)
 	var glow := OmniLight3D.new()
 	glow.name = "StoveGlow"
 	glow.light_color = Color(1.0, 0.55, 0.2)
 	glow.light_energy = 1.2
 	glow.omni_range = 3.5
-	glow.position = Vector3(-1.6, 0.6, -1.2)
+	glow.position = Vector3(-1.5, 0.6, -1.2)
 	glow.visible = false
 	node.add_child(glow)
 	# Chart table.
