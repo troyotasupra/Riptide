@@ -30,6 +30,7 @@ var _downed_overlay: ColorRect
 var _downed_label: Label
 var _dev: DevPanel
 var _cooking: CookingPanel
+var _scope: ScopeView
 var _breath_row: HBoxContainer
 var _underwater: ColorRect
 var _fishing_label: Label
@@ -85,6 +86,8 @@ func _ready() -> void:
 	_messages.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_KEEP_SIZE, 16)
 	_messages.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 
+	_scope = ScopeView.new()
+	add_child(_scope)
 	_build_underwater()
 	_build_bars()
 	_build_hotbar()
@@ -458,6 +461,13 @@ func _process(delta: float) -> void:
 		heading = fposmod(rad_to_deg(atan2(forward.x, -forward.z)), 360.0)
 	_clock.text = "%s    %s %03d°    %s" % [DayNight.clock_text(GameState.time_of_day()), CARDINALS[int(round(heading / 45.0)) % 8], int(heading),
 		GameState.world.weather.describe() if GameState.world.weather != null else ""]
+	# Looking down a magnified optic draws the world again through the lens.
+	var magnified := 1.0
+	if player.gun != null and player.gun.holding_gun() and not GameState.ui_open:
+		magnified = lerpf(1.0, float(player.gun.gun().get("zoom", 1.0)), player.gun.aim)
+	_scope.look_through(magnified)
+	if player.view_model != null:
+		player.view_model.visible = not _scope.visible and not player.held_id.is_empty()
 	var held_line := ""
 	if not GameState.ui_open:
 		if player.gun != null and player.gun.holding_gun():

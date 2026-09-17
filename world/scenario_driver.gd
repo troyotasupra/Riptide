@@ -900,6 +900,31 @@ func _look() -> void:
 			await _wait(0.6)
 			var hud3 := _hud()
 			hud3._on_cooking_opened("shack:stove", camp.station_title("shack:stove"))
+		"gun", "scope":
+			world.dev.request("give", ["m4", 1])
+			world.dev.request("give", ["ammo_556", 60])
+			var gun_pack := player.survivor.inventory
+			gun_pack.hotbar[0] = null
+			_to_hotbar(gun_pack, "m4", 0)
+			player.survivor.select_slot(0)
+			player.held_id = "m4"
+			var dock_end2: Vector3 = camp.shack.dock_end
+			var out4: Vector3 = (dock_end2 - Vector3(camp.shack.dock_start)).normalized()
+			out4.y = 0.0
+			player.teleport(dock_end2 + Vector3.UP * 0.6)
+			player.yaw = atan2(-out4.x, -out4.z)
+			player.pitch = -0.02
+			# Something worth looking at, a long way out.
+			var mark := dock_end2 + out4.normalized() * 120.0
+			var far_shark: Shark = world.sharks.spawn(Vector3(mark.x, -0.4, mark.z), Vector3(mark.x, 0.0, mark.z), 8.0)
+			far_shark.set_physics_process(false)
+			await _wait(0.5)
+			if GameState.face == "scope":
+				world.dev.request("give", ["sniper_scope", 1])
+				await _wait(0.2)
+				var optic: Dictionary = gun_pack.find_first("sniper_scope")
+				world.combat.request_fit("optic", int(optic.get("uid", 0)))
+				Input.action_press("secondary")
 		"shackdoor":
 			var xf2: Transform3D = camp.shack.xf
 			_fixed_camera(xf2 * Vector3(0.0, 1.5, -5.0), xf2 * Vector3(0.0, 0.6, 0.5))

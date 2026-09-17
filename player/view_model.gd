@@ -65,7 +65,17 @@ func refresh(held_id: String, torso_item: String, skin: Color, crew_color_index:
 	if held_id.is_empty():
 		return
 	_held = ItemModels.build(held_id)
-	_held.rotation.x = PI + 0.5  # blade tilts up from the forearm, about 45° above the horizon
+	if ItemTable.get_item(held_id).has("weapon"):
+		# A gun is held level, pointing where you're looking, not cocked up like a blade.
+		# The forearm is pitched back, so this angle cancels it and points the
+		# barrel where you're looking, angled slightly across the view.
+		_held.rotation = Vector3(PI - 0.26, -0.07, 0.0)
+		_held.position = Vector3(-0.015, 0.01, 0.02)
+		_held.scale = Vector3.ONE * 0.88
+	else:
+		_held.rotation.x = PI + 0.5  # blade tilts up from the forearm, about 45° above the horizon
+		_held.position = Vector3.ZERO
+		_held.scale = Vector3.ONE
 	_hand.add_child(_held)
 
 

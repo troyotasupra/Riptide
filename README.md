@@ -54,6 +54,11 @@ private networks.
 | Q / E while rowing | LT / RT while rowing | Stroke the left / right oar — both to go straight; hold S (stick back) to back-row |
 | Tab | View | Inventory (gear, pockets/rig/backpack grids, hotbar, open container) |
 | B | D-pad ← | Crafting / survival book |
+| Left click | RT | Gun: fire |
+| Right click (hold) | LT | Gun: aim down the sights |
+| R | D-pad → | Gun: reload, or clear a jam |
+| X | R3 | Gun: switch fire mode |
+| Shift while aiming | L3 | Hold your breath to steady the sights |
 | Left click (hold / tap) | RT | Fishing rod: charge and cast · strike · hold to reel |
 | Right click | LT | Fishing rod: pick the bait |
 | F while fighting a fish | Y | Cut the line |
@@ -65,6 +70,17 @@ private networks.
 The sea is calm in the shallows — coves, the dock, the beach — and gets rougher the
 further out you go, roughest of all in a storm. On the camp island a pool sits high
 on the hill and its stream falls over a rock band all the way down to the sea.
+
+Guns: the M1911, Uzi, M4, Mossberg and Intervention, each on its own ammunition —
+.45, 9mm, 5.56, 12 gauge and .408 never interchange. Bullets are real: they take
+time to reach what you shot at and drop on the way, and every gun is sighted in at
+60 m, so at distance you hold over and lead a moving target. The kick climbs while
+you hold the trigger and most of it comes back on its own. Attachments (optics,
+muzzle devices, grips, magazines, stocks, lasers) fit where they belong and each
+one trades something away — a suppressor is quiet but fouls the gun and slows your
+sights, an extended magazine holds ten more but takes longer to change. Guns foul
+as you shoot; a neglected one jams (R clears it) and a cleaning kit puts it right.
+Magnified optics draw the world through the lens, so a scope really is a scope.
 
 Sharks patrol the open water between the islands and the reef. They only go after
 people in the water — never anyone aboard a boat, never in the shallows. Strike
@@ -134,7 +150,8 @@ tools, flying, weather and wind, rain, fishing), `--scenario=sharks --spawn=camp
 Start the host with `--dev` and the `client` run checks developer mode from a crew member too.
 Screenshots: `--scenario=dock|structures|lineup|inventory` with `--shot=file.png`, and
 `--scenario=look --face=tree|tree_under|palm|palm_top|bush|fiber|shore|spring|waterfall|shackdoor|storm|dev|fishing|fish|cooking`.
-`--scenario=walk` covers getting about on foot: stepping over ledges, the shack door,
+`--scenario=guns` covers shooting: rate of fire, travel time at 200 m, reloads,
+fire modes, attachments, fouling and jams. `--scenario=walk` covers getting about on foot: stepping over ledges, the shack door,
 being freed when stuck, diving and breath.
 Add `--mute` to silence a run (`--no-focus` runs are always muted).
 Test runs use their own save file and profiles, never your real ones.
