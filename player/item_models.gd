@@ -13,6 +13,11 @@ const LEATHER := Color(0.34, 0.22, 0.13)
 const ROPE := Color(0.74, 0.65, 0.47)
 const PAPER := Color(0.90, 0.86, 0.74)
 const BRASS := Color(0.80, 0.64, 0.28)
+## Gun finishes: worn gunmetal, black parkerising, polymer furniture, oiled wood.
+const GUNMETAL := Color(0.26, 0.27, 0.29)
+const PARKER := Color(0.14, 0.145, 0.15)
+const POLYMER := Color(0.17, 0.18, 0.17)
+const GUN_WOOD := Color(0.34, 0.21, 0.12)
 
 
 static func build(id: String) -> Node3D:
@@ -94,74 +99,109 @@ static func build(id: String) -> Node3D:
 			for y: float in [1.16, 1.19]:
 				_torus(root, 0.022, 0.007, Vector3(0.0, y, 0.0), Materials.cloth(ROPE))
 		"m1911", "flare_gun":
-			# Guns are built barrel along +Y, sights up on +Z, the grip at the origin.
-			var body := Color(0.12, 0.12, 0.13) if id == "m1911" else Color(0.92, 0.42, 0.08)
-			var body_material := Materials.plain(body, 0.45) if id == "flare_gun" else Materials.metal(body, 0.5)
-			var grip_material := Materials.plain(body.darkened(0.35), 0.8)
-			_box(root, Vector3(0.032, 0.17, 0.045), Vector3(0.0, 0.09, 0.022), body_material)
-			_cylinder(root, 0.011 if id == "m1911" else 0.021, 0.05, Vector3(0.0, 0.185, 0.022), Materials.metal(DARK_STEEL))
-			var grip := _box(root, Vector3(0.03, 0.115, 0.045), Vector3(0.0, -0.02, -0.03), grip_material)
-			grip.rotation.x = -0.22
-			_box(root, Vector3(0.026, 0.05, 0.012), Vector3(0.0, 0.02, -0.008), body_material)
-			_box(root, Vector3(0.01, 0.012, 0.012), Vector3(0.0, 0.16, 0.05), Materials.metal(STEEL))
-			_torus(root, 0.021, 0.004, Vector3(0.0, 0.025, -0.012), body_material, Vector3(0.0, 0.0, PI / 2.0))
+			var flare := id == "flare_gun"
+			var pistol_body := Materials.metal(PARKER if not flare else Color(0.75, 0.32, 0.06), 0.45)
+			var pistol_steel := Materials.metal(GUNMETAL, 0.4)
+			# Frame, slide, barrel.
+			_box(root, Vector3(0.026, 0.115, 0.03), Vector3(0.0, 0.06, 0.012), pistol_body)
+			_box(root, Vector3(0.03, 0.155, 0.034), Vector3(0.0, 0.1, 0.035), pistol_steel)
+			_grooves(root, 6, 0.045, 0.075, 0.052, 0.032, 0.03, Materials.metal(PARKER.darkened(0.25), 0.6))
+			_cylinder(root, 0.011 if not flare else 0.019, 0.022, Vector3(0.0, 0.185, 0.035), pistol_steel)
+			_cylinder(root, 0.0075 if not flare else 0.016, 0.03, Vector3(0.0, 0.192, 0.035), Materials.metal(DARK_STEEL, 0.35))
+			# Grip with panels, trigger, hammer.
+			var panels := Materials.wood(Color(0.32, 0.20, 0.12)) if not flare else Materials.plain(Color(0.2, 0.2, 0.22), 0.8)
+			_grip_and_trigger(root, Vector3(0.028, 0.105, 0.036), Vector3(0.0, 0.03, 0.0), -0.28, pistol_body, panels)
+			_box(root, Vector3(0.012, 0.022, 0.014), Vector3(0.0, 0.028, 0.05), pistol_steel).rotation.x = 0.5
+			_sight(root, 0.17, 0.05, true, pistol_steel)
+			_sight(root, 0.035, 0.05, false, pistol_steel)
 		"uzi":
-			var uzi_metal := Materials.metal(Color(0.16, 0.16, 0.17), 0.55)
-			var uzi_grip := Materials.plain(Color(0.10, 0.10, 0.11), 0.8)
-			_box(root, Vector3(0.05, 0.2, 0.075), Vector3(0.0, 0.12, 0.03), uzi_metal)
-			_cylinder(root, 0.012, 0.11, Vector3(0.0, 0.27, 0.03), Materials.metal(DARK_STEEL))
-			var uzi_hand := _box(root, Vector3(0.038, 0.13, 0.05), Vector3(0.0, -0.02, -0.03), uzi_grip)
-			uzi_hand.rotation.x = -0.14
-			# The magazine feeds through the grip.
-			var uzi_mag := _box(root, Vector3(0.028, 0.14, 0.045), Vector3(0.0, -0.06, -0.06), uzi_metal)
-			uzi_mag.rotation.x = -0.14
-			_box(root, Vector3(0.04, 0.16, 0.025), Vector3(0.0, -0.06, 0.055), uzi_metal)
-			_box(root, Vector3(0.012, 0.03, 0.02), Vector3(0.0, 0.215, 0.07), Materials.metal(STEEL))
-			_torus(root, 0.022, 0.004, Vector3(0.0, 0.03, -0.008), uzi_metal, Vector3(0.0, 0.0, PI / 2.0))
+			var uzi_metal := Materials.metal(PARKER, 0.5)
+			var uzi_steel := Materials.metal(GUNMETAL, 0.4)
+			var uzi_polymer := Materials.plain(POLYMER, 0.8)
+			# Stamped receiver with its ribs, and the short barrel.
+			_box(root, Vector3(0.048, 0.2, 0.07), Vector3(0.0, 0.11, 0.03), uzi_metal)
+			_grooves(root, 5, 0.04, 0.18, 0.066, 0.05, 0.012, Materials.metal(PARKER.darkened(0.25), 0.6))
+			_cylinder(root, 0.013, 0.1, Vector3(0.0, 0.25, 0.03), uzi_steel)
+			_cylinder(root, 0.009, 0.04, Vector3(0.0, 0.3, 0.03), Materials.metal(DARK_STEEL, 0.35))
+			_box(root, Vector3(0.05, 0.03, 0.02), Vector3(0.0, 0.21, 0.06), uzi_metal)
+			_sight(root, 0.235, 0.062, true, uzi_steel)
+			_sight(root, 0.055, 0.062, false, uzi_steel)
+			# Charging knob on top, ejection port on the right.
+			_box(root, Vector3(0.022, 0.03, 0.014), Vector3(0.0, 0.12, 0.072), uzi_steel)
+			_box(root, Vector3(0.004, 0.05, 0.022), Vector3(0.026, 0.13, 0.035), Materials.metal(PARKER.darkened(0.4), 0.6))
+			# The magazine feeds through the pistol grip.
+			_grip_and_trigger(root, Vector3(0.042, 0.11, 0.05), Vector3(0.0, 0.02, 0.0), -0.12, uzi_polymer)
+			_magazine(root, Vector3(0.0, 0.0, -0.1), 0.12, 0.032, 0.046, -0.12, uzi_metal)
+			# Folding stock, tucked along the side of the receiver.
+			for side: float in [-1.0, 1.0]:
+				_box(root, Vector3(0.008, 0.16, 0.012), Vector3(side * 0.026, -0.05, 0.052), uzi_steel)
+			_box(root, Vector3(0.052, 0.022, 0.048), Vector3(0.0, -0.125, 0.052), uzi_polymer)
 		"m4":
-			var rifle_metal := Materials.metal(Color(0.18, 0.18, 0.19), 0.5)
-			var furniture := Materials.plain(Color(0.13, 0.14, 0.13), 0.75)
-			_box(root, Vector3(0.045, 0.26, 0.075), Vector3(0.0, 0.17, 0.025), rifle_metal)
-			_box(root, Vector3(0.05, 0.26, 0.06), Vector3(0.0, 0.43, 0.025), furniture)
-			_cylinder(root, 0.011, 0.3, Vector3(0.0, 0.68, 0.025), Materials.metal(DARK_STEEL))
-			_box(root, Vector3(0.028, 0.22, 0.018), Vector3(0.0, 0.2, 0.068), rifle_metal)
-			_box(root, Vector3(0.018, 0.03, 0.05), Vector3(0.0, 0.57, 0.08), rifle_metal)
-			var m4_grip := _box(root, Vector3(0.038, 0.14, 0.05), Vector3(0.0, -0.02, -0.035), furniture)
-			m4_grip.rotation.x = -0.25
-			var m4_mag := _box(root, Vector3(0.03, 0.17, 0.05), Vector3(0.0, 0.09, -0.07), rifle_metal)
-			m4_mag.rotation.x = -0.18
-			_box(root, Vector3(0.045, 0.22, 0.075), Vector3(0.0, -0.13, 0.02), furniture)
-			_box(root, Vector3(0.03, 0.1, 0.035), Vector3(0.0, -0.01, 0.02), rifle_metal)
-			_torus(root, 0.023, 0.004, Vector3(0.0, 0.03, -0.01), rifle_metal, Vector3(0.0, 0.0, PI / 2.0))
+			var rifle_metal := Materials.metal(PARKER, 0.45)
+			var rifle_steel := Materials.metal(GUNMETAL, 0.4)
+			var furniture := Materials.plain(POLYMER, 0.8)
+			# Upper and lower receiver, with the ejection port and charging handle.
+			_box(root, Vector3(0.042, 0.17, 0.052), Vector3(0.0, 0.11, 0.022), rifle_metal)
+			_box(root, Vector3(0.04, 0.24, 0.05), Vector3(0.0, 0.2, 0.062), rifle_metal)
+			_box(root, Vector3(0.03, 0.24, 0.014), Vector3(0.0, 0.2, 0.086), rifle_metal)
+			_box(root, Vector3(0.005, 0.055, 0.026), Vector3(0.023, 0.2, 0.06), Materials.metal(PARKER.darkened(0.4), 0.6))
+			_box(root, Vector3(0.028, 0.03, 0.016), Vector3(0.0, 0.085, 0.078), rifle_steel)
+			_rail(root, 0.11, 0.32, 0.09, 0.03)
+			# Handguard, gas block, barrel and flash hider.
+			_cylinder(root, 0.026, 0.24, Vector3(0.0, 0.43, 0.062), furniture, Vector3.ZERO, 0.024)
+			_rail(root, 0.33, 0.53, 0.09, 0.028)
+			_box(root, Vector3(0.022, 0.035, 0.04), Vector3(0.0, 0.57, 0.075), rifle_steel)
+			_cylinder(root, 0.0095, 0.22, Vector3(0.0, 0.66, 0.062), Materials.metal(DARK_STEEL, 0.35))
+			_cylinder(root, 0.014, 0.05, Vector3(0.0, 0.79, 0.062), rifle_steel)
+			_grooves(root, 3, 0.775, 0.805, 0.076, 0.03, 0.012, Materials.metal(DARK_STEEL, 0.5))
+			_sight(root, 0.58, 0.088, true, rifle_steel)
+			_sight(root, 0.3, 0.095, false, rifle_steel)
+			# Grip, magazine, buffer tube and stock.
+			_grip_and_trigger(root, Vector3(0.036, 0.12, 0.046), Vector3(0.0, 0.02, 0.0), -0.34, furniture)
+			_magazine(root, Vector3(0.0, 0.1, -0.005), 0.17, 0.03, 0.048, -0.12, rifle_metal)
+			_cylinder(root, 0.017, 0.16, Vector3(0.0, -0.06, 0.045), rifle_steel)
+			_stock(root, Vector3(0.0, -0.04, 0.045), 0.2, 0.044, furniture)
 		"mossberg":
-			var barrel_steel := Materials.metal(Color(0.15, 0.15, 0.16), 0.5)
-			var stock_wood := Materials.wood(Color(0.30, 0.19, 0.11))
-			_cylinder(root, 0.016, 0.56, Vector3(0.0, 0.5, 0.035), barrel_steel)
-			_cylinder(root, 0.012, 0.4, Vector3(0.0, 0.42, -0.005), barrel_steel)
-			_box(root, Vector3(0.045, 0.2, 0.08), Vector3(0.0, 0.13, 0.02), barrel_steel)
-			# The pump, forward under the barrel.
-			_cylinder(root, 0.021, 0.14, Vector3(0.0, 0.42, -0.005), stock_wood)
-			var pump_grip := _box(root, Vector3(0.038, 0.13, 0.05), Vector3(0.0, -0.02, -0.035), stock_wood)
-			pump_grip.rotation.x = -0.22
-			_box(root, Vector3(0.045, 0.26, 0.085), Vector3(0.0, -0.16, 0.0), stock_wood)
-			_box(root, Vector3(0.012, 0.02, 0.018), Vector3(0.0, 0.73, 0.055), Materials.metal(STEEL))
-			_torus(root, 0.023, 0.004, Vector3(0.0, 0.03, -0.012), barrel_steel, Vector3(0.0, 0.0, PI / 2.0))
+			var shotgun_steel := Materials.metal(GUNMETAL.darkened(0.15), 0.4)
+			var shotgun_black := Materials.metal(PARKER, 0.5)
+			var wood := Materials.wood(GUN_WOOD)
+			# Receiver, barrel over its magazine tube.
+			_box(root, Vector3(0.044, 0.22, 0.07), Vector3(0.0, 0.13, 0.03), shotgun_black)
+			_box(root, Vector3(0.005, 0.07, 0.03), Vector3(0.024, 0.13, 0.03), Materials.metal(PARKER.darkened(0.4), 0.6))
+			_cylinder(root, 0.0155, 0.58, Vector3(0.0, 0.53, 0.045), shotgun_steel)
+			_cylinder(root, 0.012, 0.42, Vector3(0.0, 0.45, 0.005), shotgun_steel)
+			_sphere(root, 0.005, Vector3(0.0, 0.81, 0.062), Materials.plain(Color(0.9, 0.85, 0.4), 0.3))
+			# The pump, ribbed, riding the tube.
+			_cylinder(root, 0.023, 0.15, Vector3(0.0, 0.42, 0.005), wood)
+			_grooves(root, 6, 0.36, 0.48, 0.028, 0.046, 0.016, Materials.wood(GUN_WOOD.darkened(0.25)))
+			# Wrist, comb and butt: one piece of wood, shaped in three.
+			_grip_and_trigger(root, Vector3(0.04, 0.085, 0.05), Vector3(0.0, 0.02, 0.005), -0.3, wood)
+			_stock(root, Vector3(0.0, -0.02, 0.02), 0.26, 0.046, wood)
 		"intervention":
-			var sniper_metal := Materials.metal(Color(0.22, 0.24, 0.22), 0.45)
-			var sniper_stock := Materials.plain(Color(0.28, 0.30, 0.26), 0.8)
-			_cylinder(root, 0.019, 0.66, Vector3(0.0, 0.62, 0.03), sniper_metal)
-			_cylinder(root, 0.026, 0.1, Vector3(0.0, 1.0, 0.03), Materials.metal(DARK_STEEL))
-			_box(root, Vector3(0.05, 0.3, 0.085), Vector3(0.0, 0.2, 0.03), sniper_metal)
-			_box(root, Vector3(0.035, 0.26, 0.022), Vector3(0.0, 0.24, 0.085), sniper_metal)
-			var bolt := _cylinder(root, 0.01, 0.08, Vector3(0.045, 0.16, 0.05), sniper_metal)
-			bolt.rotation.z = PI / 2.0
-			var sniper_grip := _box(root, Vector3(0.04, 0.15, 0.05), Vector3(0.0, -0.02, -0.04), sniper_stock)
-			sniper_grip.rotation.x = -0.28
-			var sniper_mag := _box(root, Vector3(0.032, 0.12, 0.05), Vector3(0.0, 0.11, -0.07), sniper_metal)
-			sniper_mag.rotation.x = -0.12
-			_box(root, Vector3(0.05, 0.34, 0.1), Vector3(0.0, -0.2, 0.01), sniper_stock)
-			_box(root, Vector3(0.05, 0.1, 0.05), Vector3(0.0, -0.08, 0.06), sniper_stock)
-			_torus(root, 0.025, 0.004, Vector3(0.0, 0.03, -0.012), sniper_metal, Vector3(0.0, 0.0, PI / 2.0))
+			var sniper_black := Materials.metal(PARKER, 0.42)
+			var sniper_steel := Materials.metal(GUNMETAL.darkened(0.1), 0.38)
+			var chassis := Materials.plain(Color(0.30, 0.32, 0.28), 0.8)
+			# Heavy fluted barrel and its brake.
+			_cylinder(root, 0.018, 0.62, Vector3(0.0, 0.6, 0.035), sniper_steel)
+			for i in 4:
+				var flute := i * TAU / 4.0
+				_box(root, Vector3(0.006, 0.5, 0.006), Vector3(cos(flute) * 0.016, 0.62, 0.035 + sin(flute) * 0.016), Materials.metal(GUNMETAL.darkened(0.3), 0.5))
+			_cylinder(root, 0.025, 0.09, Vector3(0.0, 0.96, 0.035), sniper_black)
+			_grooves(root, 3, 0.935, 0.985, 0.058, 0.052, 0.014, Materials.metal(DARK_STEEL, 0.5))
+			# Receiver with its rail, bolt and magazine.
+			_box(root, Vector3(0.048, 0.3, 0.07), Vector3(0.0, 0.2, 0.035), sniper_black)
+			_rail(root, 0.09, 0.33, 0.075, 0.032)
+			var bolt := _cylinder(root, 0.009, 0.075, Vector3(0.042, 0.15, 0.05), sniper_steel)
+			bolt.rotation.z = PI / 2.0 - 0.25
+			_sphere(root, 0.011, Vector3(0.072, 0.135, 0.05), sniper_steel)
+			_grip_and_trigger(root, Vector3(0.038, 0.13, 0.048), Vector3(0.0, 0.02, 0.005), -0.32, chassis)
+			_magazine(root, Vector3(0.0, 0.11, -0.005), 0.12, 0.034, 0.05, -0.05, sniper_black)
+			# Skeleton chassis stock: a spine, a comb, a cut-out and the butt.
+			var chassis_stock := _assembly(root, Vector3(0.0, -0.05, 0.035), -0.06)
+			_box(chassis_stock, Vector3(0.042, 0.26, 0.03), Vector3(0.0, -0.13, -0.03), chassis)
+			_box(chassis_stock, Vector3(0.042, 0.17, 0.026), Vector3(0.0, -0.19, 0.035), chassis)
+			_box(chassis_stock, Vector3(0.044, 0.05, 0.05), Vector3(0.0, -0.045, 0.01), chassis)
+			_box(chassis_stock, Vector3(0.046, 0.024, 0.115), Vector3(0.0, -0.275, -0.005), Materials.plain(PARKER.darkened(0.2), 0.9))
 		"red_dot", "holo_sight", "prism_3x", "lpvo_6x", "sniper_scope":
 			var glass := Materials.glow(Color(0.35, 0.75, 0.95), 0.6)
 			var housing := Materials.metal(Color(0.15, 0.15, 0.16), 0.5)
@@ -660,6 +700,86 @@ static func _fish(parent: Node3D, id: String) -> void:
 		"raw_mahi_mahi":
 			# The bull mahi's tall, blunt forehead.
 			_add(parent, _unit_sphere(), Vector3(depth * 0.18, y + length * 0.33, 0.0), skin).scale = Vector3(depth * 0.85, length * 0.2, thick * 0.95)
+
+
+
+# --- gun parts ---------------------------------------------------------------------
+# Guns are built barrel along +Y, sights up on +Z, the grip at the origin.
+
+## A length of picatinny rail: the base, with slots cut across it.
+static func _rail(parent: Node3D, from_y: float, to_y: float, z: float, width: float) -> void:
+	var length := to_y - from_y
+	if length <= 0.0:
+		return
+	_box(parent, Vector3(width, length, 0.008), Vector3(0.0, (from_y + to_y) * 0.5, z), Materials.metal(PARKER, 0.55))
+	var slots := maxi(2, int(length / 0.018))
+	for i in slots:
+		var y := lerpf(from_y + 0.008, to_y - 0.008, float(i) / maxf(1.0, float(slots - 1)))
+		_box(parent, Vector3(width * 1.02, 0.005, 0.014), Vector3(0.0, y, z + 0.005), Materials.metal(PARKER.darkened(0.3), 0.7))
+
+
+## Grooves cut across something, like slide serrations or a pump's ribs.
+static func _grooves(parent: Node3D, count: int, from_y: float, to_y: float, z: float, width: float, depth: float, mat: Material) -> void:
+	for i in count:
+		var y := lerpf(from_y, to_y, float(i) / maxf(1.0, float(count - 1)))
+		_box(parent, Vector3(width, 0.005, depth), Vector3(0.0, y, z), mat)
+
+
+## An iron sight: a post at the front, a notch at the back.
+static func _sight(parent: Node3D, y: float, z: float, front: bool, mat: Material) -> void:
+	if front:
+		_box(parent, Vector3(0.006, 0.008, 0.022), Vector3(0.0, y, z + 0.011), mat)
+		for side: float in [-1.0, 1.0]:
+			_box(parent, Vector3(0.005, 0.01, 0.03), Vector3(side * 0.013, y, z + 0.015), mat)
+	else:
+		for side: float in [-1.0, 1.0]:
+			_box(parent, Vector3(0.007, 0.01, 0.02), Vector3(side * 0.011, y, z + 0.01), mat)
+		_box(parent, Vector3(0.03, 0.01, 0.006), Vector3(0.0, y, z + 0.004), mat)
+
+
+## A part of a gun that hangs off it at an angle — a grip, a magazine, a stock.
+## Everything added to the returned node is laid out along its own axes, so it
+## stays in one piece instead of stepping out of line.
+static func _assembly(parent: Node3D, at: Vector3, lean: float) -> Node3D:
+	var node := Node3D.new()
+	node.position = at
+	node.rotation.x = lean
+	parent.add_child(node)
+	return node
+
+
+## A magazine hanging below the receiver from `top`, `lean` back from upright.
+static func _magazine(parent: Node3D, top: Vector3, length: float, width: float, depth: float, lean: float, mat: Material) -> void:
+	var mag := _assembly(parent, top, lean)
+	_box(mag, Vector3(width, depth, length), Vector3(0.0, 0.0, -length * 0.5), mat)
+	_box(mag, Vector3(width * 1.08, depth * 1.05, 0.012), Vector3(0.0, 0.0, -length), Materials.plain(PARKER.darkened(0.2), 0.7))
+	# A witness rib down the side, so it doesn't read as a plain block.
+	_box(mag, Vector3(width * 1.02, depth * 0.35, length * 0.8), Vector3(0.0, depth * 0.36, -length * 0.5), Materials.plain(PARKER.darkened(0.35), 0.8))
+
+
+## The pistol grip with its trigger and guard, hanging from `at`.
+static func _grip_and_trigger(parent: Node3D, grip_size: Vector3, at: Vector3, lean: float, mat: Material, panels: Material = null) -> void:
+	var grip := _assembly(parent, at, lean)
+	var length: float = grip_size.y
+	_box(grip, Vector3(grip_size.x, grip_size.z, length), Vector3(0.0, 0.0, -length * 0.5), mat)
+	_box(grip, Vector3(grip_size.x * 1.06, grip_size.z * 0.5, 0.014), Vector3(0.0, 0.0, -length), Materials.plain(PARKER.darkened(0.25), 0.8))
+	if panels != null:
+		for side: float in [-1.0, 1.0]:
+			_box(grip, Vector3(0.004, grip_size.z * 0.8, length * 0.8), Vector3(side * grip_size.x * 0.52, 0.0, -length * 0.5), panels)
+	# Trigger and guard sit just in front of the grip, on the gun itself.
+	_box(parent, Vector3(0.008, 0.03, 0.012), Vector3(0.0, at.y + 0.035, at.z + 0.012), Materials.metal(PARKER, 0.5)).rotation.x = 0.35
+	_torus(parent, 0.023, 0.0035, Vector3(0.0, at.y + 0.03, at.z + 0.016), Materials.metal(PARKER, 0.5), Vector3(0.0, 0.0, PI / 2.0), Vector3(1.0, 1.0, 0.7))
+
+
+## A shoulder stock running back from `at`: the wrist, then the comb and butt,
+## dropping a little as it goes.
+static func _stock(parent: Node3D, at: Vector3, length: float, width: float, mat: Material, comb: bool = true) -> void:
+	var stock := _assembly(parent, at, 0.0)
+	_box(stock, Vector3(width * 0.8, length * 0.45, 0.05), Vector3(0.0, -length * 0.22, -0.012), mat)
+	_box(stock, Vector3(width, length * 0.5, 0.08), Vector3(0.0, -length * 0.72, -0.026), mat)
+	if comb:
+		_box(stock, Vector3(width * 0.78, length * 0.46, 0.028), Vector3(0.0, -length * 0.66, 0.02), mat)
+	_box(stock, Vector3(width * 1.05, 0.022, 0.1), Vector3(0.0, -length, -0.03), Materials.plain(PARKER.darkened(0.2), 0.9))
 
 
 static func _add(parent: Node3D, mesh: Mesh, pos: Vector3, material: Material, rot: Vector3 = Vector3.ZERO) -> MeshInstance3D:

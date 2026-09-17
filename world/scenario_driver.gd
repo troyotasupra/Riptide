@@ -925,6 +925,29 @@ func _look() -> void:
 				var optic: Dictionary = gun_pack.find_first("sniper_scope")
 				world.combat.request_fit("optic", int(optic.get("uid", 0)))
 				Input.action_press("secondary")
+		"guns":
+			# Every gun in a row, side on, for judging their shapes.
+			var rack := ["m1911", "uzi", "mossberg", "m4", "intervention"]
+			var stand := player.world_transform().origin + Vector3(0.0, 40.0, 0.0)
+			var holder := Node3D.new()
+			world.add_child(holder)
+			holder.global_position = stand
+			for i in rack.size():
+				var model := ItemModels.build(rack[i])
+				holder.add_child(model)
+				# Lay each one on its side, muzzle to the left, stacked down the view.
+				model.position = Vector3(0.0, (2 - i) * 0.42, 0.0)
+				# Barrel to the left, sights up: we want the side of each gun.
+				model.transform.basis = Basis(Vector3(0.0, 0.0, -1.0), Vector3(-1.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0))
+			var rack_cam := Camera3D.new()
+			rack_cam.fov = 48.0
+			world.add_child(rack_cam)
+			rack_cam.global_transform = Transform3D(Basis.looking_at(Vector3.FORWARD, Vector3.UP), stand + Vector3(-0.3, 0.0, 2.4))
+			rack_cam.make_current()
+			var lamp2 := DirectionalLight3D.new()
+			lamp2.light_energy = 1.2
+			world.add_child(lamp2)
+			lamp2.global_rotation = Vector3(-0.7, 0.9, 0.0)
 		"shackdoor":
 			var xf2: Transform3D = camp.shack.xf
 			_fixed_camera(xf2 * Vector3(0.0, 1.5, -5.0), xf2 * Vector3(0.0, 0.6, 0.5))
