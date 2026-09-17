@@ -15,6 +15,7 @@ var _held_id := "?"
 var _sleeve_key := "?"
 var _phase := 0.0
 var _swing_t := 0.0
+var _recoil := 0.0
 ## 0..1 while rowing: the arm pulls the oar through its stroke.
 var rowing := 0.0
 var _row_phase := 0.0
@@ -72,6 +73,11 @@ func swing() -> void:
 	_swing_t = 1.0
 
 
+## The gun goes off: the hand snaps back and up, then settles.
+func recoil(strength: float) -> void:
+	_recoil = clampf(strength, 0.0, 1.5)
+
+
 ## Where a point on the held item's model (its own coordinates) is in the world
 ## right now, or Vector3.INF when nothing is held — e.g. the fishing rod's tip.
 func held_point(local: Vector3) -> Vector3:
@@ -87,6 +93,10 @@ func animate(delta: float, speed: float) -> void:
 	var arc := sin(_swing_t * PI)
 	_arm.position = REST + Vector3(cos(_phase) * 0.012, absf(sin(_phase)) * 0.018, 0.0) * moving + Vector3(-0.05, 0.08, 0.0) * arc
 	_arm.rotation.x = REST_PITCH + arc * 0.7 - (1.0 - _swing_t) * arc * 1.4
+	if _recoil > 0.001:
+		_recoil = maxf(0.0, _recoil - delta * 5.0)
+		_arm.position += Vector3(0.0, 0.02, 0.06) * _recoil
+		_arm.rotation.x -= 0.16 * _recoil
 	if rowing > 0.01:
 		_row_phase = fmod(_row_phase + delta * (3.2 + rowing * 2.0), TAU)
 		var pull := sin(_row_phase)

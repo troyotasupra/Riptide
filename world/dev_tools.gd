@@ -10,6 +10,12 @@ const PLACES := {
 	"reef": "Wreck reef", "crossing": "Open sea",
 }
 const FISHING_KIT := [["fishing_rod", 1], ["grub", 20], ["cut_bait", 20], ["berries", 10], ["lure", 3], ["jig", 3]]
+const GUN_KIT := [["m1911", 1], ["uzi", 1], ["m4", 1], ["mossberg", 1], ["intervention", 1],
+	["ammo_45", 50], ["ammo_9mm", 60], ["ammo_556", 60], ["ammo_12ga", 30], ["ammo_408", 20], ["cleaning_kit", 1]]
+const ATTACHMENT_KIT := [["red_dot", 1], ["holo_sight", 1], ["prism_3x", 1], ["lpvo_6x", 1], ["sniper_scope", 1],
+	["suppressor", 1], ["compensator", 1], ["muzzle_brake", 1], ["vertical_grip", 1], ["angled_grip", 1],
+	["bipod", 1], ["extended_mag", 1], ["quickdraw_mag", 1], ["heavy_stock", 1], ["light_stock", 1],
+	["folding_stock", 1], ["laser", 1], ["flashlight", 1]]
 const RAFT_KIT := [["stone_hatchet", 1], ["oar", 1], ["fiber", 30], ["flint", 4], ["driftwood", 8], ["log", 8], ["rope", 8]]
 
 

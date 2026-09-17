@@ -33,6 +33,8 @@ func _run() -> void:
 			await _outdoors_loop()
 		"walk":
 			await _walk_loop()
+		"guns":
+			await _gun_loop()
 		"dock":
 			_dock_view()
 			return  # stays up for a --shot screenshot
@@ -103,7 +105,7 @@ func _camp_loop() -> void:
 	camp.interact_shack_part(s, "footlocker", 0)
 	_check(camp.unlocked.has("shack:footlocker") and camp.open_container == "shack:footlocker", "the brass key unlocks it")
 	var compartment: ItemGrid = camp.containers["shack:footlocker"]
-	_check(compartment.count_of("pistol") == 1 and compartment.count_of("plate_carrier") == 1, "the pistol and a plate carrier are inside")
+	_check(compartment.count_of("m1911") == 1 and compartment.count_of("plate_carrier") == 1, "the pistol and a plate carrier are inside")
 
 	pack.clear()
 	var carrier_uid := int(compartment.items.filter(func(item: Dictionary) -> bool: return item.id == "plate_carrier")[0].uid)
@@ -581,6 +583,149 @@ func _outdoors_loop() -> void:
 	_check(Dictionary(saved.get("players", {}).get(player.player_id, {}).get("fish_log", {})).has(cast.get("species", "")) or not s.fish_log.is_empty(), "and your fish log")
 
 
+## Shooting: the kit, the fire rate, real bullets that take time to arrive,
+## reloading, fire modes, attachments, fouling and jams.
+func _gun_loop() -> void:
+	var world := GameState.world
+	var player := GameState.local_player as Player
+	var s := player.survivor
+	var pack := s.inventory
+	_check(GameState.dev_mode, "developer mode is on for this host")
+	s.equipment.wear({"id": "daypack", "count": 1, "spoils_at": 0.0})
+	s.refresh_storage()
+	for wanted: Array in [["m4", 1], ["m1911", 1], ["ammo_556", 60], ["ammo_45", 14],
+			["suppressor", 1], ["sniper_scope", 1], ["cleaning_kit", 1]]:
+		world.dev.request("give", [wanted[0], wanted[1]])
+	_check(pack.count_of("m4") == 1 and pack.count_of("ammo_556") >= 60, "dev: a rifle, a pistol and ammunition")
+
+	# Out over open water, where a shark can be put in front of us.
+	var sea: Vector2 = world.camp_island.center * 0.5
+	player.teleport(Vector3(sea.x, 14.0, sea.y))
+	player.set_flying(true)
+	await _wait(1.0)
+
+	pack.hotbar[0] = null
+	_to_hotbar(pack, "m4", 0)
+	s.select_slot(0)
+	player.held_id = "m4"
+	await _wait(0.3)
+	var rifle: Dictionary = CombatService.held_gun(player)
+	_check(not rifle.is_empty(), "the M4 is in hand")
+	if rifle.is_empty():
+		return
+	var state := CombatService.gun_state(rifle)
+	_check(int(state.ammo) == 30 and int(state.mag) == 30, "it came loaded: %d/%d" % [state.ammo, state.mag])
+	_check(String(state.mode) == "auto" and String(state.round) == "ammo_556", "on automatic, eating 5.56")
+
+	# A shark ten metres ahead, at eye level, and a shot into it.
+	var ahead := Vector3(0.0, 0.0, -1.0)
+	player.yaw = 0.0
+	player.pitch = 0.0
+	var shark_at := Vector3(sea.x, -0.5, sea.y)
+	var shark: Shark = world.sharks.spawn(shark_at, shark_at, 6.0)
+	shark.set_physics_process(false)
+	await _wait(0.3)
+	# Stand off ten metres with the sights level with it.
+	player.teleport(shark.global_position - ahead * 10.0 - Vector3.UP * Player.EYE_HEIGHT)
+	await _wait(0.4)
+	var before: float = shark.health
+	world.combat.request_shot(ahead, 1.0)
+	await _wait(0.4)
+	_check(shark.health < before, "a shot hits a shark ten metres out (%.0f → %.0f)" % [before, shark.health])
+	_check(int(rifle.get("ammo", 0)) == 29, "and costs one round (%d left)" % int(rifle.get("ammo", 0)))
+
+	world.combat.request_shot(ahead, 1.0)
+	world.combat.request_shot(ahead, 1.0)
+	_check(int(rifle.get("ammo", 0)) == 28, "the rate of fire won't let you spam the trigger")
+
+	# Out of the way, so it can't soak up the next shot.
+	world.sharks.sharks.erase(shark.shark_id)
+	shark.queue_free()
+	await _wait(0.3)
+
+	# A bullet is not instant: a shark 200 m out is hit a moment later.
+	var far_at := player.global_position + ahead * 200.0 + Vector3.UP * Player.EYE_HEIGHT
+	var far_shark: Shark = world.sharks.spawn(far_at, far_at, 6.0)
+	far_shark.set_physics_process(false)
+	await _wait(0.5)
+	var far_before: float = far_shark.health
+	# Aim at it rather than assuming it sits exactly on the sight line.
+	var eye := player.world_transform().origin + Vector3.UP * Player.EYE_HEIGHT
+	var at_far := (far_shark.global_position - eye).normalized()
+	world.combat.request_shot(at_far, 1.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	_check(far_shark.health == far_before, "a 200 m shot hasn't arrived after two frames")
+	await _wait(0.8)
+	_check(far_shark.health < far_before, "but it gets there (%.0f → %.0f)" % [far_before, far_shark.health])
+
+	# Empty it, then reload from the pack.
+	rifle["ammo"] = 1
+	var rounds_before := pack.count_of("ammo_556")
+	world.combat.request_shot(ahead, 1.0)
+	await _wait(0.3)
+	_check(int(rifle.get("ammo", 0)) == 0, "fired it dry")
+	world.combat.request_reload()
+	await _wait(WeaponMath.reload_seconds(CombatService.gun_stats(rifle), true) + 0.6)
+	_check(int(rifle.get("ammo", 0)) == 30, "reloaded a full magazine")
+	_check(pack.count_of("ammo_556") == rounds_before - 30, "the rounds came out of the pack")
+
+	# Fire modes.
+	world.combat.request_fire_mode()
+	_check(String(rifle.get("mode", "")) == "semi", "switched to semi-automatic")
+	world.combat.request_fire_mode()
+	_check(String(rifle.get("mode", "")) == "auto", "and back to automatic")
+
+	# Attachments: fit a suppressor from the pack and it quietens the gun.
+	var loud_before := WeaponMath.loudness(CombatService.gun_stats(rifle))
+	var can: Dictionary = pack.find_first("suppressor")
+	world.combat.request_fit("muzzle", int(can.get("uid", 0)))
+	_check(Dictionary(rifle.get("attachments", {})).get("muzzle", "") == "suppressor", "fitted the suppressor")
+	_check(WeaponMath.loudness(CombatService.gun_stats(rifle)) < loud_before * 0.6, "and it carries nowhere near as far")
+	_check(pack.count_of("suppressor") == 0, "it came out of the pack")
+	world.combat.request_fit("muzzle", 0)
+	_check(pack.count_of("suppressor") == 1, "and taking it off gives it back")
+	var scope: Dictionary = pack.find_first("sniper_scope")
+	world.combat.request_fit("optic", int(scope.get("uid", 0)))
+	_check(float(CombatService.gun_stats(rifle).zoom) > 8.0, "a scope on the M4 magnifies")
+
+	# A neglected gun jams, and the same key clears it.
+	rifle["condition"] = 0.02
+	var jammed := false
+	for i in 30:
+		world.combat.request_shot(ahead, 1.0)
+		await _wait(0.12)
+		if bool(rifle.get("jammed", false)):
+			jammed = true
+			break
+	_check(jammed, "a fouled gun jams sooner or later")
+	if jammed:
+		var ammo_at_jam := int(rifle.get("ammo", 0))
+		world.combat.request_shot(ahead, 1.0)
+		_check(int(rifle.get("ammo", 0)) == ammo_at_jam, "a jammed gun won't fire")
+		world.combat.request_reload()
+		await _wait(CombatService.CLEAR_JAM_SECONDS + 0.6)
+		_check(not bool(rifle.get("jammed", false)), "and clearing it takes a moment")
+	world.combat.request_clean()
+	_check(float(rifle.get("condition", 0.0)) > 0.98, "a cleaning kit puts it right")
+
+	# The pistol is a different gun with different rounds.
+	pack.hotbar[1] = null
+	_to_hotbar(pack, "m1911", 1)
+	s.select_slot(1)
+	player.held_id = "m1911"
+	await _wait(0.3)
+	var pistol: Dictionary = CombatService.held_gun(player)
+	var pistol_state := CombatService.gun_state(pistol)
+	_check(String(pistol_state.round) == "ammo_45" and int(pistol_state.mag) == 7, "the 1911 holds seven .45")
+	pistol["ammo"] = 0
+	pack.remove("ammo_45", pack.count_of("ammo_45"))
+	world.combat.request_reload()
+	await _wait(1.0)
+	_check(int(pistol.get("ammo", 0)) == 0, "with no .45 in the pack there's nothing to load")
+	player.set_flying(false)
+
+
 ## Getting about on foot: in through the shack door, over a low ledge, and stopped
 ## by a real wall.
 func _walk_loop() -> void:
@@ -621,10 +766,11 @@ func _walk_loop() -> void:
 	await _hold("crouch", 8.0)
 	_check(player.underwater, "holding crouch takes you under the surface")
 	_check(s.survival.breath < air - 12.0, "and your breath runs down (%.0f)" % s.survival.breath)
-	var spent := s.survival.breath
 	await _wait(12.0)
 	_check(not player.underwater, "let go and you come back up")
-	_check(s.survival.breath > spent + 6.0, "and get your breath back (%.0f)" % s.survival.breath)
+	# However long the ascent took, breath is back once your head is out.
+	await _wait(3.0)
+	_check(s.survival.breath > 95.0, "and get your breath back (%.0f)" % s.survival.breath)
 
 	var low: float = await _ledge_walk(0.45)
 	_check(low > 3.0, "stepped up over a 45 cm ledge (walked %.1f m)" % low)
@@ -897,7 +1043,7 @@ func _inventory_screen() -> void:
 	s.equipment.wear({"id": "combat_helmet", "count": 1, "spoils_at": 0.0})
 	s.refresh_storage()
 	for entry: Array in [["machete", 1], ["canteen_clean", 1], ["log", 2], ["cooked_fish", 3], ["stone", 14], ["bandage", 4],
-			["pistol", 1], ["pistol_ammo", 30], ["rope", 5], ["berries", 12], ["tarp", 1], ["stone_hatchet", 1]]:
+			["m1911", 1], ["ammo_45", 30], ["rope", 5], ["berries", 12], ["tarp", 1], ["stone_hatchet", 1]]:
 		s.inventory.add(entry[0], entry[1], Ocean.time)
 	s.push_inventory()
 	camp.interact_shack_part(s, "chest", 0)

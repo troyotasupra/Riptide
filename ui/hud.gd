@@ -458,7 +458,13 @@ func _process(delta: float) -> void:
 		heading = fposmod(rad_to_deg(atan2(forward.x, -forward.z)), 360.0)
 	_clock.text = "%s    %s %03d°    %s" % [DayNight.clock_text(GameState.time_of_day()), CARDINALS[int(round(heading / 45.0)) % 8], int(heading),
 		GameState.world.weather.describe() if GameState.world.weather != null else ""]
-	_fishing_label.text = "" if GameState.ui_open or player.angler == null else player.angler.hud_text()
+	var held_line := ""
+	if not GameState.ui_open:
+		if player.gun != null and player.gun.holding_gun():
+			held_line = player.gun.hud_text()
+		elif player.angler != null:
+			held_line = player.angler.hud_text()
+	_fishing_label.text = held_line
 	if _camp.chart_read:
 		_markers.text = _chart_markers(here)
 	elif not GameState.objectives_done.has("reach_camp") and GameState.world.camp_island != null:

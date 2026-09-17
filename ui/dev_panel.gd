@@ -47,6 +47,8 @@ func _ready() -> void:
 	_row(box, "Spawn", [
 		["Fishing kit", func() -> void: _send("fishing_kit", [])],
 		["Raft materials", func() -> void: _send("raft_kit", [])],
+		["Guns + ammo", func() -> void: _send("gun_kit", [])],
+		["Attachments", func() -> void: _send("attachment_kit", [])],
 		["Raft here", func() -> void: _send("raft", [])],
 		["Shark here", func() -> void: _send("shark", [])],
 		["Kill sharks", func() -> void: _send("kill_sharks", [])],

@@ -31,6 +31,7 @@ var built_boats := {}
 var sharks: SharkField
 var weather: Weather
 var fishing: FishingService
+var combat: CombatService
 var dev: DevTools
 var _next_boat_index := FIRST_BUILT_BOAT_INDEX
 var _age := 0.0
@@ -55,6 +56,9 @@ func _ready() -> void:
 	fishing = FishingService.new()
 	fishing.name = "Fishing"
 	add_child(fishing)
+	combat = CombatService.new()
+	combat.name = "Combat"
+	add_child(combat)
 	dev = DevTools.new()
 	dev.name = "Dev"
 	add_child(dev)
@@ -626,6 +630,7 @@ func _on_peer_left(peer_id: int) -> void:
 		saved_players[player.player_id] = player.survivor.to_save(Ocean.time)
 	camp.forget_peer(peer_id)
 	fishing.forget(peer_id)
+	combat.forget(peer_id)
 	_despawn_player(peer_id)
 	Net.send_to_ready(self, "_despawn_player", [peer_id])
 

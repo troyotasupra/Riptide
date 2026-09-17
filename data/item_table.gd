@@ -15,7 +15,10 @@ const GROUPS := {"wood": ["driftwood", "log"], "baitfish": ["raw_sardine", "raw_
 const GROUP_NAMES := {"wood": "Wood", "baitfish": "Small fish"}
 const BAIT_HINT := "Fishing bait — with the rod selected, right click to put it on the hook."
 
-const COMING_SOON := "Not usable yet — fishing and hunting arrive in the next update."
+const COMING_SOON := "Not usable yet — it arrives in a later update."
+const GUN_HINT := "Left click fires, right click brings the sights up, R reloads, X switches fire mode. Open the inventory to fit attachments."
+const AMMO_HINT := "Rounds for one calibre of gun — they don't fit anything else. Reload with R."
+const ATTACH_HINT := "Fits a gun: open the inventory, select the gun, and drop this on one of its slots."
 
 const ITEMS := {
 	# --- food ---
@@ -60,7 +63,6 @@ const ITEMS := {
 	"grub": {"name": "Grub", "category": "material", "weight": 0.01, "stack": 30, "spoil": 1800.0, "hint": BAIT_HINT + " Small fish love them. Found when chopping trees and turning driftwood."},
 	"cut_bait": {"name": "Cut bait", "category": "material", "weight": 0.05, "stack": 30, "spoil": 900.0, "hint": BAIT_HINT + " Reef fish and big predators go for it. Cut from small fish (B)."},
 	"jig": {"name": "Hand-tied jig", "category": "material", "weight": 0.03, "stack": 5, "hint": "A feathered jig for open water — mahi-mahi and tuna. Not used up by a catch, only lost if the line snaps. Right click with the rod to put it on."},
-	"pistol_ammo": {"name": "9mm rounds", "category": "material", "weight": 0.012, "stack": 50, "hint": COMING_SOON},
 	"flare": {"name": "Flare", "category": "material", "weight": 0.15, "stack": 6, "hint": COMING_SOON},
 
 	# --- tools & weapons ---
@@ -73,8 +75,43 @@ const ITEMS := {
 	"canteen": {"name": "Canteen (empty)", "category": "tool", "tool": "canteen", "weight": 0.3, "stack": 1, "hint": "Hold it and press E at the spring (clean) or the stream (boil it first)."},
 	"fishing_rod": {"name": "Fishing rod", "category": "tool", "tool": "fishing_rod", "weight": 1.0, "stack": 1, "hint": "Hold left click to wind up a cast and let go to throw. When the bobber dips, left click to strike, then hold to reel and ease off before the line snaps. Right click picks your bait."},
 	"spear": {"name": "Spear", "category": "weapon", "tool": "spear", "weight": 1.5, "stack": 1, "hint": "Look at a shark and left click to strike — the best reach and damage you've got."},
-	"pistol": {"name": "Pistol", "category": "weapon", "weight": 0.9, "stack": 1, "hint": COMING_SOON},
 	"flare_gun": {"name": "Flare gun", "category": "weapon", "weight": 0.6, "stack": 1, "hint": COMING_SOON},
+
+	# --- guns (how each one shoots lives in WeaponTable) ---
+	"m1911": {"name": "M1911", "category": "weapon", "weapon": "m1911", "weight": 1.1, "stack": 1, "hint": GUN_HINT},
+	"uzi": {"name": "Uzi", "category": "weapon", "weapon": "uzi", "weight": 3.6, "stack": 1, "hint": GUN_HINT},
+	"m4": {"name": "M4", "category": "weapon", "weapon": "m4", "weight": 3.4, "stack": 1, "hint": GUN_HINT},
+	"mossberg": {"name": "Mossberg", "category": "weapon", "weapon": "mossberg", "weight": 3.2, "stack": 1, "hint": GUN_HINT},
+	"intervention": {"name": "Intervention", "category": "weapon", "weapon": "intervention", "weight": 6.5, "stack": 1, "hint": GUN_HINT},
+	"cleaning_kit": {"name": "Cleaning kit", "category": "tool", "tool": "cleaning_kit", "weight": 0.3, "stack": 1, "uses": 10,
+		"hint": "Select a gun, then use this to clean it. A fouled gun jams."},
+
+	# --- ammunition (calibres never interchange) ---
+	"ammo_45": {"name": ".45 ACP", "category": "material", "weight": 0.015, "stack": 50, "hint": AMMO_HINT},
+	"ammo_9mm": {"name": "9mm", "category": "material", "weight": 0.012, "stack": 60, "hint": AMMO_HINT},
+	"ammo_556": {"name": "5.56", "category": "material", "weight": 0.013, "stack": 60, "hint": AMMO_HINT},
+	"ammo_12ga": {"name": "12 gauge", "category": "material", "weight": 0.045, "stack": 30, "hint": AMMO_HINT},
+	"ammo_408": {"name": ".408", "category": "material", "weight": 0.032, "stack": 20, "hint": AMMO_HINT},
+
+	# --- attachments (what each one does lives in AttachmentTable) ---
+	"red_dot": {"name": "Red dot", "category": "attachment", "attachment": "red_dot", "weight": 0.12, "stack": 1, "hint": ATTACH_HINT},
+	"holo_sight": {"name": "Holographic sight", "category": "attachment", "attachment": "holo_sight", "weight": 0.18, "stack": 1, "hint": ATTACH_HINT},
+	"prism_3x": {"name": "3x prism", "category": "attachment", "attachment": "prism_3x", "weight": 0.3, "stack": 1, "hint": ATTACH_HINT},
+	"lpvo_6x": {"name": "1-6x LPVO", "category": "attachment", "attachment": "lpvo_6x", "weight": 0.42, "stack": 1, "hint": ATTACH_HINT},
+	"sniper_scope": {"name": "Sniper scope", "category": "attachment", "attachment": "sniper_scope", "weight": 0.6, "stack": 1, "hint": ATTACH_HINT},
+	"compensator": {"name": "Compensator", "category": "attachment", "attachment": "compensator", "weight": 0.1, "stack": 1, "hint": ATTACH_HINT},
+	"muzzle_brake": {"name": "Muzzle brake", "category": "attachment", "attachment": "muzzle_brake", "weight": 0.16, "stack": 1, "hint": ATTACH_HINT},
+	"suppressor": {"name": "Suppressor", "category": "attachment", "attachment": "suppressor", "weight": 0.45, "stack": 1, "hint": ATTACH_HINT},
+	"vertical_grip": {"name": "Vertical grip", "category": "attachment", "attachment": "vertical_grip", "weight": 0.14, "stack": 1, "hint": ATTACH_HINT},
+	"angled_grip": {"name": "Angled grip", "category": "attachment", "attachment": "angled_grip", "weight": 0.11, "stack": 1, "hint": ATTACH_HINT},
+	"bipod": {"name": "Bipod", "category": "attachment", "attachment": "bipod", "weight": 0.5, "stack": 1, "hint": ATTACH_HINT},
+	"extended_mag": {"name": "Extended magazine", "category": "attachment", "attachment": "extended_mag", "weight": 0.25, "stack": 1, "hint": ATTACH_HINT},
+	"quickdraw_mag": {"name": "Quickdraw magazine", "category": "attachment", "attachment": "quickdraw_mag", "weight": 0.08, "stack": 1, "hint": ATTACH_HINT},
+	"light_stock": {"name": "Light stock", "category": "attachment", "attachment": "light_stock", "weight": 0.1, "stack": 1, "hint": ATTACH_HINT},
+	"heavy_stock": {"name": "Heavy stock", "category": "attachment", "attachment": "heavy_stock", "weight": 0.55, "stack": 1, "hint": ATTACH_HINT},
+	"folding_stock": {"name": "Folding stock", "category": "attachment", "attachment": "folding_stock", "weight": 0.2, "stack": 1, "hint": ATTACH_HINT},
+	"laser": {"name": "Laser", "category": "attachment", "attachment": "laser", "weight": 0.07, "stack": 1, "hint": ATTACH_HINT},
+	"flashlight": {"name": "Flashlight", "category": "attachment", "attachment": "flashlight", "weight": 0.12, "stack": 1, "hint": ATTACH_HINT},
 
 	# --- medical, reading, keys ---
 	"bandage": {"name": "Bandage", "category": "medical", "weight": 0.05, "stack": 10, "heal": 25.0},
@@ -121,7 +158,9 @@ const SIZES := {
 	"raw_mahi_mahi": [3, 2], "raw_tuna": [2, 4], "fish_steak": [2, 1], "raw_shark_meat": [2, 1], "cooked_shark": [2, 1], "peg_leg": [1, 3], "hook_hand": [1, 2], "canteen_clean": [1, 2], "canteen_dirty": [1, 2], "canteen": [1, 2],
 	"driftwood": [2, 1], "log": [3, 1], "tarp": [2, 2],
 	"knife": [1, 2], "machete": [1, 3], "stone_hatchet": [1, 3], "oar": [1, 4], "raft_kit": [3, 3], "torch": [1, 3], "fishing_rod": [1, 4], "spear": [1, 4],
-	"pistol": [2, 1], "flare_gun": [2, 1],
+	"m1911": [2, 2], "uzi": [2, 3], "m4": [2, 4], "mossberg": [2, 4], "intervention": [2, 5], "flare_gun": [2, 1],
+	"sniper_scope": [1, 3], "lpvo_6x": [1, 2], "prism_3x": [1, 2], "suppressor": [1, 2], "bipod": [1, 2],
+	"heavy_stock": [2, 2], "light_stock": [2, 2], "folding_stock": [2, 1], "extended_mag": [1, 2], "cleaning_kit": [2, 1],
 	"survival_book": [2, 2], "logbook": [2, 2], "sea_chart": [1, 2],
 	"campfire_kit": [2, 2], "lean_to_kit": [2, 3], "tent_kit": [3, 2], "drying_rack_kit": [2, 3], "storage_crate_kit": [3, 3],
 	"tshirt": [2, 2], "rain_jacket": [2, 3], "wool_sweater": [2, 2], "shorts": [2, 2], "cargo_pants": [2, 3],
@@ -133,9 +172,14 @@ const SIZES := {
 const RARITY := {
 	"cooked_fish": 1, "cooked_meat": 1, "dried_fish": 1, "dried_meat": 1, "dried_berries": 1, "canteen_clean": 1,
 	"rope": 1, "flare": 1, "bandage": 1, "lighter": 1, "knife": 1, "stone_hatchet": 1, "fishing_rod": 1, "lure": 1,
-	"machete": 2, "flare_gun": 2, "pistol_ammo": 2, "survival_book": 2, "sea_chart": 2, "logbook": 2, "journal": 2,
+	"machete": 2, "flare_gun": 2, "survival_book": 2, "sea_chart": 2, "logbook": 2, "journal": 2,
 	"rain_jacket": 1, "wool_sweater": 1, "cargo_pants": 1, "hiking_boots": 1, "wool_beanie": 1, "daypack": 2,
-	"pistol": 3, "plate_carrier": 3, "combat_helmet": 3, "compartment_key": 3,
+	"m1911": 3, "mossberg": 3, "uzi": 3, "m4": 4, "intervention": 5,
+	"ammo_45": 2, "ammo_9mm": 2, "ammo_556": 2, "ammo_12ga": 2, "ammo_408": 3, "cleaning_kit": 1,
+	"red_dot": 2, "holo_sight": 2, "prism_3x": 3, "lpvo_6x": 3, "sniper_scope": 4,
+	"compensator": 2, "muzzle_brake": 2, "suppressor": 4, "vertical_grip": 2, "angled_grip": 2, "bipod": 3,
+	"extended_mag": 2, "quickdraw_mag": 2, "light_stock": 2, "heavy_stock": 2, "folding_stock": 2, "laser": 3, "flashlight": 2,
+	"plate_carrier": 3, "combat_helmet": 3, "compartment_key": 3,
 	"tent_kit": 1, "storage_crate_kit": 1, "book_page_shelter": 2, "book_page_camp": 2,
 	"raw_snapper": 1, "raw_pufferfish": 1, "raw_grouper": 2, "raw_barracuda": 2, "raw_mahi_mahi": 2, "raw_tuna": 3, "fish_steak": 1, "jig": 1,
 	"cooked_shark": 1, "peg_leg": 2, "hook_hand": 2, "book_page_prosthetics": 2, "oar": 1,

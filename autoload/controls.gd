@@ -20,6 +20,7 @@ const KEYS := {
 	"inventory": [KEY_TAB],
 	"book": [KEY_B],
 	"rotate": [KEY_R],
+	"fire_mode": [KEY_X],
 	"drop": [KEY_Q],
 	"give": [KEY_G],
 	"pause": [KEY_ESCAPE],
@@ -53,6 +54,7 @@ const PAD_BUTTONS := {
 	"inventory": [JOY_BUTTON_BACK],
 	"book": [JOY_BUTTON_DPAD_LEFT],
 	"rotate": [JOY_BUTTON_DPAD_RIGHT],
+	"fire_mode": [JOY_BUTTON_RIGHT_STICK],
 	"give": [JOY_BUTTON_DPAD_UP],
 	"drop": [JOY_BUTTON_DPAD_DOWN],
 	"pause": [JOY_BUTTON_START],
@@ -79,13 +81,13 @@ const PAD_AXES := {
 const KEY_LABELS := {
 	"interact": "E", "primary": "LMB", "secondary": "RMB", "jump": "Space", "paddle": "F", "sprint": "Shift",
 	"row_left": "Q", "row_right": "E", "move_back": "S",
-	"crouch": "C", "rotate": "R", "inventory": "Tab", "book": "B", "drop": "Q", "give": "G", "pause": "Esc",
+	"crouch": "C", "rotate": "R", "fire_mode": "X", "inventory": "Tab", "book": "B", "drop": "Q", "give": "G", "pause": "Esc",
 	"hotbar": "1–8",
 }
 const PAD_LABELS := {
 	"interact": "X", "primary": "RT", "secondary": "LT", "jump": "A", "paddle": "Y", "sprint": "L3",
 	"row_left": "LT", "row_right": "RT", "move_back": "Stick ↓",
-	"crouch": "B", "rotate": "D-pad →", "inventory": "View", "book": "D-pad ←", "drop": "D-pad ↓",
+	"crouch": "B", "rotate": "D-pad →", "fire_mode": "R3", "inventory": "View", "book": "D-pad ←", "drop": "D-pad ↓",
 	"give": "D-pad ↑", "pause": "Menu", "hotbar": "LB/RB",
 }
 

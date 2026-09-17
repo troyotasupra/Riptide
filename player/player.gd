@@ -108,6 +108,10 @@ var flying := false
 var _wedged_for := 0.0
 var god := false
 var angler: Angler
+var gun: Gun
+## Where the sights have wandered to (radians), and the field of view while aiming.
+var aim_offset := Vector2.ZERO
+var aim_fov := 0.0
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _has_target := false
@@ -187,7 +191,7 @@ func _ready() -> void:
 	if is_local:
 		camera = Camera3D.new()
 		camera.top_level = true
-		camera.fov = Settings.fov
+		camera.fov = aim_fov if aim_fov > 0.0 else Settings.fov
 		camera.near = 0.05
 		camera.far = 3000.0
 		camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
@@ -203,6 +207,10 @@ func _ready() -> void:
 		view_model = ViewModel.new()
 		view_model.name = "ViewModel"
 		camera.add_child(view_model)
+		gun = Gun.new()
+		gun.name = "Gun"
+		gun.player = self
+		add_child(gun)
 		angler = Angler.new()
 		angler.name = "Angler"
 		angler.player = self
@@ -423,7 +431,7 @@ func _process(delta: float) -> void:
 			pitch = clampf(pitch - stick.y * speed * (-1.0 if Settings.invert_y else 1.0), -1.5, 1.5)
 		# Use the live yaw/pitch rather than the physics-tick body rotation so
 		# looking around responds every frame.
-		var view := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, pitch)
+		var view := Basis(Vector3.UP, yaw + aim_offset.x) * Basis(Vector3.RIGHT, clampf(pitch + aim_offset.y, -1.55, 1.55))
 		camera.global_transform = Transform3D(base.basis * view, world.origin + base.basis * Vector3(0.0, _eye_height, 0.0))
 		camera.fov = Settings.fov
 		_torch_light.visible = ItemTable.get_item(held_id).get("tool", "") == "torch"

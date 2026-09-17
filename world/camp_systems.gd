@@ -68,7 +68,7 @@ const PICKUP_SPOTS := {
 const STASH := [["survival_book", 1], ["knife", 1], ["canteen", 1], ["lighter", 1], ["tarp", 1], ["paracord", 2],
 	["logbook", 1], ["sea_chart", 1], ["fishing_rod", 1], ["lure", 3], ["flare_gun", 1], ["flare", 2], ["bandage", 4], ["sun_hat", 1]]
 const LOCKER_CONTENTS := [["rain_jacket", 1], ["cargo_pants", 1], ["hiking_boots", 1], ["wool_beanie", 1], ["wool_sweater", 1], ["daypack", 1]]
-const FOOTLOCKER_CONTENTS :=[["pistol", 1], ["pistol_ammo", 15], ["plate_carrier", 1], ["combat_helmet", 1]]
+const FOOTLOCKER_CONTENTS :=[["m1911", 1], ["ammo_45", 21], ["plate_carrier", 1], ["combat_helmet", 1]]
 
 var world: Node3D
 ## id -> ItemGrid (the host's are the truth; clients mirror what they open)
@@ -151,6 +151,13 @@ static func fresh_stack(id: String, count: int) -> Dictionary:
 	var stack := {"id": id, "count": count, "spoils_at": Ocean.time + spoil if spoil > 0.0 else 0.0}
 	if item.has("uses"):
 		stack["uses"] = int(item.uses)
+	if item.has("weapon"):
+		# A gun turns up loaded, in fair condition, on its first fire mode.
+		var gun := WeaponMath.stats(String(item.weapon))
+		stack["ammo"] = int(gun.mag)
+		stack["condition"] = 0.85
+		stack["mode"] = String(gun.modes[0])
+		stack["attachments"] = {}
 	return stack
 
 

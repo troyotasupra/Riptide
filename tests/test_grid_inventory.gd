@@ -115,6 +115,7 @@ func test_round_trip_keeps_positions() -> void:
 func test_every_item_has_a_sensible_size() -> void:
 	for id: String in Items.ITEMS:
 		var size: Vector2i = Items.size_of(id)
-		check(size.x >= 1 and size.y >= 1 and size.x <= 3 and size.y <= 4, "%s is %s" % [id, size])
+		# A long gun is the biggest thing you can carry: two cells across, five down.
+		check(size.x >= 1 and size.y >= 1 and size.x <= 3 and size.y <= 5, "%s is %s" % [id, size])
 	for id: String in Items.STORAGE:
 		check(Items.ITEMS[id].category == "wearable", "%s gives storage and can be worn" % id)

@@ -93,14 +93,114 @@ static func build(id: String) -> Node3D:
 			_rock(root, 5, Vector3(0.05, 0.17, 0.02), Vector3(0.0, 1.27, 0.0), Materials.stone(Color(0.25, 0.25, 0.28)))
 			for y: float in [1.16, 1.19]:
 				_torus(root, 0.022, 0.007, Vector3(0.0, y, 0.0), Materials.cloth(ROPE))
-		"pistol", "flare_gun":
-			var body := Color(0.12, 0.12, 0.13) if id == "pistol" else Color(0.92, 0.42, 0.08)
+		"m1911", "flare_gun":
+			var body := Color(0.12, 0.12, 0.13) if id == "m1911" else Color(0.92, 0.42, 0.08)
 			var body_material := Materials.plain(body, 0.45) if id == "flare_gun" else Materials.metal(body, 0.5)
 			_box(root, Vector3(0.032, 0.19, 0.04), Vector3(0.0, 0.08, -0.028), body_material)
-			_cylinder(root, 0.011 if id == "pistol" else 0.02, 0.05, Vector3(0.0, 0.18, -0.03), Materials.metal(DARK_STEEL))
+			_cylinder(root, 0.011 if id == "m1911" else 0.02, 0.05, Vector3(0.0, 0.18, -0.03), Materials.metal(DARK_STEEL))
 			var grip := _box(root, Vector3(0.03, 0.05, 0.1), Vector3(0.0, -0.01, 0.035), Materials.plain(body.darkened(0.35), 0.8))
 			grip.rotation.x = 0.25
 			_torus(root, 0.022, 0.004, Vector3(0.0, 0.035, 0.0), body_material, Vector3(0.0, 0.0, PI / 2.0))
+		"uzi":
+			var uzi_metal := Materials.metal(Color(0.16, 0.16, 0.17), 0.55)
+			_box(root, Vector3(0.05, 0.13, 0.19), Vector3(0.0, 0.16, -0.02), uzi_metal)
+			_cylinder(root, 0.012, 0.16, Vector3(0.0, 0.29, -0.06), Materials.metal(DARK_STEEL))
+			_box(root, Vector3(0.04, 0.16, 0.05), Vector3(0.0, 0.05, 0.03), Materials.plain(Color(0.10, 0.10, 0.11), 0.8))
+			_box(root, Vector3(0.03, 0.14, 0.04), Vector3(0.0, -0.02, 0.03), uzi_metal)
+			_box(root, Vector3(0.035, 0.03, 0.2), Vector3(0.0, 0.2, 0.12), uzi_metal)
+			_box(root, Vector3(0.012, 0.035, 0.012), Vector3(0.0, 0.245, -0.11), Materials.metal(STEEL))
+			_torus(root, 0.022, 0.004, Vector3(0.0, 0.1, -0.02), uzi_metal, Vector3(0.0, 0.0, PI / 2.0))
+		"m4":
+			var rifle_metal := Materials.metal(Color(0.18, 0.18, 0.19), 0.5)
+			var furniture := Materials.plain(Color(0.13, 0.14, 0.13), 0.75)
+			_box(root, Vector3(0.045, 0.24, 0.075), Vector3(0.0, 0.22, -0.01), rifle_metal)
+			_box(root, Vector3(0.05, 0.3, 0.06), Vector3(0.0, 0.5, -0.03), furniture)
+			_cylinder(root, 0.011, 0.34, Vector3(0.0, 0.7, -0.03), Materials.metal(DARK_STEEL))
+			_box(root, Vector3(0.02, 0.06, 0.02), Vector3(0.0, 0.36, 0.03), rifle_metal)
+			_box(root, Vector3(0.04, 0.15, 0.05), Vector3(0.0, 0.08, 0.05), furniture)
+			_box(root, Vector3(0.035, 0.22, 0.05), Vector3(0.0, 0.12, -0.03), rifle_metal)
+			_box(root, Vector3(0.05, 0.2, 0.09), Vector3(0.0, 0.1, 0.17), furniture)
+			_box(root, Vector3(0.05, 0.03, 0.03), Vector3(0.0, 0.35, -0.055), rifle_metal)
+			_torus(root, 0.024, 0.004, Vector3(0.0, 0.14, 0.0), rifle_metal, Vector3(0.0, 0.0, PI / 2.0))
+		"mossberg":
+			var barrel_steel := Materials.metal(Color(0.15, 0.15, 0.16), 0.5)
+			var stock_wood := Materials.wood(Color(0.30, 0.19, 0.11))
+			_cylinder(root, 0.016, 0.62, Vector3(0.0, 0.62, -0.02), barrel_steel)
+			_cylinder(root, 0.012, 0.42, Vector3(0.0, 0.5, 0.02), barrel_steel)
+			_box(root, Vector3(0.045, 0.2, 0.07), Vector3(0.0, 0.24, -0.01), barrel_steel)
+			_cylinder(root, 0.02, 0.13, Vector3(0.0, 0.45, 0.02), stock_wood)
+			_box(root, Vector3(0.04, 0.16, 0.05), Vector3(0.0, 0.09, 0.04), stock_wood)
+			_box(root, Vector3(0.05, 0.26, 0.1), Vector3(0.0, 0.06, 0.16), stock_wood)
+			_torus(root, 0.024, 0.004, Vector3(0.0, 0.15, 0.0), barrel_steel, Vector3(0.0, 0.0, PI / 2.0))
+		"intervention":
+			var sniper_metal := Materials.metal(Color(0.22, 0.24, 0.22), 0.45)
+			var sniper_stock := Materials.plain(Color(0.28, 0.30, 0.26), 0.8)
+			_cylinder(root, 0.019, 0.78, Vector3(0.0, 0.78, -0.02), sniper_metal)
+			_cylinder(root, 0.026, 0.11, Vector3(0.0, 1.2, -0.02), Materials.metal(DARK_STEEL))
+			_box(root, Vector3(0.05, 0.3, 0.09), Vector3(0.0, 0.3, -0.01), sniper_metal)
+			_box(root, Vector3(0.05, 0.42, 0.12), Vector3(0.0, 0.12, 0.14), sniper_stock)
+			_box(root, Vector3(0.045, 0.18, 0.05), Vector3(0.0, 0.1, 0.02), sniper_stock)
+			_cylinder(root, 0.012, 0.1, Vector3(0.05, 0.36, 0.04), sniper_metal, Vector3(0.0, 0.0, PI / 2.0))
+			_box(root, Vector3(0.05, 0.16, 0.03), Vector3(0.0, 0.45, -0.07), sniper_metal)
+			_torus(root, 0.026, 0.004, Vector3(0.0, 0.2, 0.0), sniper_metal, Vector3(0.0, 0.0, PI / 2.0))
+		"red_dot", "holo_sight", "prism_3x", "lpvo_6x", "sniper_scope":
+			var glass := Materials.glow(Color(0.35, 0.75, 0.95), 0.6)
+			var housing := Materials.metal(Color(0.15, 0.15, 0.16), 0.5)
+			var long: bool = id in ["lpvo_6x", "sniper_scope"]
+			var tube := 0.3 if id == "sniper_scope" else (0.24 if id == "lpvo_6x" else (0.12 if id == "prism_3x" else 0.07))
+			var fat := 0.028 if long else 0.022
+			_cylinder(root, fat, tube, Vector3(0.0, 0.05 + tube * 0.5, 0.0), housing, Vector3(PI / 2.0, 0.0, 0.0))
+			_cylinder(root, fat * 1.25, 0.03, Vector3(0.0, 0.05 + tube, 0.0), housing, Vector3(PI / 2.0, 0.0, 0.0))
+			_cylinder(root, fat * 1.1, 0.01, Vector3(0.0, 0.05, 0.0), glass, Vector3(PI / 2.0, 0.0, 0.0))
+			_box(root, Vector3(0.03, 0.05, 0.05), Vector3(0.0, 0.03, 0.0), housing)
+			if long:
+				_cylinder(root, fat * 0.7, 0.02, Vector3(0.028, 0.05 + tube * 0.45, 0.0), housing, Vector3(0.0, 0.0, PI / 2.0))
+		"suppressor", "compensator", "muzzle_brake":
+			var can_metal := Materials.metal(Color(0.13, 0.13, 0.14), 0.45)
+			var length := 0.2 if id == "suppressor" else 0.07
+			var girth := 0.026 if id == "suppressor" else 0.021
+			_cylinder(root, girth, length, Vector3(0.0, length * 0.5, 0.0), can_metal)
+			if id != "suppressor":
+				for cut: float in [0.02, 0.04]:
+					_box(root, Vector3(girth * 2.2, 0.006, girth * 1.2), Vector3(0.0, cut, 0.0), Materials.metal(DARK_STEEL))
+			else:
+				for ring: float in [0.05, 0.1, 0.15]:
+					_torus(root, girth, 0.003, Vector3(0.0, ring, 0.0), Materials.metal(DARK_STEEL))
+		"vertical_grip", "angled_grip":
+			var grip_material := Materials.plain(Color(0.12, 0.12, 0.13), 0.8)
+			var handle := _box(root, Vector3(0.032, 0.11, 0.032), Vector3(0.0, 0.06, 0.0), grip_material)
+			if id == "angled_grip":
+				handle.rotation.x = 0.6
+			_box(root, Vector3(0.04, 0.02, 0.05), Vector3(0.0, 0.01, 0.0), Materials.metal(DARK_STEEL))
+		"bipod":
+			var leg_metal := Materials.metal(Color(0.16, 0.16, 0.17), 0.5)
+			_box(root, Vector3(0.04, 0.03, 0.06), Vector3(0.0, 0.02, 0.0), leg_metal)
+			for side: float in [-1.0, 1.0]:
+				var leg := _cylinder(root, 0.006, 0.16, Vector3(side * 0.03, 0.09, 0.0), leg_metal)
+				leg.rotation.z = side * 0.35
+		"extended_mag", "quickdraw_mag":
+			var mag_metal := Materials.metal(Color(0.14, 0.14, 0.15), 0.5)
+			var tall := 0.2 if id == "extended_mag" else 0.12
+			var mag := _box(root, Vector3(0.028, tall, 0.05), Vector3(0.0, tall * 0.5, 0.0), mag_metal)
+			mag.rotation.x = 0.12
+			_box(root, Vector3(0.03, 0.015, 0.052), Vector3(0.0, tall, 0.0), Materials.plain(Color(0.2, 0.2, 0.22), 0.7))
+		"light_stock", "heavy_stock", "folding_stock":
+			var stock_material := Materials.plain(Color(0.16, 0.17, 0.15), 0.8)
+			var depth := 0.16 if id == "heavy_stock" else 0.12
+			_box(root, Vector3(0.045, 0.1, depth), Vector3(0.0, 0.1, 0.0), stock_material)
+			_box(root, Vector3(0.03, 0.09, 0.05), Vector3(0.0, 0.03, -0.03), Materials.metal(DARK_STEEL))
+			if id == "folding_stock":
+				_torus(root, 0.018, 0.004, Vector3(0.0, 0.05, -0.05), Materials.metal(STEEL), Vector3(0.0, PI / 2.0, 0.0))
+		"laser", "flashlight":
+			var body_metal := Materials.metal(Color(0.15, 0.15, 0.16), 0.5)
+			_cylinder(root, 0.015, 0.08, Vector3(0.0, 0.05, 0.0), body_metal)
+			_cylinder(root, 0.012, 0.008, Vector3(0.0, 0.09, 0.0),
+				Materials.glow(Color(0.95, 0.15, 0.12) if id == "laser" else Color(1.0, 0.95, 0.8), 2.0))
+			_box(root, Vector3(0.03, 0.02, 0.04), Vector3(0.0, 0.01, 0.0), body_metal)
+		"cleaning_kit":
+			_box(root, Vector3(0.12, 0.05, 0.07), Vector3(0.0, 0.03, 0.0), Materials.cloth(Color(0.32, 0.34, 0.30)))
+			_cylinder(root, 0.004, 0.16, Vector3(0.03, 0.08, 0.0), Materials.metal(STEEL), Vector3(0.0, 0.0, 0.2))
+			_cylinder(root, 0.014, 0.04, Vector3(-0.03, 0.06, 0.0), Materials.plain(Color(0.45, 0.35, 0.2), 0.6))
 		"survival_book", "logbook", "journal":
 			var cover: Color = {"survival_book": Color(0.18, 0.34, 0.24), "logbook": Color(0.36, 0.22, 0.12), "journal": Color(0.45, 0.32, 0.18)}[id]
 			_box(root, Vector3(0.15, 0.21, 0.035), Vector3(0.0, 0.1, 0.0), Materials.cloth(PAPER))
@@ -256,7 +356,7 @@ static func build(id: String) -> Node3D:
 			body.position.y = 0.04
 			root.add_child(body)
 			_torus(root, 0.01, 0.0025, Vector3(0.0, -0.005, 0.0), Materials.metal(STEEL), Vector3(0.0, PI / 2.0, 0.0))
-		"pistol_ammo":
+		"ammo_45", "ammo_9mm", "ammo_556", "ammo_12ga", "ammo_408":
 			_box(root, Vector3(0.1, 0.05, 0.07), Vector3(0.0, 0.025, 0.0), Materials.cloth(Color(0.30, 0.34, 0.24)))
 			for i in 4:
 				_cylinder(root, 0.006, 0.03, Vector3(-0.03 + i * 0.02, 0.06, 0.0), Materials.metal(BRASS, 0.3))
