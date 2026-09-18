@@ -79,6 +79,48 @@ static func tube(points: PackedVector3Array, radii: PackedFloat32Array, sides: i
 	return mesh
 
 
+## A flat outline pushed out sideways: give the shape you'd draw from the side
+## (x along the object, y up) and it comes back as a solid `width` thick. Shapes
+## like a magwell, a pistol grip or a rifle stock have sloped and stepped
+## outlines that stacked boxes can't make.
+static func extrude(outline: PackedVector2Array, width: float, key: String = "") -> ArrayMesh:
+	if not key.is_empty() and _cache.has(key):
+		return _cache[key]
+	var vertices := PackedVector3Array()
+	var half := width * 0.5
+	var indices := Geometry2D.triangulate_polygon(outline)
+	# The two flat faces.
+	for side: float in [-1.0, 1.0]:
+		var count := indices.size()
+		for i in range(0, count, 3):
+			var order := [0, 1, 2] if side > 0.0 else [2, 1, 0]
+			for step: int in order:
+				var point := outline[indices[i + step]]
+				vertices.append(Vector3(side * half, point.x, point.y))
+	# The wall around the edge.
+	for i in outline.size():
+		var a := outline[i]
+		var b := outline[(i + 1) % outline.size()]
+		var quad := [Vector3(-half, a.x, a.y), Vector3(half, a.x, a.y), Vector3(half, b.x, b.y), Vector3(-half, b.x, b.y)]
+		for step: int in [0, 2, 1, 0, 3, 2]:
+			vertices.append(quad[step])
+	# Flat normals, worked out per triangle: hard edges, not a smoothed blob.
+	var normals := PackedVector3Array()
+	for i in range(0, vertices.size(), 3):
+		var face := (vertices[i + 1] - vertices[i]).cross(vertices[i + 2] - vertices[i]).normalized()
+		for j in 3:
+			normals.append(face)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	if not key.is_empty():
+		_cache[key] = mesh
+	return mesh
+
+
 ## A gently curving, tapering branch from the origin, `length` long.
 static func branch(variant: int, length: float, base_radius: float, tip_radius: float, bend: float, segments: int = 8) -> ArrayMesh:
 	var key := "branch_%d_%.2f_%.3f_%.3f_%.2f" % [variant, length, base_radius, tip_radius, bend]

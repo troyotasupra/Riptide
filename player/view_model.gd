@@ -71,7 +71,7 @@ func refresh(held_id: String, torso_item: String, skin: Color, crew_color_index:
 		# barrel where you're looking, angled slightly across the view.
 		_held.rotation = Vector3(PI - 0.3, -0.16, 0.06)
 		_held.position = Vector3(-0.02, 0.03, 0.01)
-		_held.scale = Vector3.ONE * 0.88
+		_held.scale = Vector3.ONE
 	else:
 		_held.rotation.x = PI + 0.5  # blade tilts up from the forearm, about 45° above the horizon
 		_held.position = Vector3.ZERO

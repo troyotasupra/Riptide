@@ -827,7 +827,8 @@ func _look() -> void:
 	GameState.day_offset = 0.45 - Ocean.time / DayNight.DAY_LENGTH
 	world.weather.set_state("clear", true)
 	world.weather.set_wind(0.8, 3.0)
-	match GameState.face:
+	# A face can carry an argument after a colon, e.g. "guns:m4".
+	match GameState.face.split(":")[0]:
 		"storm":
 			world.weather.set_state("storm", true)
 			world.weather.set_wind(0.8, 16.0)
@@ -927,7 +928,9 @@ func _look() -> void:
 				Input.action_press("secondary")
 		"guns":
 			# Every gun in a row, side on, for judging their shapes.
-			var rack := ["m1911", "uzi", "mossberg", "m4", "intervention"]
+			# --face=guns racks them all; --face=guns:m4 fills the frame with one.
+			var pick := GameState.face.split(":")
+			var rack := ["m1911", "uzi", "mossberg", "m4", "intervention"] if pick.size() < 2 else [pick[1]]
 			var stand := player.world_transform().origin + Vector3(0.0, 40.0, 0.0)
 			var holder := Node3D.new()
 			world.add_child(holder)
@@ -936,13 +939,14 @@ func _look() -> void:
 				var model := ItemModels.build(rack[i])
 				holder.add_child(model)
 				# Lay each one on its side, muzzle to the left, stacked down the view.
-				model.position = Vector3(0.0, (2 - i) * 0.42, 0.0)
+				model.position = Vector3(0.0, (float(rack.size() - 1) * 0.5 - i) * 0.42, 0.0)
 				# Barrel to the left, sights up: we want the side of each gun.
 				model.transform.basis = Basis(Vector3(0.0, 0.0, -1.0), Vector3(-1.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0))
 			var rack_cam := Camera3D.new()
-			rack_cam.fov = 48.0
+			rack_cam.fov = 48.0 if rack.size() > 1 else 32.0
 			world.add_child(rack_cam)
-			rack_cam.global_transform = Transform3D(Basis.looking_at(Vector3.FORWARD, Vector3.UP), stand + Vector3(-0.3, 0.0, 2.4))
+			var rack_at := stand + (Vector3(-0.3, 0.0, 2.4) if rack.size() > 1 else Vector3(-0.38, 0.0, 1.5))
+			rack_cam.global_transform = Transform3D(Basis.looking_at(Vector3.FORWARD, Vector3.UP), rack_at)
 			rack_cam.make_current()
 			var lamp2 := DirectionalLight3D.new()
 			lamp2.light_energy = 1.2
