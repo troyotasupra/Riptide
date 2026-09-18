@@ -638,6 +638,21 @@ func _gun_loop() -> void:
 	world.combat.request_shot(ahead, 1.0)
 	_check(int(rifle.get("ammo", 0)) == 28, "the rate of fire won't let you spam the trigger")
 
+	# The real trigger: a left click through the player's own input handling.
+	await _wait(0.3)
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	var was_free := GameState.free_mouse
+	GameState.free_mouse = true  # the test window never has the mouse captured
+	player._unhandled_input(click)
+	var release := click.duplicate()
+	release.pressed = false
+	player._unhandled_input(release)
+	GameState.free_mouse = was_free
+	await _wait(0.3)
+	_check(int(rifle.get("ammo", 0)) == 27, "a left click fires the gun in hand (%d left)" % int(rifle.get("ammo", 0)))
+
 	# Out of the way, so it can't soak up the next shot.
 	world.sharks.sharks.erase(shark.shark_id)
 	shark.queue_free()

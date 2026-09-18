@@ -192,7 +192,7 @@ func _ready() -> void:
 		camera = Camera3D.new()
 		camera.top_level = true
 		camera.fov = aim_fov if aim_fov > 0.0 else Settings.fov
-		camera.near = 0.05
+		camera.near = 0.01
 		camera.far = 3000.0
 		camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 		add_child(camera)
@@ -356,6 +356,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if downed:
 		return
 	if angler != null and angler.handle_input(event):
+		get_viewport().set_input_as_handled()
+		return
+	if gun != null and gun.handle_input(event):
 		get_viewport().set_input_as_handled()
 		return
 	# Aboard with an oar, Q or E just takes up the oars — it never drops the oar overboard.

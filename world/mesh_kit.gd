@@ -82,43 +82,118 @@ static func tube(points: PackedVector3Array, radii: PackedFloat32Array, sides: i
 ## A flat outline pushed out sideways: give the shape you'd draw from the side
 ## (x along the object, y up) and it comes back as a solid `width` thick. Shapes
 ## like a magwell, a pistol grip or a rifle stock have sloped and stepped
-## outlines that stacked boxes can't make.
-static func extrude(outline: PackedVector2Array, width: float, key: String = "") -> ArrayMesh:
+## outlines that stacked boxes can't make. Every edge gets a small chamfer so it
+## catches the light, and the faces carry UVs in metres × UV_PER_METRE.
+const UV_PER_METRE := 8.0
+
+
+static func extrude(outline: PackedVector2Array, width: float, key: String = "", bevel: float = -1.0) -> ArrayMesh:
 	if not key.is_empty() and _cache.has(key):
 		return _cache[key]
-	var vertices := PackedVector3Array()
+	var shape := _counter_clockwise(outline)
 	var half := width * 0.5
-	var indices := Geometry2D.triangulate_polygon(outline)
-	# The two flat faces.
+	if bevel < 0.0:
+		bevel = minf(0.0015, width * 0.12)
+	var inner := _inset(shape, bevel) if bevel > 0.0 else shape
+	var core := half - bevel
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# The two flat faces, drawn from the inset outline.
+	var indices := Geometry2D.triangulate_polygon(inner)
+	if indices.is_empty():
+		indices = Geometry2D.triangulate_polygon(shape)
+		inner = shape
 	for side: float in [-1.0, 1.0]:
-		var count := indices.size()
-		for i in range(0, count, 3):
-			var order := [0, 1, 2] if side > 0.0 else [2, 1, 0]
-			for step: int in order:
-				var point := outline[indices[i + step]]
-				vertices.append(Vector3(side * half, point.x, point.y))
-	# The wall around the edge.
-	for i in outline.size():
-		var a := outline[i]
-		var b := outline[(i + 1) % outline.size()]
-		var quad := [Vector3(-half, a.x, a.y), Vector3(half, a.x, a.y), Vector3(half, b.x, b.y), Vector3(-half, b.x, b.y)]
-		for step: int in [0, 2, 1, 0, 3, 2]:
-			vertices.append(quad[step])
-	# Flat normals, worked out per triangle: hard edges, not a smoothed blob.
-	var normals := PackedVector3Array()
-	for i in range(0, vertices.size(), 3):
-		var face := (vertices[i + 1] - vertices[i]).cross(vertices[i + 2] - vertices[i]).normalized()
-		for j in 3:
-			normals.append(face)
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_NORMAL] = normals
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		for i in range(0, indices.size(), 3):
+			var a := inner[indices[i]]
+			var b := inner[indices[i + 1]]
+			var c := inner[indices[i + 2]]
+			_face(tool, [Vector3(side * half, a.x, a.y), Vector3(side * half, b.x, b.y), Vector3(side * half, c.x, c.y)],
+				[a * UV_PER_METRE, b * UV_PER_METRE, c * UV_PER_METRE], Vector3(side, 0.0, 0.0))
+	# The wall around the edge, and the chamfers from it to each face.
+	var run := 0.0
+	var count := shape.size()
+	for i in count:
+		var a := shape[i]
+		var b := shape[(i + 1) % count]
+		var ia := inner[i]
+		var ib := inner[(i + 1) % count]
+		var along := b - a
+		var out2 := Vector2(along.y, -along.x).normalized()
+		var out := Vector3(0.0, out2.x, out2.y)
+		var u0 := run * UV_PER_METRE
+		var u1 := (run + along.length()) * UV_PER_METRE
+		run += along.length()
+		var wa := Vector3(0.0, a.x, a.y)
+		var wb := Vector3(0.0, b.x, b.y)
+		var qa := [wa + Vector3(-core, 0, 0), wa + Vector3(core, 0, 0), wb + Vector3(core, 0, 0), wb + Vector3(-core, 0, 0)]
+		var quv := [Vector2(u0, -core * UV_PER_METRE), Vector2(u0, core * UV_PER_METRE), Vector2(u1, core * UV_PER_METRE), Vector2(u1, -core * UV_PER_METRE)]
+		_quad(tool, qa, quv, out)
+		if bevel > 0.0:
+			for side: float in [-1.0, 1.0]:
+				var edge := [wa + Vector3(side * core, 0, 0), wb + Vector3(side * core, 0, 0),
+					Vector3(side * half, ib.x, ib.y), Vector3(side * half, ia.x, ia.y)]
+				var e := side * half * UV_PER_METRE
+				_quad(tool, edge, [Vector2(u0, e), Vector2(u1, e), Vector2(u1, e + side * 0.01), Vector2(u0, e + side * 0.01)],
+					(out + Vector3(side, 0.0, 0.0)).normalized())
+	tool.generate_tangents()
+	var mesh := tool.commit()
 	if not key.is_empty():
 		_cache[key] = mesh
 	return mesh
+
+
+## The outline wound counter-clockwise (y up), so "outward" is always to the right of each edge.
+static func _counter_clockwise(outline: PackedVector2Array) -> PackedVector2Array:
+	var area := 0.0
+	for i in outline.size():
+		var a := outline[i]
+		var b := outline[(i + 1) % outline.size()]
+		area += a.x * b.y - b.x * a.y
+	if area >= 0.0:
+		return outline
+	var flipped := outline.duplicate()
+	flipped.reverse()
+	return flipped
+
+
+## Each corner pulled `amount` inward along its mitre (capped on sharp corners).
+static func _inset(shape: PackedVector2Array, amount: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var count := shape.size()
+	for i in count:
+		var prev := shape[(i - 1 + count) % count]
+		var here := shape[i]
+		var next := shape[(i + 1) % count]
+		var d1 := (here - prev).normalized()
+		var d2 := (next - here).normalized()
+		var n1 := Vector2(d1.y, -d1.x)
+		var n2 := Vector2(d2.y, -d2.x)
+		var mitre := (n1 + n2)
+		if mitre.length() < 0.001:
+			mitre = n1
+		mitre = mitre.normalized()
+		var reach := amount / maxf(0.35, mitre.dot(n1))
+		out.append(here - mitre * reach)
+	return out
+
+
+## One triangle, wound so its front faces `outward` (Godot's front faces are clockwise).
+static func _face(tool: SurfaceTool, points: Array, uvs: Array, outward: Vector3) -> void:
+	var order := [0, 1, 2]
+	var normal: Vector3 = (points[2] - points[0]).cross(points[1] - points[0])
+	if normal.dot(outward) < 0.0:
+		order = [0, 2, 1]
+	var flat: Vector3 = outward if normal.length() < 1e-9 else normal.normalized() * signf(normal.dot(outward))
+	for k: int in order:
+		tool.set_normal(flat)
+		tool.set_uv(uvs[k])
+		tool.add_vertex(points[k])
+
+
+static func _quad(tool: SurfaceTool, points: Array, uvs: Array, outward: Vector3) -> void:
+	_face(tool, [points[0], points[1], points[2]], [uvs[0], uvs[1], uvs[2]], outward)
+	_face(tool, [points[0], points[2], points[3]], [uvs[0], uvs[2], uvs[3]], outward)
 
 
 ## A gently curving, tapering branch from the origin, `length` long.

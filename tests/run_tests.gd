@@ -21,6 +21,7 @@ const SUITES := [
 	"res://tests/test_weather.gd",
 	"res://tests/test_fishing.gd",
 	"res://tests/test_weapons.gd",
+	"res://tests/test_meshkit.gd",
 ]
 
 
