@@ -25,6 +25,7 @@ const SUITES := [
 	"res://tests/test_meshkit.gd",
 	"res://tests/test_structures.gd",
 	"res://tests/test_sleep_vote.gd",
+	"res://tests/test_hit_math.gd",
 ]
 
 

@@ -297,6 +297,12 @@ func _step_bullets(delta: float) -> void:
 		var query := PhysicsRayQueryParameters3D.create(bullet.position, to,
 			Layers.WORLD | Layers.BOATS | Layers.INTERACT)
 		var hit := space.intersect_ray(query)
+		# Crew are checked by hand: aboard a boat their physics body is on a
+		# deck proxy miles below, nowhere near where they're drawn.
+		var person := _first_person_hit(bullet, to)
+		if not person.is_empty() and (hit.is_empty() or Vector3(bullet.position).distance_to(person.at) <= Vector3(bullet.position).distance_to(hit.position)):
+			_hit_person(person, bullet)
+			continue
 		if not hit.is_empty():
 			_hit_something(hit, bullet)
 			continue
@@ -309,6 +315,47 @@ func _step_bullets(delta: float) -> void:
 		if float(bullet.life) < Ballistics.MAX_FLIGHT and float(bullet.range) < Ballistics.MAX_RANGE:
 			still_flying.append(bullet)
 	_bullets = still_flying
+
+
+## The nearest crew member this leg of the flight passes through, if any.
+func _first_person_hit(bullet: Dictionary, to: Vector3) -> Dictionary:
+	var world := GameState.world
+	if world == null:
+		return {}
+	var from: Vector3 = bullet.position
+	var best := {}
+	var best_distance := INF
+	for player: Player in world.players_root.get_children():
+		if player.peer_id == int(bullet.shooter) or player.survivor == null or player.survivor.god:
+			continue
+		var feet := player.world_transform().origin
+		var height := HitMath.CROUCH_HEIGHT if player.crouching or player.downed else HitMath.STANDING_HEIGHT
+		var along := HitMath.along_segment(from, to, feet, height)
+		if along < 0.0 or along >= best_distance:
+			continue
+		best_distance = along
+		best = {"player": player, "at": from + (to - from).normalized() * along, "feet": feet, "height": height}
+	return best
+
+
+## Host: a round goes into a crew member (or is waved through by the rules).
+func _hit_person(person: Dictionary, bullet: Dictionary) -> void:
+	var world := GameState.world
+	var player: Player = person.player
+	var at: Vector3 = person.at
+	_impact(at, "flesh")
+	Net.send_to_ready(self, "_impact", [at, "flesh"])
+	world.sfx_at("hit", at)
+	if not GameState.friendly_fire:
+		var shooter := _player(int(bullet.shooter))
+		if shooter != null and shooter.survivor != null:
+			shooter.survivor.notify("That round went into %s. (Friendly fire is off.)" % player.display_name)
+		return
+	var s := player.survivor
+	var damage := HitMath.damage_for(float(bullet.damage), at.y, float(person.feet.y), float(person.height))
+	s.survival.take_damage(damage)
+	s.notify("You're hit!")
+	s.push_survival()
 
 
 func _hit_something(hit: Dictionary, bullet: Dictionary) -> void:

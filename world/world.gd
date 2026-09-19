@@ -358,6 +358,7 @@ func save_now() -> void:
 		"crew_color": GameState.crew_color,
 		"emblem": GameState.emblem,
 		"time_of_day": GameState.time_of_day(),
+		"friendly_fire": GameState.friendly_fire,
 		"resources": depleted,
 		"resources_burnt": resources.burnt.keys(),
 		"boats": boats,
@@ -372,6 +373,7 @@ func save_now() -> void:
 
 func _apply_save(data: Dictionary) -> void:
 	var now: float = Ocean.time
+	GameState.friendly_fire = bool(data.get("friendly_fire", false))
 	var depleted: Dictionary = data.get("resources", {})
 	for id: String in depleted:
 		resources.depleted[id] = now + float(depleted[id])
@@ -481,7 +483,9 @@ func request_interact(target_id: String, slot: int) -> void:
 		"bag":
 			var bag: Node3D = camp.bag_nodes.get(parts[1]) if parts.size() > 1 else null
 			if bag != null and at.distance_to(bag.global_position) <= INTERACT_RANGE:
-				camp.open_container_for(survivor, "bag:" + parts[1])
+				# One thing lying there is simply picked up; a bagful is searched.
+				if not camp.take_lone_item(survivor, parts[1]):
+					camp.open_container_for(survivor, "bag:" + parts[1])
 		"struct":
 			var structure: Node3D = camp.structure_nodes.get(parts[1]) if parts.size() > 1 else null
 			if structure != null and at.distance_to(structure.global_position) <= INTERACT_RANGE + 1.5:
@@ -623,6 +627,7 @@ func _on_peer_ready(peer_id: int) -> void:
 		fishing.sync_to(peer_id)
 		fire.sync_to(peer_id)
 		dev._set_allowed.rpc_id(peer_id, GameState.dev_mode)
+		_set_friendly_fire.rpc_id(peer_id, GameState.friendly_fire)
 	var player_name: String = Net.roster[peer_id]["name"]
 	var player_id := Net.player_id_of(peer_id)
 	var look := Net.look_of(peer_id)
@@ -763,3 +768,17 @@ func _build_environment() -> SkyController:
 	controller.environment = environment
 	controller.sky_material = sky_material
 	return controller
+
+
+## The host's rule on shooting each other, sent to everyone who joins.
+@rpc("authority", "call_remote", "reliable")
+func _set_friendly_fire(on: bool) -> void:
+	GameState.friendly_fire = on
+
+
+## Host: turn crew-on-crew damage on or off (the developer panel).
+func set_friendly_fire(on: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	GameState.friendly_fire = on
+	Net.send_to_ready(self, "_set_friendly_fire", [on])

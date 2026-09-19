@@ -4,13 +4,17 @@ extends Interactable
 ## pack they lost when they blacked out. Search it with interact (F); it disappears once empty.
 
 var bag_id := ""
+## One thing lying there rather than a bagful: the item's id and how many.
+var lone_id := ""
+var lone_count := 0
 
 
-func setup(id: String, title: String, pos: Vector3) -> void:
+func setup(id: String, title: String, pos: Vector3, item_id: String = "", count: int = 0) -> void:
 	bag_id = id
+	lone_id = item_id
+	lone_count = count
 	name = "Bag_" + id
 	interact_id = "bag:" + id
-	prompt = "Search %s   ·   %s pick it all up" % [title, Controls.tag("rotate")]
 	position = pos
 	rotation.y = float(hash(id) % 628) / 100.0
 	collision_layer = Layers.INTERACT
@@ -21,6 +25,17 @@ func setup(id: String, title: String, pos: Vector3) -> void:
 	collider.shape = shape
 	collider.position.y = 0.15
 	add_child(collider)
+	if not lone_id.is_empty():
+		# One item dropped: it lies there as itself, not stuffed in a duffel.
+		var many := " ×%d" % lone_count if lone_count > 1 else ""
+		prompt = "Pick up %s%s" % [ItemTable.display_name(lone_id), many]
+		var model := ItemModels.build(lone_id)
+		# Lying on its side, as a dropped thing does.
+		model.rotation = Vector3(PI * 0.5, rotation.y * 0.7, 0.0)
+		model.position.y = 0.06
+		add_child(model)
+		return
+	prompt = "Search %s   ·   %s pick it all up" % [title, Controls.tag("rotate")]
 	var body := CapsuleMesh.new()
 	body.radius = 0.16
 	body.height = 0.62

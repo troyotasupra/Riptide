@@ -13,6 +13,9 @@ var crew_color := 4
 var emblem := 1
 ## Objectives the local player has completed this session (id -> true).
 var objectives_done := {}
+## The host's rule on shooting each other: off, so a stray round in a firefight
+## doesn't drop a crewmate. Saved with the world and sent to everyone who joins.
+var friendly_fire := false
 ## Developer mode is on for this session (the host's setting; crew get it from the host).
 var dev_mode := false
 ## Item hints already shown this session (item id -> true).
