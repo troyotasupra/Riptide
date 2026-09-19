@@ -8,6 +8,7 @@
 #   tools/dev.sh scenario starter        one scripted in-world check
 #   tools/dev.sh scenario guns --seed=1  ... with extra arguments passed through
 #   tools/dev.sh look shore shot.png     a screenshot of one view
+#   tools/dev.sh coop                    a host and a joining crew member, two processes
 #   tools/dev.sh check                   import, then tests, then the starter scenario
 #
 # Set GODOT to use a specific build.
@@ -83,6 +84,34 @@ check)
 	"$godot" --headless --path "$project" --import
 	"$godot" --headless --path "$project" --script res://tests/run_tests.gd
 	run_scenario starter --seed=4242
+	;;
+coop)
+	# Two processes, a host and a joining crew member, the way two people on
+	# different machines connect.
+	#
+	# The host deliberately runs NO scenario of its own. The client scenario
+	# checks the host's starting clothes and an untouched sea chest, so a host
+	# running --scenario=camp fails it by simply playing on: it takes the knife
+	# and puts a jacket on before the client ever looks.
+	log="${TMPDIR:-/tmp}/riptide-coop-host.log"
+	rm -f "$HOME/Library/Application Support/Godot/app_userdata/Riptide/saves/scenario_test.save"
+	"$godot" --path "$project" --no-focus --audio-driver Dummy -- \
+		--host --profile=testhost "--port=$port" --spawn=shack --dev --seed=4242 \
+		>"$log" 2>&1 &
+	host_pid=$!
+	trap 'kill $host_pid 2>/dev/null' EXIT
+	for _ in $(seq 1 60); do
+		grep -q "\[net\] hosting" "$log" 2>/dev/null && break
+		sleep 1
+	done
+	if ! grep -q "\[net\] hosting" "$log" 2>/dev/null; then
+		echo "the host never came up; see $log" >&2
+		tail -20 "$log" >&2
+		exit 1
+	fi
+	sleep 4
+	"$godot" --path "$project" --no-focus --audio-driver Dummy -- \
+		--join=127.0.0.1 "--port=$port" --profile=testcrew --scenario=client --dev --seed=4242 "$@"
 	;;
 run)
 	"$godot" --path "$project" -- --dev "$@"
