@@ -363,7 +363,8 @@ const LAYER_BASE := [SAND, MEADOW_GRASS, JUNGLE_FLOOR, ROCK, WET_SAND]
 ## Which photo layer (TerrainLayers) the ground here is.
 static func layer_for(biome: Biome, h: float, normal_y: float) -> int:
 	if biome == Biome.SEA:
-		return TerrainLayers.WET
+		# The shallow apron is the beach carrying on under the water.
+		return TerrainLayers.SAND if h > -5.0 else TerrainLayers.WET
 	if normal_y < 0.72 and biome != Biome.BEACH:
 		return TerrainLayers.ROCK
 	match biome:
@@ -380,7 +381,8 @@ static func layer_for(biome: Biome, h: float, normal_y: float) -> int:
 
 static func color_for(biome: Biome, h: float, normal_y: float) -> Color:
 	if biome == Biome.SEA:
-		return WET_SAND.darkened(clampf(-h / 30.0, 0.0, 0.5))
+		# Pale sand on the sunlit apron, darkening as the bottom falls away.
+		return SAND.lerp(WET_SAND, smoothstep(0.5, 6.0, -h)).darkened(clampf(-h / 40.0, 0.0, 0.45))
 	if normal_y < 0.72 and biome != Biome.BEACH:
 		return ROCK
 	if biome == Biome.BEACH:
@@ -407,7 +409,12 @@ func _base_height(x: float, z: float) -> float:
 	var bumps := (_terrain.get_noise_2d(x, z) + 1.0) * 0.5
 	var lowland := 3.0 + 14.0 * bumps
 	var hill_lift := HILL_PEAK * pow(maxf(0.0, 1.0 - Vector2(x, z).distance_to(hill) / HILL_RADIUS), 1.6)
-	var sea_floor := lerpf(DEEP_SEABED, NEAR_SEABED, clampf(2.2 - d * 1.2, 0.0, 1.0))
+	# Off the sand the bottom shelves away gently — a wadeable, sunlit apron of
+	# sand you can see through the water — before it falls off to the seabed.
+	var offshore := local.length() - edge
+	var sea_floor := -0.85 - 3.0 * smoothstep(0.0, 30.0, offshore)
+	sea_floor = lerpf(sea_floor, NEAR_SEABED, smoothstep(32.0, 110.0, offshore))
+	sea_floor = lerpf(sea_floor, DEEP_SEABED, smoothstep(110.0, 330.0, offshore))
 	var reef := maxf(0.0, 1.0 - Vector2(x, z).distance_to(shipwreck) / REEF_RADIUS)
 	# The freighter ran aground on a sandbar in the middle of the reef.
 	var bar := smoothstep(WRECK_BAR_RADIUS, WRECK_BAR_RADIUS * 0.4, Vector2(x, z).distance_to(shipwreck))

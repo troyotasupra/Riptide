@@ -56,6 +56,14 @@ func test_calibres_sound_different() -> void:
 	check(_brightness(shotgun, 0.02, 0.08) < _brightness(smg, 0.02, 0.08), "the 12 gauge booms lower than the 9 mm")
 
 
+func test_a_round_going_past_is_a_crack_not_a_boom() -> void:
+	var past := _samples(Audio.passby())
+	var shot := _samples(Audio.shot("m4", false))
+	check(past.size() < int(0.12 * Audio.RATE), "it's over in a moment")
+	check(_brightness(past, 0.0, 0.01) > _brightness(shot, 0.02, 0.05), "and it's a sharp snap, not the muzzle's boom")
+	check(_rms(past, 0.0, 0.003) > _rms(past, 0.05, 0.08) * 6.0, "with nothing rolling on behind it")
+
+
 func test_the_bow_is_not_a_gunshot() -> void:
 	var bow := _samples(Audio.shot("bow", false))
 	check(bow.size() < int(0.5 * Audio.RATE), "the bow is a short thrum")

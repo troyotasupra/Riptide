@@ -218,7 +218,8 @@ func _camp_loop() -> void:
 	GameState.day_offset = 0.92 - Ocean.time / DayNight.DAY_LENGTH
 	camp.interact_shack_part(s, "bunk", 0)
 	_check(camp.local_asleep, "asleep in the bunk at night")
-	await _wait(3.5)
+	# Everybody in bed: the night goes after five seconds.
+	await _wait(6.5)
 	_check(DayNight.is_day(GameState.time_of_day()) and not camp.local_asleep, "the night skips to dawn when the crew sleeps")
 	_check(camp.respawn_spot(player.player_id).get("kind", "") == "shack", "the bunk becomes the respawn point")
 	_check(camp.warmth_for(player) >= CampSystems.SHACK_WARMTH, "the shack keeps you warm")
@@ -1179,6 +1180,16 @@ func _look() -> void:
 			get_tree().process_frame.connect(func() -> void:
 				if player.angler.state == Angler.State.WAITING:
 					player.angler._bite_in = INF)
+		"shallows":
+			# Straight down into the shallows: how much of the bottom shows.
+			var island2: CampIsland = world.camp_island
+			var out3 := Vector2.from_angle(island2.cove_bearing)
+			for metres: float in [0.0, 4.0, 8.0, 15.0, 25.0, 40.0, 70.0]:
+				var spot := island2.cove + out3 * metres
+				print("[seabed] %4.0f m out: bottom %.2f m" % [metres, world.ground_height(spot.x, spot.y)])
+			var look_at := island2.cove + out3 * 14.0
+			var eye3 := island2.cove + out3 * 5.0
+			_fixed_camera(Vector3(eye3.x, 7.0, eye3.y), Vector3(look_at.x, world.ground_height(look_at.x, look_at.y), look_at.y))
 		"shore":
 			var island: CampIsland = world.camp_island
 			for label: Array in [["dock end", Vector2(camp.shack.dock_end.x, camp.shack.dock_end.z)],

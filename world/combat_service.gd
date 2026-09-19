@@ -366,6 +366,9 @@ func _report_shot(muzzle: Vector3, direction: Vector3, weapon_id: String, quiet:
 		ArrowFlight.launch(muzzle, direction.normalized() * float(WeaponTable.WEAPONS[weapon_id].velocity))
 		return
 	Sound.play_shot(weapon_id, muzzle, quiet)
+	# Anyone the round goes past hears it crack by, ahead of the report.
+	if shooter != multiplayer.get_unique_id():
+		Sound.play_passby(muzzle, direction.normalized(), float(WeaponTable.WEAPONS.get(weapon_id, {}).get("velocity", 0.0)), quiet)
 	Effects.tracer(muzzle, muzzle + direction.normalized() * TRACER_LENGTH)
 	Effects.muzzle_flash(muzzle, direction.normalized(), 1.0 - clampf(quiet, 0.0, 0.8))
 

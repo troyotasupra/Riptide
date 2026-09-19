@@ -32,6 +32,26 @@ static func shot(weapon: String, suppressed: bool) -> AudioStreamWAV:
 	return _cache[key]
 
 
+## The bullet itself going past: a short, dry supersonic crack and its snap of
+## air. Nothing like the muzzle report, and it arrives before it downrange.
+static func passby() -> AudioStreamWAV:
+	if not _cache.has("passby"):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 991
+		var length := int(0.09 * RATE)
+		var samples := PackedFloat32Array()
+		samples.resize(length)
+		var low := 0.0
+		for i in length:
+			var t := float(i) / RATE
+			var noise := rng.randf_range(-1.0, 1.0)
+			low += (noise - low) * 0.18
+			# A hard snap, then the air closing behind it.
+			samples[i] = noise * exp(-t / 0.0012) + low * 0.8 * exp(-t / 0.012)
+		_cache["passby"] = _wav(samples)
+	return _cache["passby"]
+
+
 static func _report(p: Array, suppressed: bool, seed_value: int) -> AudioStreamWAV:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value

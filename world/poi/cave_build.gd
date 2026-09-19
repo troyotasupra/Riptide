@@ -247,12 +247,11 @@ static func _chamber(shape: CampIsland) -> Node3D:
 	var node := Node3D.new()
 	node.name = "Chamber"
 	var yaw := facing_in(shape)
-	var thief := _dead_pirate(node, {"body": 0, "build": 0, "height": 1, "skin": 3, "face": 1, "eyes": 1, "hair": 0, "hair_color": 0, "beard": 2},
-		{"torso": "rain_jacket", "legs": "cargo_pants", "head": "wool_beanie"}, 2)
-	thief.transform = Transform3D(Basis(Vector3.UP, yaw + 0.7) * Basis(Vector3.RIGHT, -1.45), room_point(shape, Vector3(-1.1, 0.25, 0.6)))
-	var hunter := _dead_pirate(node, {"body": 1, "build": 2, "height": 3, "skin": 1, "face": 2, "eyes": 2, "hair": 3, "hair_color": 2, "beard": 1},
-		{"torso": "wool_sweater", "legs": "cargo_pants", "feet": "hiking_boots"}, 5)
-	hunter.transform = Transform3D(Basis(Vector3.UP, yaw - 2.2) * Basis(Vector3.RIGHT, 1.4), room_point(shape, Vector3(2.9, 0.3, -1.2)))
+	# Long dead: picked clean, with the rags of what they wore under the bones.
+	var thief := _dead_pirate(node, 11, Color(0.24, 0.3, 0.26))
+	thief.transform = Transform3D(Basis(Vector3.UP, yaw + 0.7) * Basis(Vector3.RIGHT, -1.52), room_point(shape, Vector3(-1.1, 0.06, 0.6)))
+	var hunter := _dead_pirate(node, 27, Color(0.35, 0.28, 0.2))
+	hunter.transform = Transform3D(Basis(Vector3.UP, yaw - 2.2) * Basis(Vector3.RIGHT, 1.5), room_point(shape, Vector3(2.9, 0.06, -1.2)))
 	# Where they bled, and the lantern that went out when it fell.
 	var blood := Materials.plain(Color(0.22, 0.04, 0.03), 0.4)
 	for spot: Vector3 in [Vector3(-1.0, 0.02, 0.9), Vector3(2.6, 0.02, -0.9), Vector3(0.7, 0.02, 0.1)]:
@@ -285,8 +284,22 @@ static func _chamber(shape: CampIsland) -> Node3D:
 	return node
 
 
-static func _dead_pirate(parent: Node3D, look: Dictionary, worn: Dictionary, color: int) -> CharacterModel:
-	var model := CharacterModel.new()
-	parent.add_child(model)
-	model.setup(look, worn, color, 0)
-	return model
+## A skeleton with the rotted remains of clothing caught under the bones.
+static func _dead_pirate(parent: Node3D, seed_value: int, cloth: Color) -> Node3D:
+	var node := Node3D.new()
+	parent.add_child(node)
+	var bones := Remains.build(seed_value)
+	node.add_child(bones)
+	var rag := Materials.cloth(cloth.darkened(0.25))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	# Torn cloth over the ribs and hips, sagging into the frame it once filled.
+	for spot: Vector3 in [Vector3(0.0, 1.22, -0.03), Vector3(0.0, 1.38, -0.02), Vector3(0.0, 0.86, -0.01), Vector3(0.0, 0.62, 0.0)]:
+		var piece := MeshInstance3D.new()
+		piece.mesh = MeshKit.rock(300 + seed_value + int(spot.y * 10.0), 0.4, 0.5)
+		piece.material_override = rag
+		piece.position = spot
+		piece.rotation.y = rng.randf_range(-0.6, 0.6)
+		piece.scale = Vector3(rng.randf_range(0.3, 0.42), rng.randf_range(0.1, 0.2), rng.randf_range(0.22, 0.34))
+		node.add_child(piece)
+	return node
