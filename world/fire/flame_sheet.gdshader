@@ -10,17 +10,18 @@ render_mode unshaded, cull_disabled, shadows_disabled;
 // Per instance (MultiMesh custom data): x phase 0..1, y speed, z tongues across, w heat 0..1.
 
 uniform float boost = 1.12;
+// Root to tip. Fire by default; a waterfall's splash uses white and pale blues.
+uniform vec3 c_root = vec3(1.0, 0.88, 0.5);
+uniform vec3 c_low = vec3(1.0, 0.64, 0.1);
+uniform vec3 c_mid = vec3(0.97, 0.34, 0.03);
+uniform vec3 c_tip = vec3(0.66, 0.08, 0.02);
 
 varying flat vec3 facet;
 
 vec3 ramp(float k) {
-	vec3 root = vec3(1.0, 0.88, 0.5);
-	vec3 yellow = vec3(1.0, 0.64, 0.1);
-	vec3 orange = vec3(0.97, 0.34, 0.03);
-	vec3 red = vec3(0.66, 0.08, 0.02);
-	if (k < 0.12) return mix(root, yellow, k / 0.12);
-	if (k < 0.48) return mix(yellow, orange, (k - 0.12) / 0.36);
-	return mix(orange, red, (k - 0.48) / 0.52);
+	if (k < 0.12) return mix(c_root, c_low, k / 0.12);
+	if (k < 0.48) return mix(c_low, c_mid, (k - 0.12) / 0.36);
+	return mix(c_mid, c_tip, (k - 0.48) / 0.52);
 }
 
 float hash(float n) {

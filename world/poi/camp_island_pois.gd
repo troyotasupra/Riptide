@@ -80,7 +80,7 @@ static func _spring(shape: CampIsland) -> Node3D:
 	spring.add_child(collider)
 	var water := MeshInstance3D.new()
 	water.mesh = _pool_mesh(shape, shape.spring, CampIsland.POND_RADIUS * 2.4, shape.spring_height)
-	water.material_override = _water_material()
+	water.material_override = _flow_material("pool", 0.0, 0.0, 0.035, 0.8, true)
 	spring.add_child(water)
 	return spring
 
@@ -154,7 +154,7 @@ static func _flood(shape: CampIsland, origin: Vector2, cells: int, step: float, 
 	return {"wet": wet, "spilled": spilled}
 
 
-static func _surface(vertices: PackedVector3Array, normals: PackedVector3Array) -> ArrayMesh:
+static func _surface(vertices: PackedVector3Array, normals: PackedVector3Array, uvs: PackedVector2Array = PackedVector2Array()) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	if vertices.is_empty():
 		return mesh
@@ -162,6 +162,8 @@ static func _surface(vertices: PackedVector3Array, normals: PackedVector3Array) 
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
+	if uvs.size() == vertices.size():
+		arrays[Mesh.ARRAY_TEX_UV] = uvs
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return mesh
 
@@ -169,8 +171,9 @@ static func _surface(vertices: PackedVector3Array, normals: PackedVector3Array) 
 ## The stream from the pool down to the sea, lying in its carved bed. The stretch
 ## going over the waterfall is left out, because that water is drawn falling.
 static func _stream(shape: CampIsland) -> Node3D:
-	const SEGMENTS := 64
+	const SEGMENTS := 220
 	const HALF_WIDTH := 1.1
+	var plunge_at := shape.stream_point(CampIsland.FALL_T + CampIsland.FALL_SPAN)
 	var stream := Interactable.new()
 	stream.name = "Stream"
 	stream.interact_id = "stream"
@@ -180,16 +183,22 @@ static func _stream(shape: CampIsland) -> Node3D:
 
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
 	var previous_left := Vector3.ZERO
 	var previous_right := Vector3.ZERO
 	var previous_center := Vector3.ZERO
 	var had_previous := false
+	var travelled := 0.0
+	var previous_travelled := 0.0
 	for i in SEGMENTS + 1:
 		var t := float(i) / SEGMENTS
 		if t > CampIsland.FALL_T and t < CampIsland.FALL_T + CampIsland.FALL_SPAN:
 			had_previous = false  # the falling stretch
 			continue
 		var p := shape.stream_point(t)
+		if p.distance_to(plunge_at) < CampIsland.PLUNGE_RADIUS * 0.8:
+			had_previous = false  # the plunge pool has its own water
+			continue
 		var ahead := shape.stream_point(minf(t + 0.01, 1.0)) - shape.stream_point(maxf(t - 0.01, 0.0))
 		var side := ahead.normalized().orthogonal() * HALF_WIDTH
 		var y: float = shape.stream_bed(t) + 0.3
@@ -197,9 +206,22 @@ static func _stream(shape: CampIsland) -> Node3D:
 		var left := Vector3(p.x + side.x, y, p.y + side.y)
 		var right := Vector3(p.x - side.x, y, p.y - side.y)
 		if had_previous:
-			for v: Vector3 in [previous_left, previous_right, left, previous_right, right, left]:
-				vertices.append(v)
-				normals.append(Vector3.UP)
+			travelled += center.distance_to(previous_center)
+			# Four quads across with alternating diagonals, so the water rolls in facets.
+			const ACROSS := 4
+			for c in ACROSS:
+				var x0 := -1.0 + 2.0 * c / ACROSS
+				var x1 := -1.0 + 2.0 * (c + 1) / ACROSS
+				var a0 := previous_left.lerp(previous_right, (x0 + 1.0) * 0.5)
+				var a1 := previous_left.lerp(previous_right, (x1 + 1.0) * 0.5)
+				var b0 := left.lerp(right, (x0 + 1.0) * 0.5)
+				var b1 := left.lerp(right, (x1 + 1.0) * 0.5)
+				var quad := [[a0, x0, previous_travelled], [a1, x1, previous_travelled], [b1, x1, travelled], [b0, x0, travelled]]
+				var order := [0, 1, 2, 0, 2, 3] if (i + c) % 2 == 0 else [0, 1, 3, 1, 2, 3]
+				for k: int in order:
+					vertices.append(quad[k][0])
+					normals.append(Vector3.UP)
+					uvs.append(Vector2(quad[k][1], quad[k][2]))
 			# A thin interaction box along each segment so you can drink or fill a canteen.
 			var along := center - previous_center
 			if along.length() > 0.1:
@@ -212,16 +234,19 @@ static func _stream(shape: CampIsland) -> Node3D:
 		previous_left = left
 		previous_right = right
 		previous_center = center
+		previous_travelled = travelled
 		had_previous = true
 	var water := MeshInstance3D.new()
-	water.mesh = _surface(vertices, normals)
-	water.material_override = _water_material()
+	water.mesh = _surface(vertices, normals, uvs)
+	water.material_override = _flow_material("stream", 1.4, 0.12, 0.035, 0.82)
 	stream.add_child(water)
 	return stream
 
 
-## The big fall: a sheet of running water down the rock face, wet boulders either
-## side, a pool to catch it and spray where it lands.
+## The big fall: the stream shoots off the lip and pours down the rock face in
+## rolling, faceted water (water_flow.gdshader), a thinner fast strand over the
+## top of it; a splash of white water at the foot where it lands (the fire's
+## flowing sheets in white and blue), mist, wet boulders either side, and a pool.
 static func _waterfall(shape: CampIsland) -> Node3D:
 	var node := Node3D.new()
 	node.name = "Waterfall"
@@ -232,39 +257,30 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 	var forward := Vector3(direction.x, 0.0, direction.y)
 	var across := forward.cross(Vector3.UP).normalized() * CampIsland.STREAM_WIDTH * 0.9
 
-	# The sheet: leaning out from the brink and spreading as it falls.
-	var vertices := PackedVector3Array()
-	var uvs := PackedVector2Array()
-	const STEPS := 10
-	for i in STEPS:
-		var t0 := float(i) / STEPS
-		var t1 := float(i + 1) / STEPS
-		var points: Array[Vector3] = []
-		for t: float in [t0, t1]:
-			var lean := forward * (0.3 + t * 1.1)
-			var y := lerpf(top.y + 0.3, foot.y - 0.15, t * t * 0.4 + t * 0.6)
-			var spread := 1.0 + t * 0.4
-			points.append(Vector3(top.x, y, top.z) + lean - across * spread)
-			points.append(Vector3(top.x, y, top.z) + lean + across * spread)
-		for triangle: Array in [[0, 1, 2], [1, 3, 2]]:
-			for index: int in triangle:
-				vertices.append(points[index])
-				uvs.append(Vector2(float(index % 2), t1 if index >= 2 else t0))
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_TEX_UV] = uvs
-	var sheet_mesh := ArrayMesh.new()
-	sheet_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	var sheet := MeshInstance3D.new()
-	sheet.mesh = sheet_mesh
-	sheet.material_override = _falling_water_material()
-	sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	node.add_child(sheet)
+	var path := _fall_path(shape, top, foot, forward)
+	for layer: Array in [[1.0, 0.0, _flow_material("fall", 5.5, 0.72, 0.07, 0.9)], [0.45, 0.14, _flow_material("fall_strand", 7.0, 0.9, 0.05, 0.95)]]:
+		var sheet := MeshInstance3D.new()
+		sheet.mesh = _fall_sheet(path, across, layer[0], layer[1])
+		sheet.material_override = layer[2]
+		sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.add_child(sheet)
+	# White water boiling up where it lands.
+	var splash := FlameSheets.new()
+	splash.set_palette([Color(1.0, 1.0, 1.0), Color(0.88, 0.95, 1.0), Color(0.7, 0.86, 0.94), Color(0.55, 0.76, 0.86)], 1.0)
+	var landing: Vector3 = path[path.size() - 1]
+	var sheets: Array = []
+	var width := across.length() * 2.6
+	for i in 4:
+		sheets.append({"pos": landing, "yaw": atan2(forward.x, forward.z) + i * PI / 4.0, "width": width, "height": 1.1 - i * 0.12, "seed": 900 + i, "heat": 1.0})
+	for i in 6:
+		var a := i * TAU / 6.0
+		sheets.append({"pos": landing + Vector3(cos(a), 0.0, sin(a)) * width * 0.35, "yaw": -a + PI / 2.0, "width": width * 0.5, "height": 0.55, "seed": 910 + i, "heat": 0.5})
+	splash.set_sheets(sheets)
+	node.add_child(splash)
 
 	var plunge := MeshInstance3D.new()
 	plunge.mesh = _pool_mesh(shape, Vector2(foot.x, foot.z), CampIsland.PLUNGE_RADIUS * 2.0, foot.y + 0.3)
-	plunge.material_override = _water_material()
+	plunge.material_override = _flow_material("pool", 0.0, 0.0, 0.035, 0.8, true)
 	node.add_child(plunge)
 
 	var rng := RandomNumberGenerator.new()
@@ -284,7 +300,7 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 	spray.lifetime = 1.4
 	spray.position = foot + Vector3.UP * 0.4 + forward * 0.6
 	var quad := QuadMesh.new()
-	quad.size = Vector2(0.7, 0.7)
+	quad.size = Vector2(0.9, 0.9)
 	spray.draw_pass_1 = quad
 	spray.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var process := ParticleProcessMaterial.new()
@@ -301,36 +317,98 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 	var mist := StandardMaterial3D.new()
 	mist.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mist.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mist.albedo_color = Color(0.92, 0.96, 1.0, 0.16)
+	mist.albedo_color = Color(0.92, 0.96, 1.0, 0.22)
+	# A soft round puff, not a square.
+	mist.albedo_texture = FireFx._puff()
 	mist.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	spray.material_override = mist
 	node.add_child(spray)
 	return node
 
 
-static var _falling_water: ShaderMaterial
 
 
-static func _falling_water_material() -> ShaderMaterial:
-	if _falling_water != null:
-		return _falling_water
-	var shader := Shader.new()
-	shader.code = """shader_type spatial;
-render_mode cull_disabled, depth_draw_always;
+## Where the falling water runs: it shoots off the lip on a falling arc, then
+## runs down the face a hand's width off the rock, into the pool.
+static func _fall_path(shape: CampIsland, top: Vector3, foot: Vector3, forward: Vector3) -> Array[Vector3]:
+	const FINE := 600
+	const SPACING := 0.3
+	var run := Vector2(foot.x - top.x, foot.z - top.z).length() + 1.2
+	var start := top + Vector3.UP * 0.25
+	var dense: Array[Vector3] = []
+	for i in FINE + 1:
+		var d := run * float(i) / FINE
+		var xz := Vector2(top.x, top.z) + Vector2(forward.x, forward.z) * d
+		# Off the lip at about 2.5 m/s, falling under gravity.
+		var fall_t := d / 2.5
+		var free := start.y - 0.5 * 9.8 * fall_t * fall_t
+		var rock := shape.height_at(xz.x, xz.y) + 0.12
+		var y := maxf(maxf(free, rock), foot.y + 0.2)
+		dense.append(Vector3(xz.x, y, xz.y))
+	# Even steps along the water itself, so the drop gets as many facets as the run.
+	var path: Array[Vector3] = [dense[0]]
+	var since := 0.0
+	for i in range(1, dense.size()):
+		since += dense[i].distance_to(dense[i - 1])
+		if since >= SPACING:
+			path.append(dense[i])
+			since = 0.0
+	if path[path.size() - 1] != dense[dense.size() - 1]:
+		path.append(dense[dense.size() - 1])
+	return path
 
-void fragment() {
-	// Streaks of water running down the face, breaking up as they fall.
-	float run = UV.y * 5.0 + TIME * 1.6;
-	float streak = 0.5 + 0.5 * sin(run * 6.2831 + sin(UV.x * 26.0) * 1.7);
-	float foam = smoothstep(0.55, 1.0, UV.y);
-	ALBEDO = mix(vec3(0.62, 0.78, 0.86), vec3(1.0), clamp(streak * 0.7 + foam * 0.6, 0.0, 1.0));
-	ALPHA = clamp(0.72 + foam * 0.25, 0.0, 1.0);
-	ROUGHNESS = 0.12;
-	SPECULAR = 0.6;
-}"""
-	_falling_water = ShaderMaterial.new()
-	_falling_water.shader = shader
-	return _falling_water
+
+## A ribbon down `path`, `width_scale` of the stream's width, spreading as it falls,
+## standing `lift` metres off the main sheet. UV.y is metres travelled.
+static func _fall_sheet(path: Array[Vector3], across: Vector3, width_scale: float, lift: float) -> ArrayMesh:
+	const COLUMNS := 8
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var side := across.normalized()
+	var travelled := [0.0]
+	for i in range(1, path.size()):
+		travelled.append(float(travelled[i - 1]) + path[i].distance_to(path[i - 1]))
+	var rows: Array = []
+	for i in path.size():
+		var ahead := path[mini(i + 1, path.size() - 1)] - path[maxi(i - 1, 0)]
+		var out := ahead.normalized().cross(side).normalized()
+		if out.y < 0.0:
+			out = -out
+		var spread := across.length() * width_scale * (1.0 + 0.35 * float(i) / path.size())
+		var row: Array = []
+		for c in COLUMNS + 1:
+			var x := -1.0 + 2.0 * c / COLUMNS
+			row.append([path[i] + side * x * spread + out * lift, out, Vector2(x, travelled[i])])
+		rows.append(row)
+	for i in rows.size() - 1:
+		for c in COLUMNS:
+			var quad := [rows[i][c], rows[i][c + 1], rows[i + 1][c + 1], rows[i + 1][c]]
+			# Alternate the diagonal, so the facets zigzag like the fire's.
+			var order := [0, 1, 2, 0, 2, 3] if (i + c) % 2 == 0 else [0, 1, 3, 1, 2, 3]
+			for k: int in order:
+				vertices.append(quad[k][0])
+				normals.append(quad[k][1])
+				uvs.append(quad[k][2])
+	return _surface(vertices, normals, uvs)
+
+
+static var _flow_materials := {}
+
+
+## The faceted water material (water_flow.gdshader), one per use.
+static func _flow_material(key: String, speed: float, foam: float, ripple: float, alpha: float, still: bool = false) -> ShaderMaterial:
+	if _flow_materials.has(key):
+		return _flow_materials[key]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://world/water_flow.gdshader")
+	m.set_shader_parameter("speed", speed)
+	m.set_shader_parameter("foam_amount", foam)
+	m.set_shader_parameter("ripple", ripple)
+	m.set_shader_parameter("alpha", alpha)
+	m.set_shader_parameter("still", still)
+	_flow_materials[key] = m
+	return m
 
 
 static func _water_material() -> StandardMaterial3D:

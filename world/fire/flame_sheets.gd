@@ -24,6 +24,16 @@ func _init() -> void:
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
+## Recolours these sheets (root, low, mid, tip), e.g. white water for a splash.
+func set_palette(colors: Array, boost: float = 1.0) -> void:
+	var m: ShaderMaterial = sheet_mesh().surface_get_material(0).duplicate()
+	for i in 4:
+		var c: Color = colors[i]
+		m.set_shader_parameter(["c_root", "c_low", "c_mid", "c_tip"][i], Vector3(c.r, c.g, c.b))
+	m.set_shader_parameter("boost", boost)
+	material_override = m
+
+
 func set_sheets(list: Array) -> void:
 	multimesh.instance_count = list.size()
 	var box := AABB()
