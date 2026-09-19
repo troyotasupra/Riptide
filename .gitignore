@@ -1,10 +1,42 @@
-# Godot 4
+# Godot 4 — reimported from the committed sources on every machine, so it must
+# never be committed. It is also large, and machine- and version-specific.
 .godot/
 /android/
 *.translation
 /build/
 /.downloads/
+*.pck
 
-# OS
+# Godot export output and local export secrets.
+# export_presets.cfg IS committed, but Godot writes signing passwords into it
+# when you configure a signed export. See CLAUDE.md before committing a change
+# to it — this is a public repository.
+export_presets.local.cfg
+
+# Editors and IDEs — personal, not project.
+.vscode/
+.idea/
+*.code-workspace
+*.sublime-workspace
+*.sublime-project
+
+# Agent tooling. The shared instructions (CLAUDE.md) are committed; anything
+# machine-local is not.
+.claude/settings.local.json
+.claude/scratch/
+CLAUDE.local.md
+
+# Local captures, logs and scratch output from test runs.
+/shots/
+/screenshots/
+/logs/
+*.log
+
+# OS noise
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 .DS_Store
+._*
+.Spotlight-V100
+.Trashes
