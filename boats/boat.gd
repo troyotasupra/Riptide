@@ -162,15 +162,12 @@ static func create_raft(index: int) -> Boat:
 		plank.rotation.y = 0.02 * sin(i * 3.1)
 		boat.add_child(plank)
 
-	# ...and rope lashings at each end.
-	for z: float in [-size.z * 0.36, size.z * 0.36]:
-		var band := BoxMesh.new()
-		band.size = Vector3(size.x + 0.14, 0.03, 0.07)
-		var lashing := MeshInstance3D.new()
-		lashing.mesh = band
-		lashing.material_override = cord
-		lashing.position = Vector3(0.0, size.y + 0.005, z)
-		boat.add_child(lashing)
+	# ...and rope lashings wrapped round every log, near each end and amidships.
+	var xs := PackedFloat32Array()
+	for i in log_count:
+		xs.append(-size.x * 0.5 + log_radius * (2 * i + 1))
+	for z: float in [-size.z * 0.4, 0.0, size.z * 0.4]:
+		boat.add_child(MeshKit.lash(xs, log_radius, log_radius, z, cord, size.y))
 
 	for x: float in [-0.45, 0.45]:
 		for z: float in [-0.45, 0.45]:

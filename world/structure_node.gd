@@ -407,15 +407,13 @@ func set_progress(progress: Dictionary) -> void:
 		log_visual.material_override = bark
 		log_visual.position = Vector3(-1.1 + i * 0.44, 0.5, 0.0)
 		_build_parts.add_child(log_visual)
+	# Each rope added is another lashing wrapped round every log.
 	var lashings := mini(int(progress.get("rope", 0)), 3)
-	for k in lashings:
-		var band := BoxMesh.new()
-		band.size = Vector3(2.75, 0.05, 0.09)
-		var lashing := MeshInstance3D.new()
-		lashing.mesh = band
-		lashing.material_override = Materials.rope(Color(0.72, 0.62, 0.45))
-		lashing.position = Vector3(0.0, 0.72, -1.2 + k * 1.2)
-		_build_parts.add_child(lashing)
+	var xs := PackedFloat32Array()
+	for i in logs:
+		xs.append(-1.1 + i * 0.44)
+	for k in (lashings if logs > 0 else 0):
+		_build_parts.add_child(MeshKit.lash(xs, 0.21, 0.5, -1.2 + k * 1.2, Materials.rope(Color(0.72, 0.62, 0.45))))
 
 
 func _crate() -> void:

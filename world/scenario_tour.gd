@@ -54,6 +54,7 @@ func run() -> void:
 	await _shack()
 	await _pickups()
 	await _wreck()
+	await _raft()
 	await _chart()
 	await _wildfire()
 	print("[tour] saved %d picture(s) to %s" % [saved, dir])
@@ -185,6 +186,29 @@ func _wreck() -> void:
 		_look(xf * Vector3(view[1]), xf * Vector3(view[2]))
 		await _wait(0.8)
 		await _shot(view[0])
+
+
+## A raft afloat by the dock and a raft site on the beach with its lashings on.
+func _raft() -> void:
+	if not _wants("raft"):
+		return
+	var dock_end: Vector3 = camp.shack.dock_end
+	var boat: Boat = world.launch_boat("raft", Transform3D(Basis.IDENTITY, dock_end + Vector3(6.0, -1.3, 4.0)))
+	await _wait(2.0)
+	var at := boat.global_position
+	_look(at + Vector3(3.2, 1.6, 2.6), at + Vector3(0.0, 0.2, 0.0))
+	await _wait(0.4)
+	await _shot("raft_afloat")
+	var base := _site(4.0)
+	camp._spawn_structure("tour_raft_site", "raft_site", base, 0.3)
+	camp._apply_progress("tour_raft_site", {"log": 6, "rope": 3})
+	await _wait(0.3)
+	_look(base + Vector3(2.6, 1.5, 2.4), base + Vector3(0.0, 0.5, 0.0))
+	await _wait(0.4)
+	await _shot("raft_site_lashed")
+	_look(base + Vector3(1.9, 0.9, -0.3), base + Vector3(0.4, 0.5, -1.2))
+	await _wait(0.3)
+	await _shot("raft_site_lash_close")
 
 
 ## The chart, after a walk round the shack (only that much is filled in), and in
