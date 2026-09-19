@@ -15,8 +15,10 @@ const GROUPS := {"wood": ["driftwood", "log"], "baitfish": ["raw_sardine", "raw_
 const GROUP_NAMES := {"wood": "Wood", "baitfish": "Small fish"}
 const BAIT_HINT := "Fishing bait — with the rod selected, right click to put it on the hook."
 
+## How long a torch burns in your hand before it goes out.
+const TORCH_SECONDS := 1800.0
 const COMING_SOON := "Not usable yet — it arrives in a later update."
-const GUN_HINT := "Left click fires, right click brings the sights up, R reloads, X switches fire mode. Open the inventory to fit attachments."
+const GUN_HINT := "Left click fires, right click brings the sights up, R reloads, X switches fire mode. Q and E lean. Through a scope, Z and X turn the power. Open the inventory to fit attachments."
 const AMMO_HINT := "Rounds for one calibre of gun — they don't fit anything else. Reload with R."
 const ATTACH_HINT := "Fits a gun: open the inventory, select the gun, and drop this on one of its slots."
 
@@ -47,8 +49,8 @@ const ITEMS := {
 	"spoiled_food": {"name": "Spoiled food", "category": "food", "weight": 0.5, "stack": 20, "food": 2.0, "sickness": 90.0, "sick_chance": 1.0},
 
 	# --- drink ---
-	"canteen_clean": {"name": "Canteen (clean water)", "category": "drink", "weight": 1.0, "stack": 1, "water": 40.0, "empties_to": "canteen"},
-	"canteen_dirty": {"name": "Canteen (unboiled water)", "category": "drink", "weight": 1.0, "stack": 1, "water": 40.0, "sickness": 90.0, "sick_chance": 0.6, "empties_to": "canteen", "boils_to": "canteen_clean"},
+	"canteen_clean": {"name": "Canteen (clean water)", "category": "drink", "weight": 1.0, "stack": 1, "water": 25.0, "sips": 4, "empties_to": "canteen"},
+	"canteen_dirty": {"name": "Canteen (unboiled water)", "category": "drink", "weight": 1.0, "stack": 1, "water": 25.0, "sips": 4, "sickness": 90.0, "sick_chance": 0.25, "empties_to": "canteen", "boils_to": "canteen_clean"},
 
 	# --- materials ---
 	"fiber": {"name": "Plant fiber", "category": "material", "weight": 0.05, "stack": 50, "hint": "Crafting material — twist it into rope in the survival book (B)."},
@@ -70,8 +72,8 @@ const ITEMS := {
 	"machete": {"name": "Machete", "category": "tool", "tool": "machete", "weight": 0.8, "stack": 1, "hint": "Hack through plants and bushes (left click) — much faster than by hand."},
 	"stone_hatchet": {"name": "Stone hatchet", "category": "tool", "tool": "hatchet", "weight": 1.2, "stack": 1, "hint": "Look at a tree and hold left click to chop it down for logs."},
 	"oar": {"name": "Oar", "category": "tool", "tool": "oar", "weight": 1.4, "stack": 1, "hint": "Carry it aboard a raft or boat and press F to row: Q strokes the left oar, E the right, both to go straight. Hold S to back-row, Shift to pull hard."},
-	"lighter": {"name": "Lighter", "category": "tool", "tool": "lighter", "weight": 0.05, "stack": 1, "uses": 20, "hint": "Press E on a campfire or stove that has wood in it to light it."},
-	"torch": {"name": "Torch", "category": "tool", "tool": "torch", "weight": 0.5, "stack": 3, "hint": "Lights your way while it's in your hand. Left click on dry grass or brush to set it alight — fire spreads with the wind."},
+	"lighter": {"name": "Lighter", "category": "tool", "tool": "lighter", "weight": 0.05, "stack": 1, "uses": 20, "hint": "Held, its flame lights up the space around you, as long as you like. Press F on a campfire or stove that has wood in it to light it."},
+	"torch": {"name": "Torch", "category": "tool", "tool": "torch", "weight": 0.5, "stack": 1, "hint": "Lights your way while it's in your hand, for about half an hour before it burns out. Make more from wood and fiber (B). Left click on dry grass or brush to set it alight — fire spreads with the wind."},
 	"canteen": {"name": "Canteen (empty)", "category": "tool", "tool": "canteen", "weight": 0.3, "stack": 1, "hint": "Hold it and press F at the spring (clean) or the stream (boil it first)."},
 	"fishing_rod": {"name": "Fishing rod", "category": "tool", "tool": "fishing_rod", "weight": 1.0, "stack": 1, "hint": "Hold left click to wind up a cast and let go to throw. When the bobber dips, left click to strike, then hold to reel and ease off before the line snaps. Right click picks your bait."},
 	"spear": {"name": "Spear", "category": "weapon", "tool": "spear", "weight": 1.5, "stack": 1, "hint": "Look at a shark and left click to strike — the best reach and damage you've got."},

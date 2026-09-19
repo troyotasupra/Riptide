@@ -480,7 +480,7 @@ func _process(delta: float) -> void:
 	if _camp.chart_read:
 		_markers.text = _chart_markers(here)
 	elif not GameState.objectives_done.has("reach_camp") and GameState.world.camp_island != null:
-		_markers.text = "Smoke on the horizon  %03d°" % _bearing(here, GameState.world.camp_island.camp)
+		_markers.text = "The big island  %03d°" % _bearing(here, GameState.world.camp_island.camp)
 	else:
 		_markers.text = ""
 	_prompt.text = "" if GameState.ui_open else _prompt_text(player)

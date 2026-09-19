@@ -493,7 +493,11 @@ func _process(delta: float) -> void:
 		camera.global_transform = Transform3D(base.basis * view, world.origin + base.basis * (Vector3(0.0, _eye_height, 0.0) + lean_offset()))
 		# Sighted in, the gun narrows the view (a scope does its own zoom in ScopeView).
 		camera.fov = aim_fov if aim_fov > 0.0 else Settings.fov
-		_torch_light.visible = ItemTable.get_item(held_id).get("tool", "") == "torch"
+		# A torch lights the way; a lighter's little flame lights just around you, for as long as you like.
+		var held_tool: String = ItemTable.get_item(held_id).get("tool", "")
+		_torch_light.visible = held_tool == "torch" or held_tool == "lighter"
+		_torch_light.light_energy = 1.4 if held_tool == "torch" else 0.55
+		_torch_light.omni_range = 9.0 if held_tool == "torch" else 4.5
 		var skin: Color = AppearanceTable.SKIN[int(AppearanceTable.sanitize(look).skin)]
 		view_model.refresh("oar" if paddling else held_id, worn.get("torso", ""), skin, GameState.crew_color)
 		view_model.rowing = rowing if paddling else 0.0
@@ -738,8 +742,14 @@ func _local_physics(delta: float) -> void:
 
 	# Walking into a wall zeroes the velocity, so remember where we meant to go.
 	var intent := Vector3(velocity.x, 0.0, velocity.z) * delta
+	var before := global_position
 	move_and_slide()
-	_step_up(intent)
+	# Only the part of the move the ledge actually stopped: stepping up the whole
+	# intended move again on top of what already happened made you lurch forward.
+	var moved := global_position - before
+	moved.y = 0.0
+	var blocked := intent - intent.normalized() * minf(moved.dot(intent.normalized()) if intent.length() > 0.0001 else 0.0, intent.length())
+	_step_up(blocked, intent)
 
 	if platform != null:
 		_check_leave_deck()
@@ -797,7 +807,7 @@ func _place_at(position: Vector3) -> void:
 ## Character bodies slide along anything vertical, so a 15 cm doorsill or a rock
 ## stops you dead. When a wall blocks us at foot height, try lifting over it:
 ## up, forward, then back down onto whatever is there.
-func _step_up(motion: Vector3) -> void:
+func _step_up(motion: Vector3, intent: Vector3) -> void:
 	if platform != null or swimming or flying or downed or not is_on_floor():
 		return
 	if motion.length() < 0.004:
@@ -818,8 +828,8 @@ func _step_up(motion: Vector3) -> void:
 		return  # the far side is too steep to stand on
 	global_position = lifted.origin + motion + Vector3.DOWN * landing.get_travel().length()
 	# Keep walking: the wall we just climbed took our speed away.
-	velocity.x = motion.x / maxf(get_physics_process_delta_time(), 0.0001)
-	velocity.z = motion.z / maxf(get_physics_process_delta_time(), 0.0001)
+	velocity.x = intent.x / maxf(get_physics_process_delta_time(), 0.0001)
+	velocity.z = intent.z / maxf(get_physics_process_delta_time(), 0.0001)
 
 
 ## Props and terrain build over the first few frames after a world loads, and a

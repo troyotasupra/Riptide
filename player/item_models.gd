@@ -94,6 +94,8 @@ static func build(id: String) -> Node3D:
 			shell.scale = Vector3(0.028, 0.065, 0.016)
 			root.add_child(shell)
 			_box(root, Vector3(0.022, 0.014, 0.012), Vector3(0.0, 0.036, 0.0), Materials.metal(STEEL))
+			# Its flame: held, it's lit.
+			_flame(root, Vector3(0.0, 0.05, 0.0), 0.014)
 		"fishing_rod":
 			_cylinder(root, 0.007, 1.3, Vector3(0.0, 0.62, 0.0), Materials.plain(Color(0.14, 0.14, 0.16), 0.3), Vector3.ZERO, 0.015)
 			_cylinder(root, 0.016, 0.22, Vector3(0.0, 0.05, 0.0), Materials.stone(Color(0.72, 0.58, 0.40)))

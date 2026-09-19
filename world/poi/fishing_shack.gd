@@ -56,12 +56,13 @@ static func layout(shape: CampIsland) -> Dictionary:
 
 	var dock_start := shape.cove - out * 2.5 + side * DOCK_SIDE
 	var dock_end := shape.cove + out * 14.0 + side * DOCK_SIDE
-	# Alongside the dock with room to bob without grinding against the pilings.
-	var boat_xz := shape.cove + out * 10.5 + side * (DOCK_SIDE + DOCK_WIDTH * 0.5 + JohnBoat.BEAM * 0.5 + 0.8)
+	# Alongside the dock on the cove side, where the water is deepest, with room to
+	# bob without grinding against the pilings.
+	var boat_xz := shape.cove + out * 10.5 + side * (DOCK_SIDE - DOCK_WIDTH * 0.5 - JohnBoat.BEAM * 0.5 - 0.8)
 	var boat_xf := Transform3D(basis, Vector3(boat_xz.x, 0.0, boat_xz.y))
 	var posts: Array[Vector3] = []
 	for along: float in [7.5, 13.5]:
-		var p := shape.cove + out * along + side * (DOCK_SIDE + DOCK_WIDTH * 0.5 + 0.1)
+		var p := shape.cove + out * along + side * (DOCK_SIDE - DOCK_WIDTH * 0.5 - 0.1)
 		posts.append(Vector3(p.x, DOCK_Y + 0.35, p.y))
 	var lines: Array[Dictionary] = []
 	for cleat: Vector3 in [JohnBoat.BOW_CLEAT, JohnBoat.STERN_CLEAT]:

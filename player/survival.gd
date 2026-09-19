@@ -8,9 +8,9 @@ const NORMAL_TEMP := 37.0
 const HYPOTHERMIA_TEMP := 33.0
 const HYPERTHERMIA_TEMP := 40.0
 
-const HUNGER_PER_SEC := MAX / 1200.0  # full to empty in 20 minutes
-const THIRST_PER_SEC := MAX / 720.0   # full to empty in 12 minutes
-const EXERTION_DRAIN := 1.5           # sprinting/swimming multiplies drain by up to this much extra
+const HUNGER_PER_SEC := MAX / 2400.0  # full to empty in 40 minutes
+const THIRST_PER_SEC := MAX / 1500.0  # full to empty in 25 minutes
+const EXERTION_DRAIN := 1.0           # sprinting/swimming multiplies drain by up to this much extra
 
 const COMFORT_MIN_ENV := 18.0  # below this air temperature the body cools
 const COMFORT_MAX_ENV := 24.0  # above this, heavy gear overheats you

@@ -50,21 +50,23 @@ const SAVE_RENAMES := {
 
 const PICKUPS := {
 	"machete": {"item": "machete", "count": 1, "label": "Take the machete"},
-	"compartment_key": {"item": "compartment_key", "count": 1, "label": "Take the small brass key"},
-	"journal": {"item": "journal", "count": 1, "label": "Take the journal"},
 	"page_shelter": {"item": "book_page_shelter", "count": 1, "label": "Take the torn book page"},
-	"page_camp": {"item": "book_page_camp", "count": 1, "label": "Take the torn book page"},
 	"page_prosthetics": {"item": "book_page_prosthetics", "count": 1, "label": "Take the torn book page"},
 }
 ## Offsets from the castaway camp (camp space: -Z faces the island centre).
 const PICKUP_SPOTS := {
 	"machete": Vector3(2.1, 0.35, 2.0),
-	"compartment_key": Vector3(-0.5, 0.05, 0.3 - CampIslandPois.TENT_BACK),
-	"journal": Vector3(0.3, 0.05, 0.2 - CampIslandPois.TENT_BACK),
 	"page_shelter": Vector3(-1.6, 0.05, 1.3),
-	"page_camp": Vector3(0.6, 0.05, -0.5 - CampIslandPois.TENT_BACK),
 	"page_prosthetics": Vector3(-1.3, 0.05, -0.7),
 }
+
+## The castaway's pack, left by the tent door (camp space), and what was in it.
+## These used to lie inside the tent, where you couldn't reach them without
+## taking the tent down; the pickup ids they had are listed so an old save that
+## already took one doesn't get it twice.
+const CASTAWAY_PACK := "castaway_pack"
+const CASTAWAY_PACK_SPOT := Vector3(-1.5, 0.0, 0.2)
+const CASTAWAY_PACK_ITEMS := [["compartment_key", "compartment_key"], ["journal", "journal"], ["page_camp", "book_page_camp"]]
 
 const STASH := [["survival_book", 1], ["knife", 1], ["canteen", 1], ["lighter", 1], ["tarp", 1], ["paracord", 2],
 	["logbook", 1], ["sea_chart", 1], ["fishing_rod", 1], ["lure", 3], ["flare_gun", 1], ["flare", 2], ["bandage", 4], ["sun_hat", 1]]
@@ -340,6 +342,7 @@ func _full_sync(data: Dictionary) -> void:
 func _seed_structures() -> void:
 	if world == null or world.camp_island == null:
 		return
+	_seed_castaway_pack()
 	if seeded.has(CASTAWAY_TENT):
 		_move_old_castaway_tent()
 		return
@@ -354,6 +357,23 @@ func _seed_structures() -> void:
 	_apply_progress(CASTAWAY_TENT, whole)
 	Net.send_to_ready(self, "_spawn_structure", [CASTAWAY_TENT, "tent", at, yaw])
 	Net.send_to_ready(self, "_structure_progress", [CASTAWAY_TENT, whole])
+
+
+## The castaway's pack: a bag by the tent with the key, the journal and a page.
+func _seed_castaway_pack() -> void:
+	if seeded.has(CASTAWAY_PACK):
+		return
+	seeded[CASTAWAY_PACK] = true
+	var shape: CampIsland = world.camp_island
+	var basis := Basis(Vector3.UP, CampIslandPois.yaw_toward(shape.camp, shape.center))
+	var at := Vector3(shape.camp.x, 0.0, shape.camp.y) + basis * CASTAWAY_PACK_SPOT
+	at.y = shape.height_at(at.x, at.z) + 0.05
+	var stacks: Array = []
+	for entry: Array in CASTAWAY_PACK_ITEMS:
+		if not picked.has(entry[0]):
+			stacks.append({"id": entry[1], "count": 1, "spoils_at": 0.0})
+	if not stacks.is_empty():
+		drop_loot(at, stacks, "Castaway's pack")
 
 
 ## Worlds saved before the tent was moved back from the fire pit had it pitched

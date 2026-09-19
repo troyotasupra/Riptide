@@ -428,7 +428,7 @@ func _shack() -> void:
 func _pickups() -> void:
 	if not _wants("pickup_"):
 		return
-	for id: String in ["machete", "compartment_key", "journal", "page_shelter"]:
+	for id: String in ["machete", "page_shelter", "page_prosthetics"]:
 		var node: Node3D = camp.pickup_nodes.get(id)
 		if node == null or not node.visible:
 			print("[tour] pickup %s isn't there" % id)

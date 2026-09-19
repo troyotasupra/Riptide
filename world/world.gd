@@ -198,7 +198,7 @@ func start_beach_point(index: int) -> Vector3:
 
 
 ## The starter island's landing beach faces the camp island, so the goal (and
-## its smoke) is in sight and a raft built there launches toward it.
+## its hill) is in sight and a raft built there launches toward it.
 func start_direction() -> Vector2:
 	if camp_island == null or camp_island.center.length() < 1.0:
 		return Vector2(0.0, 1.0)
@@ -390,11 +390,15 @@ func _apply_save(data: Dictionary) -> void:
 		if boat == null:
 			continue
 		boat.global_transform = entry.xf
+		var saved_at: Vector3 = Transform3D(entry.xf).origin
+		# Tied up, it's at the berth (which moved to the dock's cove side); a boat saved
+		# where there's now dry ground is put back at the berth rather than left in it.
+		if boat.kind == "john_boat" and (entry.get("tied", true) or ground_height(saved_at.x, saved_at.z) > -0.4):
+			boat.global_transform = camp.shack.boat_xf
 		boat.reset_physics_interpolation()
 		if not entry.get("tied", true):
 			boat.untie()
 		elif boat.kind == "john_boat":
-			# Lines are sized to the dock berth, so a boat saved a little way off is drawn back in gently.
 			boat.moor(camp.shack.lines, camp.shack.boat_xf)
 	camp.from_save(data.get("camp", {}), now)
 	fire.from_save(data.get("fire", {}), now)
@@ -539,6 +543,7 @@ func _fill_canteen(survivor: Survivor, slot: int, filled: String) -> bool:
 	stack.id = filled
 	stack.count = 1
 	stack.spoils_at = 0.0
+	stack["sips"] = int(ItemTable.get_item(filled).get("sips", 1))
 	sfx_at("splash", survivor.player.world_transform().origin)
 	survivor.push_inventory()
 	return true
@@ -662,7 +667,7 @@ func _spawn_player(peer_id: int, player_name: String, player_id: String, look: D
 	player.yaw = PI
 	player.pitch = -0.05
 	if camp_island != null:
-		# Face the camp island (and its smoke) — the goal is always in sight when you wash up.
+		# Face the camp island — the goal is always in sight when you wash up.
 		var to_goal := camp_island.center - Vector2(pos.x, pos.z)
 		player.yaw = atan2(-to_goal.x, -to_goal.y)
 	if camp_island != null and (GameState.spawn_override == "camp" or GameState.face in ["camp", "sea"]):

@@ -1,7 +1,7 @@
 class_name CampIslandPois
 extends RefCounted
 ## Landmarks on the camp island: the spring and its stream, the castaway camp
-## (with its smoke — the landmark you steer the raft by), the cave mouth, the
+## (its fire pit still smouldering), the cave mouth, the
 ## fishing shack and its dock, and the shipwreck on the reef.
 
 static func build(shape: CampIsland) -> Node3D:
@@ -426,29 +426,30 @@ static func _castaway_camp(shape: CampIsland) -> Node3D:
 	node.position = _ground(shape, shape.camp)
 	node.rotation.y = yaw_toward(shape.camp, shape.center)
 	var wood := Color(0.45, 0.36, 0.26)
+	# The camp's ground isn't flat: sit everything on the ground right under it.
+	var basis := Basis(Vector3.UP, node.rotation.y)
+	var ground := func(p: Vector3) -> Vector3:
+		var w: Vector3 = node.position + basis * p
+		return Vector3(p.x, p.y + shape.height_at(w.x, w.z) - node.position.y, p.z)
 	# The castaway's tent itself is a real structure (CampSystems seeds it), so the
 	# crew can sleep in it or take it apart; this is just the camp around it.
 	for i in 9:
 		var a := i * TAU / 9.0
-		var stone := _mesh(node, MeshKit.rock(60 + i % 6, 0.3, 0.7), "ring_stone", Color(0.45, 0.44, 0.42), Vector3(cos(a) * 0.8, 0.07, 2.6 + sin(a) * 0.8), Vector3(0.0, a * 1.7, 0.1))
+		var stone := _mesh(node, MeshKit.rock(60 + i % 6, 0.3, 0.7), "ring_stone", Color(0.45, 0.44, 0.42), ground.call(Vector3(cos(a) * 0.8, 0.07, 2.6 + sin(a) * 0.8)), Vector3(0.0, a * 1.7, 0.1))
 		stone.scale = Vector3(0.3, 0.2, 0.26) * (0.85 + 0.3 * absf(sin(i * 3.7)))
-	var ash := _mesh(node, MeshKit.rock(70, 0.1, 0.25), "charcoal", Color(0.14, 0.12, 0.11), Vector3(0.0, 0.0, 2.6))
+	var ash := _mesh(node, MeshKit.rock(70, 0.1, 0.25), "charcoal", Color(0.14, 0.12, 0.11), ground.call(Vector3(0.0, 0.0, 2.6)))
 	ash.scale = Vector3(1.1, 0.25, 1.1)
 	for i in 3:
 		var a := i * TAU / 3.0 + 0.4
-		var burnt := _mesh(node, MeshKit.branch(120 + i, 0.8, 0.05, 0.04, 0.03, 5), "charcoal", Color(0.1, 0.08, 0.07), Vector3(cos(a) * 0.35, 0.05, 2.6 + sin(a) * 0.35))
+		var burnt := _mesh(node, MeshKit.branch(120 + i, 0.8, 0.05, 0.04, 0.03, 5), "charcoal", Color(0.1, 0.08, 0.07), ground.call(Vector3(cos(a) * 0.35, 0.05, 2.6 + sin(a) * 0.35)))
 		burnt.rotation = Vector3(0.0, -a, PI / 2.0 - 0.25)
 	# The log the machete is stuck in.
-	_mesh(node, _cylinder(0.22, 0.25, 0.7), "old_wood", wood, Vector3(2.1, 0.35, 2.0))
-	var smoke := _smoke()
-	# The tall landmark column starts above head height, so it doesn't fog the camp itself.
-	smoke.position = Vector3(0.0, 4.0, 2.6)
-	node.add_child(smoke)
+	_mesh(node, _cylinder(0.22, 0.25, 0.7), "old_wood", wood, ground.call(Vector3(2.1, 0.35, 2.0)))
 	# Still smouldering: low flames in the pit.
 	var fire := FireFx.new()
 	fire.size = 0.55
 	fire.intensity = 0.7
-	fire.position = Vector3(0.0, 0.08, 2.6)
+	fire.position = ground.call(Vector3(0.0, 0.08, 2.6))
 	node.add_child(fire)
 	return node
 
@@ -461,36 +462,6 @@ const TENT_BACK := 2.0
 static func castaway_tent_spot(shape: CampIsland) -> Vector3:
 	var back := Basis(Vector3.UP, yaw_toward(shape.camp, shape.center)) * Vector3(0.0, 0.0, -TENT_BACK)
 	return _ground(shape, shape.camp + Vector2(back.x, back.z))
-
-
-static func _smoke() -> GPUParticles3D:
-	var particles := GPUParticles3D.new()
-	# A tall column — the landmark you row toward from the starter island.
-	particles.amount = 56
-	particles.lifetime = 20.0
-	particles.preprocess = 20.0
-	var process := ParticleProcessMaterial.new()
-	process.direction = Vector3.UP
-	process.spread = 6.0
-	process.initial_velocity_min = 3.8
-	process.initial_velocity_max = 5.0
-	process.gravity = Vector3(0.3, 0.1, 0.12)
-	process.scale_min = 2.5
-	process.scale_max = 7.0
-	particles.process_material = process
-	var quad := QuadMesh.new()
-	quad.size = Vector2(3.0, 3.0)
-	var puff := StandardMaterial3D.new()
-	puff.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	puff.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	puff.billboard_keep_scale = true
-	puff.albedo_color = Color(0.80, 0.80, 0.80, 0.35)
-	puff.albedo_texture = _soft_puff_texture()
-	puff.roughness = 1.0
-	quad.material = puff
-	particles.draw_pass_1 = quad
-	particles.visibility_aabb = AABB(Vector3(-60.0, -5.0, -60.0), Vector3(120.0, 130.0, 120.0))
-	return particles
 
 
 ## A soft round puff, so smoke particles don't render as hard squares.

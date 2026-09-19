@@ -94,6 +94,7 @@ func host_tick(delta: float) -> void:
 	var chill: float = 0.0 if sheltered or weather == null else float(weather.current.chill)
 	air_temp = EnvironmentTemp.felt_temp(DayNight.daylight(GameState.time_of_day()), wetness, player.swimming, warmth, chill)
 	survival.tick(dt, air_temp, equipment.insulation(), player.exertion)
+	_burn_torch(dt)
 	var head := player.world_transform().origin
 	underwater = player.platform == null and Waves.height_at(Vector2(head.x, head.z), Ocean.time) > head.y + Player.EYE_HEIGHT
 	survival.breathe(dt, underwater)
@@ -372,21 +373,46 @@ func push_limbs() -> void:
 	Net.send_to_ready(player, "_set_limbs", [missing_limbs, prosthetics])
 
 
+## Host: a torch in hand burns down (half an hour of light) and goes out.
+func _burn_torch(dt: float) -> void:
+	var stack = inventory.hotbar[selected_slot]
+	if stack == null or ItemTable.get_item(String(stack.id)).get("tool", "") != "torch":
+		return
+	var left := float(stack.get("burn_left", ItemTable.TORCH_SECONDS)) - dt
+	if left > 0.0:
+		stack["burn_left"] = left
+		if left < 60.0 and left + dt >= 60.0:
+			notify("Your torch is guttering — a minute left.")
+		return
+	inventory.take(int(stack.uid), 1)
+	notify("Your torch burns out.")
+	push_inventory()
+
+
 func _consume(uid: int, item: Dictionary) -> void:
 	var empties_to: String = item.get("empties_to", "")
+	# A full canteen is several drinks; it only empties on the last one.
+	var sips_left := -1
 	if empties_to.is_empty():
 		inventory.take(uid, 1)
 	else:
 		var stack := inventory.get_stack(uid)
-		stack.id = empties_to
-		stack.count = 1
-		stack.spoils_at = 0.0
+		sips_left = int(stack.get("sips", item.get("sips", 1))) - 1
+		if sips_left > 0:
+			stack["sips"] = sips_left
+		else:
+			stack.id = empties_to
+			stack.count = 1
+			stack.spoils_at = 0.0
+			stack.erase("sips")
 	survival.eat(item.get("food", 0.0))
 	survival.drink(item.get("water", 0.0))
 	var verb := "Drank" if item.get("category", "") == "drink" else "Ate"
 	if item.has("sickness") and randf() < float(item.get("sick_chance", 1.0)):
 		survival.make_sick(item.sickness)
 		notify("%s %s... and your stomach turns. You're sick." % [verb, String(item.name).to_lower()])
+	elif sips_left > 0:
+		notify("%s from the canteen · %d drink%s left" % [verb, sips_left, "" if sips_left == 1 else "s"])
 	else:
 		notify("%s %s" % [verb, String(item.name).to_lower()])
 	push_inventory()

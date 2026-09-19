@@ -10,7 +10,7 @@ const LIST := [
 	["oar", "Carve an oar"],
 	["raft_site", "Place a raft frame on the beach near the water"],
 	["raft", "Add logs and rope lashings, then launch the raft"],
-	["reach_camp", "Row to the island under the smoke (F to row, Q/E strokes)"],
+	["reach_camp", "Row across to the big island (F takes the oars, Q/E strokes)"],
 	["shack", "Find the fishing shack and read the survival book"],
 	["castaway_camp", "Search the castaway camp inland"],
 	["unlock", "Unlock the footlocker in the fishing shack"],
@@ -46,7 +46,7 @@ static func check(id: String, world: Node, player: Player) -> bool:
 		"shack":
 			return camp.known_recipes.has("campfire_kit")
 		"castaway_camp":
-			return camp.picked.has("machete") or camp.picked.has("compartment_key") or camp.picked.has("journal")
+			return camp.picked.has("machete") or inventory.count_of("compartment_key") > 0 or inventory.count_of("journal") > 0
 		"unlock":
 			return camp.unlocked.has("shack:footlocker")
 		"campfire":
