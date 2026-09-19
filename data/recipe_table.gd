@@ -12,7 +12,7 @@ const STARTING := ["campfire_kit", "lean_to_kit", "spear", "bandage", "torch", "
 const RECIPES := {
 	"rope": {"name": "Rope", "needs": {"fiber": 5}, "makes": "rope", "count": 1},
 	"stone_hatchet": {"name": "Stone hatchet", "needs": {"wood": 1, "flint": 2, "rope": 1}, "makes": "stone_hatchet", "count": 1},
-	"oar": {"name": "Oar", "needs": {"wood": 2, "rope": 1}, "makes": "oar", "count": 1, "tool": "hatchet"},
+	"oar": {"name": "Oars", "needs": {"wood": 2, "rope": 1}, "makes": "oar", "count": 1, "tool": "hatchet"},
 	"raft_kit": {"name": "Raft frame", "needs": {"wood": 3, "rope": 2}, "makes": "raft_kit", "count": 1, "tool": "hatchet"},
 	"campfire_kit": {"name": "Campfire ring", "needs": {"stone": 2}, "makes": "campfire_kit", "count": 1},
 	"lean_to_kit": {"name": "Lean-to", "needs": {"tarp": 1, "paracord": 1, "wood": 2}, "makes": "lean_to_kit", "count": 1},

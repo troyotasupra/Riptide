@@ -44,6 +44,10 @@ static func create(index: int) -> JohnBoat:
 	boat.hull_aabb = AABB(Vector3(-BEAM * 0.5, 0.0, -LENGTH * 0.5), Vector3(BEAM, SIDE_TOP, LENGTH))
 	# The floor sits just above the waterline; keep waves from drawing inside the hull.
 	boat.water_mask = AABB(Vector3(-BEAM * 0.5 + 0.06, -0.3, -LENGTH * 0.5 + 0.08), Vector3(BEAM - 0.12, SIDE_TOP + 0.3, LENGTH - 0.16))
+	boat.motor_force = 1000.0
+	boat.motor_torque = 520.0
+	boat.motor_mount = Vector3(0.0, SIDE_TOP - 0.75, LENGTH * 0.5 + 0.14)
+	boat.tow_local = Vector3(0.55, SIDE_TOP + 0.02, LENGTH * 0.5 - 0.1)
 	boat._build()
 	for x: float in [-0.6, 0.6]:
 		for z: float in [-1.7, -0.6, 0.6, 1.7]:
@@ -124,3 +128,9 @@ func _build() -> void:
 	_box(Vector3(0.82, 0.03, 0.28), Vector3(0.0, FLOOR_Y + 0.27, -1.35), dark, false)
 	_add_part("drybox", Vector3(0.9, 0.4, 0.45), Vector3(0.0, FLOOR_Y + 0.2, -1.35))
 	_add_part("cleat", Vector3(0.5, 0.3, 0.4), BOW_CLEAT + Vector3(0.0, 0.05, 0.08))
+	for s: float in [-1.0, 1.0]:
+		_add_part("oars" if s < 0.0 else "oars_r", Vector3(0.3, 0.3, 0.5), Vector3(s * (half_b + 0.02), SIDE_TOP + 0.08, 0.25))
+	_add_part("transom", Vector3(0.7, 0.45, 0.35), Vector3(0.0, SIDE_TOP + 0.1, half_l - 0.05))
+	_add_part("tow", Vector3(0.3, 0.3, 0.3), tow_local + Vector3(0.0, 0.05, 0.0))
+	# The stern cleat the tow line makes fast to.
+	_box(Vector3(0.14, 0.03, 0.04), tow_local, dark, false)

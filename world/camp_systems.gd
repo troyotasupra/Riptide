@@ -200,6 +200,17 @@ func create_pickups(shape: CampIsland) -> void:
 		pickup_nodes[id] = node
 		if picked.has(id):
 			_apply_picked(id)
+	# The fuel drums on the freighter's aft deck.
+	var wreck := FreighterWreck.transform(shape)
+	var spots := FreighterWreck.drum_spots()
+	for i in spots.size():
+		var drum_id := "fuel_drum_%d" % i
+		var drum := PickupNode.new()
+		drum.setup(drum_id, "Take a fuel drum (18 kg)", "fuel_drum", wreck * spots[i], wreck.basis.get_euler().y + i)
+		add_child(drum)
+		pickup_nodes[drum_id] = drum
+		if picked.has(drum_id):
+			_apply_picked(drum_id)
 	var cave_yaw := CaveBuild.facing_in(shape)
 	for id: String in CAVE_PICKUPS:
 		var entry: Dictionary = CAVE_PICKUPS[id]
@@ -602,8 +613,28 @@ func in_shack(p: Vector3) -> bool:
 
 # --- prompts (any peer, for the local player's crosshair) --------------------
 
-func part_prompt(boat: Boat, part_name: String, _player: Node) -> String:
+func part_prompt(boat: Boat, part_name: String, player: Node) -> String:
+	var pack: Pack = (player as Player).survivor.inventory if player != null and (player as Player).survivor != null else null
 	match part_name:
+		"oars", "oars_r":
+			if boat.oars_fitted:
+				return "The oars are in the oarlocks — take them (nobody rows her away without them)"
+			return "Fit your oars in the oarlocks" if pack != null and pack.count_of("oar") > 0 else "Empty oarlocks — bring a pair of oars"
+		"transom":
+			if not boat.motor_fitted:
+				return "Fit the outboard motor" if pack != null and pack.count_of("outboard_motor") > 0 else "A bare transom — an outboard would clamp on here"
+			var tank := "%.1f L in the tank" % boat.fuel
+			if pack != null and pack.count_of("fuel_drum") > 0 and boat.fuel < Boat.TANK_LITRES - 0.1:
+				return "Pour fuel into the outboard (%s)" % tank
+			if boat.fuel <= 0.05:
+				return "The outboard's tank is dry — bring a fuel drum"
+			return "Take the helm (%s)   ·   %s unclamp the motor" % [tank, Controls.tag("rotate")]
+		"tow":
+			if boat.tow_target != null:
+				return "Cast off the tow line"
+			return "Throw a tow line to the %s" % _tow_candidate(boat).kind.replace("_", " ") if _tow_candidate(boat) != null else "Tow point — bring another boat close astern"
+		"cargo":
+			return "Open the raft's cargo"
 		"drybox":
 			return "Open the dry box"
 		"cleat":
@@ -713,10 +744,99 @@ static func held_item(player: Node) -> String:
 
 # --- host: interactions --------------------------------------------------------
 
+## The nearest other boat close enough astern to take in tow.
+func _tow_candidate(boat: Boat) -> Boat:
+	var from := boat.global_transform * boat.tow_local
+	var best: Boat = null
+	for other: Boat in world.boats_root.get_children():
+		if other == boat or other.tow_target == boat:
+			continue
+		var d := from.distance_to(other.global_transform * other.bow_point())
+		if d < 9.0 and (best == null or d < from.distance_to(best.global_transform * best.bow_point())):
+			best = other
+	return best
+
+
 func interact_boat_part(survivor: Survivor, boat: Boat, part_name: String, _slot: int) -> void:
 	var id := "boat:%s:%s" % [boat.name, part_name]
 	var at: Vector3 = (boat.parts[part_name] as Node3D).global_position if boat.parts.has(part_name) else boat.global_position
+	var pack := survivor.inventory
 	match part_name:
+		"oars", "oars_r":
+			if boat.oars_fitted:
+				if pack.add("oar", 1) > 0:
+					survivor.notify("No room in your pack for the oars.")
+					return
+				boat.set_fittings(false, boat.motor_fitted, boat.fuel)
+				survivor.notify("You unship the oars and take them. Nobody's rowing her away now.")
+			elif pack.count_of("oar") > 0:
+				pack.remove("oar", 1)
+				boat.set_fittings(true, boat.motor_fitted, boat.fuel)
+				survivor.notify("Oars shipped. Aboard, F takes them up.")
+			else:
+				survivor.notify("The oarlocks are empty. You need a pair of oars (B to make them).")
+				return
+			world.sfx_at("cloth", at)
+			survivor.push_inventory()
+		"transom":
+			if not boat.motor_fitted:
+				if boat.motor_force <= 0.0:
+					return
+				if pack.count_of("outboard_motor") == 0:
+					survivor.notify("There's no motor on her. Somebody on this island must have had one.")
+					return
+				pack.remove("outboard_motor", 1)
+				boat.set_fittings(boat.oars_fitted, true, boat.fuel)
+				world.sfx_at("latch", at)
+				survivor.notify("You clamp the outboard onto the transom. It needs fuel before it'll run.")
+				survivor.push_inventory()
+				return
+			var drum: Dictionary = pack.find_first("fuel_drum")
+			if drum.is_empty():
+				return  # taking the helm is the crew member's own business (Player)
+			var space := Boat.TANK_LITRES - boat.fuel
+			if space < 0.1:
+				survivor.notify("The tank's full.")
+				return
+			var inside := float(drum.get("fuel", 20.0))
+			var poured := minf(space, inside)
+			inside -= poured
+			if inside <= 0.05:
+				pack.take(int(drum.uid), 1)
+				survivor.notify("You pour in %.0f L. The drum's empty — you leave it." % poured)
+			else:
+				drum["fuel"] = inside
+				survivor.notify("You pour in %.0f L (%.0f L left in the drum)." % [poured, inside])
+			boat.set_fittings(boat.oars_fitted, true, boat.fuel + poured)
+			world.sfx_at("pot", at)
+			survivor.push_inventory()
+		"transom_remove":
+			if not boat.motor_fitted:
+				return
+			if pack.add("outboard_motor", 1) > 0:
+				survivor.notify("No room to carry the motor.")
+				return
+			boat.set_fittings(boat.oars_fitted, false, boat.fuel)
+			world.sfx_at("latch", at)
+			survivor.notify("You unclamp the outboard and heave it off (the fuel stays in its tank on the boat).")
+			survivor.push_inventory()
+		"tow":
+			if boat.tow_target != null:
+				boat.set_tow(null)
+				survivor.notify("Tow line cast off.")
+			else:
+				var target := _tow_candidate(boat)
+				if target == null:
+					survivor.notify("Nothing close enough astern to take in tow.")
+					return
+				boat.set_tow(target)
+				survivor.notify("Tow line made fast. Take it steady.")
+			world.sfx_at("cloth", at)
+		"cargo":
+			if not containers.has(id):
+				_make_container(id, Vector2i(8, 6), "Raft cargo")
+			world.sfx_at("chest", at)
+			open_container_for(survivor, id)
 		"drybox":
 			if containers.has(id):
 				world.sfx_at("chest", at)
@@ -725,7 +845,7 @@ func interact_boat_part(survivor: Survivor, boat: Boat, part_name: String, _slot
 			if boat.is_tied():
 				world.set_boat_tied(boat, false)
 				world.sfx_at("cloth", at)
-				survivor.notify("You cast off. Carry an oar, press F to row — Q strokes left, E strokes right.")
+				survivor.notify("You cast off. F takes up the oars — Q strokes left, E strokes right.")
 			elif _near_dock(boat):
 				world.set_boat_tied(boat, true)
 				world.sfx_at("cloth", at)
@@ -803,9 +923,9 @@ func interact_structure(survivor: Survivor, id: String, slot: int) -> void:
 
 
 func pickup(survivor: Survivor, id: String) -> void:
-	if picked.has(id) or not (PICKUPS.has(id) or CAVE_PICKUPS.has(id)):
+	if picked.has(id) or not (PICKUPS.has(id) or CAVE_PICKUPS.has(id) or id.begins_with("fuel_drum_")):
 		return
-	var entry: Dictionary = PICKUPS.get(id, CAVE_PICKUPS.get(id, {}))
+	var entry: Dictionary = PICKUPS.get(id, CAVE_PICKUPS.get(id, {"item": "fuel_drum", "count": 1}))
 	if survivor.inventory.add(entry.item, entry.count, Ocean.time) > 0:
 		survivor.notify("You have no room for that.")
 		return
@@ -1256,6 +1376,20 @@ func _apply_picked(id: String) -> void:
 func _push_container(id: String) -> void:
 	for peer: int in _viewers.get(id, {}):
 		_send_container(id, peer, false)
+	# A raft's cargo shows on its deck: fuel drums standing there.
+	if id.begins_with("boat:") and id.ends_with(":cargo") and containers.has(id):
+		var boat: Boat = world.find_boat(id.split(":")[1])
+		if boat != null:
+			var drums := (containers[id] as ItemGrid).count_of("fuel_drum")
+			boat.show_cargo(drums)
+			Net.send_to_ready(self, "_cargo_look", [String(boat.name), drums])
+
+
+@rpc("authority", "call_remote", "reliable")
+func _cargo_look(boat_name: String, drums: int) -> void:
+	var boat: Boat = world.find_boat(boat_name) if world != null else null
+	if boat != null:
+		boat.show_cargo(drums)
 
 
 func _send_container(id: String, peer: int, opening: bool) -> void:
@@ -1715,7 +1849,12 @@ func _launch(survivor: Survivor, id: String, entry: Dictionary) -> void:
 	_remove_structure(id)
 	Net.send_to_ready(self, "_remove_structure", [id])
 	world.sfx_at("thud", entry.pos)
-	_notify_crew("%s pushed the raft into the water! Climb aboard with an oar and press F to row — Q and E stroke." % survivor.player.display_name)
+	# Whoever pushed it off ships their oars in it.
+	if boat != null and survivor.inventory.count_of("oar") > 0:
+		survivor.inventory.remove("oar", 1)
+		boat.set_fittings(true, false, 0.0)
+		survivor.push_inventory()
+	_notify_crew("%s pushed the raft into the water! Climb aboard and press F to row — Q and E stroke." % survivor.player.display_name)
 
 
 ## Take `count` of an item or a group ("wood" = any driftwood or logs).

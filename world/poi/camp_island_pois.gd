@@ -2,7 +2,7 @@ class_name CampIslandPois
 extends RefCounted
 ## Landmarks on the camp island: the spring and its stream, the castaway camp
 ## (its fire pit still smouldering), the cave mouth, the
-## fishing shack and its dock, and the shipwreck on the reef.
+## fishing shack and its dock, and the freighter aground on the reef.
 
 static func build(shape: CampIsland) -> Node3D:
 	var root := Node3D.new()
@@ -13,7 +13,7 @@ static func build(shape: CampIsland) -> Node3D:
 	root.add_child(_castaway_camp(shape))
 	root.add_child(CaveBuild.build(shape))
 	root.add_child(FishingShack.build(shape))
-	root.add_child(_shipwreck(shape))
+	root.add_child(FreighterWreck.build(shape))
 	return root
 
 
@@ -491,16 +491,3 @@ static func _soft_puff_texture() -> Texture2D:
 	texture.width = 64
 	texture.height = 64
 	return texture
-
-
-static func _shipwreck(shape: CampIsland) -> Node3D:
-	var node := Node3D.new()
-	node.name = "Shipwreck"
-	node.position = _ground(shape, shape.shipwreck) + Vector3(0.0, 1.2, 0.0)
-	node.rotation = Vector3(0.1, shape.island_seed % 628 / 100.0, 0.5)
-	_mesh(node, _box(Vector3(6.0, 4.0, 22.0)), "wreck_wood", Color(0.30, 0.22, 0.15), Vector3.ZERO)
-	_mesh(node, _cylinder(0.25, 0.3, 9.0), "wreck_mast", Color(0.25, 0.19, 0.13), Vector3(0.0, 5.5, -3.0), Vector3(0.0, 0.0, 0.6))
-	var hull := BoxShape3D.new()
-	hull.size = Vector3(6.0, 4.0, 22.0)
-	_solid(node, hull, Vector3.ZERO)
-	return node

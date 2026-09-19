@@ -548,14 +548,17 @@ func _update_info(player: Player) -> void:
 		for id: int in Net.roster:
 			names.append(Net.roster[id]["name"])
 		lines.append("Crew: " + ", ".join(names))
-	if player != null and player.platform != null and player.platform.can_paddle:
+	if player != null and player.driving != null:
+		lines.append("AT THE HELM   %s / %s throttle · %s / %s steer · %s let go   ·   fuel %.1f L" % [
+			Controls.tag("move_forward"), Controls.tag("move_back"), Controls.tag("move_left"), Controls.tag("move_right"), Controls.tag("interact"), player.driving.fuel])
+	elif player != null and player.platform != null and player.platform.can_paddle:
 		if player.paddling:
 			lines.append("ROWING   %s ◀ left · right ▶ %s   (both = straight · %s back · %s hard · %s stop)" % [
 				Controls.tag("row_left"), Controls.tag("row_right"), Controls.tag("move_back"), Controls.tag("sprint"), Controls.tag("paddle")])
-		elif player.survivor.inventory.tool_types().has("oar"):
+		elif player.platform.oars_fitted:
 			lines.append("%s take the oars" % Controls.tag("paddle"))
 		else:
-			lines.append("You'll need an oar to row")
+			lines.append("No oars in her oarlocks")
 	if Settings.show_debug:
 		lines.append("")
 		lines.append("RIPTIDE M1c-pre · %s · peer %d" % ["HOST" if multiplayer.is_server() else "CREW", multiplayer.get_unique_id()])

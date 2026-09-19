@@ -61,6 +61,8 @@ static func build(id: String) -> Node3D:
 			_arrow(root, Vector3.ZERO)
 		"outboard_motor":
 			_outboard(root)
+		"fuel_drum":
+			_fuel_drum(root)
 		"stone_hatchet":
 			_cylinder(root, 0.018, 0.5, Vector3(0.0, 0.12, 0.0), Materials.wood(WOOD), Vector3.ZERO, 0.022)
 			_rock(root, 3, Vector3(0.07, 0.1, 0.19), Vector3(0.0, 0.34, -0.05), Materials.stone(Color(0.28, 0.28, 0.31)))
@@ -1063,8 +1065,21 @@ static func _outboard(root: Node3D) -> void:
 	_box(root, Vector3(0.18, 0.2, 0.06), Vector3(0.0, 0.6, -0.12), dark)
 	for x: float in [-0.06, 0.06]:
 		_cylinder(root, 0.012, 0.1, Vector3(x, 0.55, -0.18), dark, Vector3(PI / 2.0, 0.0, 0.0))
-	_cylinder(root, 0.018, 0.42, Vector3(0.0, 0.72, 0.38), dark, Vector3(PI / 2.0 - 0.15, 0.0, 0.0), 0.022)
-	_capsule(root, 0.026, 0.12, Vector3(0.0, 0.75, 0.6), Materials.plain(Color(0.08, 0.08, 0.08), 0.8)).rotation.x = PI / 2.0 - 0.15
+	# The tiller reaches forward into the boat (-Z); the propeller is aft (+Z).
+	_cylinder(root, 0.018, 0.42, Vector3(0.0, 0.72, -0.38), dark, Vector3(PI / 2.0 + 0.15, 0.0, 0.0), 0.022)
+	_capsule(root, 0.026, 0.12, Vector3(0.0, 0.75, -0.6), Materials.plain(Color(0.08, 0.08, 0.08), 0.8)).rotation.x = PI / 2.0 + 0.15
+
+
+## A 20-litre steel fuel drum, red, with rolling hoops, a filler cap and a handle.
+static func _fuel_drum(root: Node3D) -> void:
+	var paint := Materials.metal(Color(0.62, 0.12, 0.08), 0.5)
+	var dark := Materials.metal(Color(0.18, 0.17, 0.16), 0.5)
+	_cylinder(root, 0.15, 0.44, Vector3(0.0, 0.22, 0.0), paint)
+	for y: float in [0.04, 0.16, 0.28, 0.4]:
+		_torus(root, 0.152, 0.008, Vector3(0.0, y, 0.0), paint)
+	_cylinder(root, 0.03, 0.03, Vector3(0.07, 0.455, 0.0), dark)
+	_box(root, Vector3(0.16, 0.02, 0.025), Vector3(-0.04, 0.47, 0.0), dark)
+	_box(root, Vector3(0.12, 0.08, 0.002), Vector3(0.0, 0.25, 0.151), Materials.plain(Color(0.9, 0.85, 0.2)))
 
 
 ## A spinning rod: a tapered two-piece blank, cork grip and reel seat, a spinning

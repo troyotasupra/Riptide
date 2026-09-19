@@ -175,7 +175,7 @@ func _draw_marks() -> void:
 			_marks.draw_rect(Rect2(at - Vector2(5, 5), Vector2(10, 10)), INK)
 			_marks.draw_string(ThemeDB.fallback_font, at + Vector2(8, 4), "Shack", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, INK)
 	var camp: CampIsland = world.camp_island
-	for spot: Array in [[camp.cave_mouth, "Cave"], [camp.camp, "Camp"], [camp.spring, "Spring"]]:
+	for spot: Array in [[camp.cave_mouth, "Cave"], [camp.camp, "Camp"], [camp.spring, "Spring"], [camp.shipwreck, "Wreck"]]:
 		if _known(spot[0]):
 			var at := _to_chart(spot[0])
 			_marks.draw_circle(at, 4.0, INK)

@@ -79,6 +79,10 @@ var lean := 0.0
 const LEAN_DISTANCE := 0.36
 const LEAN_ROLL := 0.2
 var paddling := false
+## At the helm of this boat's outboard (W/S throttle, A/D steer), or null.
+var driving: Boat = null
+var _helm_sent := Vector2(9.0, 9.0)
+var _helm_resend := 0.0
 ## 0 resting .. 1 sprinting or swimming hard; drives hunger and thirst on the host.
 var exertion := 0.0
 var carried_weight_kg := 0.0
@@ -371,9 +375,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	# Aboard with an oar, Q or E just takes up the oars — it never drops the oar overboard.
+	# At the helm, F (anything) lets go of it.
+	if driving != null and event.is_action_pressed("interact"):
+		_leave_helm()
+		get_viewport().set_input_as_handled()
+		return
 	if not paddling and platform != null and platform.can_paddle and focus_id.is_empty() \
 			and (event.is_action_pressed("row_left") or event.is_action_pressed("row_right")) \
-			and survivor.inventory.tool_types().has("oar"):
+			and platform.oars_fitted:
 		paddling = true
 		get_viewport().set_input_as_handled()
 		return
@@ -381,7 +390,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("paddle") and platform != null and platform.can_paddle and (paddling or focus_id.is_empty()):
 		if paddling:
 			paddling = false
-		elif survivor.inventory.tool_types().has("oar"):
+		elif platform.oars_fitted:
 			paddling = true
 			if not GameState.hints_shown.has("rowing"):
 				GameState.hints_shown["rowing"] = true
@@ -389,7 +398,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					Controls.tag("row_left"), Controls.tag("row_right"), Controls.tag("move_back"), Controls.tag("sprint"), Controls.tag("paddle")])
 		else:
 			Sound.play("error", -8.0)
-			survivor.notified.emit("You need an oar to row. Carve one from wood and rope (B).")
+			survivor.notified.emit("Her oarlocks are empty. Fit a pair of oars at the oarlocks (F), or make some (B).")
 	elif paddling:
 		pass  # while rowing, Q and E are oar strokes rather than drop and interact
 	elif event.is_action_pressed("dismantle") and focus_id.begins_with("struct:"):
@@ -403,6 +412,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_press_interact("interact")
 	elif event.is_action_pressed("primary"):
 		_press_primary()
+	elif event.is_action_pressed("rotate") and focus_id.begins_with("boat:") and focus_id.ends_with(":transom"):
+		GameState.world.rpc_id(1, "request_interact", focus_id + "_remove", survivor.selected_slot)
 	elif event.is_action_pressed("rotate") and focus_id.begins_with("bag:"):
 		# R on a bag picks the whole thing up.
 		GameState.world.camp.rpc_id(1, "request_take_bag", focus_id.substr(4))
@@ -646,8 +657,19 @@ func _local_physics(delta: float) -> void:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	if not GameState.autopilot.is_empty():
 		input = _autopilot_input(delta)
-	if downed or platform == null or not platform.can_paddle or not survivor.inventory.tool_types().has("oar"):
+	if downed or platform == null or not platform.can_paddle or not platform.oars_fitted:
 		paddling = false
+	if driving != null and (downed or platform != driving or not driving.motor_fitted or not is_instance_valid(driving)):
+		_leave_helm()
+	if driving != null:
+		# W / S open and close the throttle, A / D put the tiller over.
+		var helm := Vector2(-input.y, input.x) if active else Vector2.ZERO
+		_helm_resend += delta
+		if helm != _helm_sent or (helm != Vector2.ZERO and _helm_resend > 1.0):
+			_helm_resend = 0.0
+			_helm_sent = helm
+			driving.set_motor_input.rpc_id(1, helm.x, helm.y)
+		input = Vector2.ZERO
 	var strokes := Vector2.ZERO
 	if paddling and active:
 		strokes = Vector2(1.0 if Input.is_action_pressed("row_left") else 0.0, 1.0 if Input.is_action_pressed("row_right") else 0.0)
@@ -934,7 +956,24 @@ func _update_give_target() -> void:
 			give_text = "%s Give %s to %s" % [Controls.tag("give"), ItemTable.display_name(held_id), other.display_name]
 
 
+func _leave_helm() -> void:
+	if driving != null and is_instance_valid(driving):
+		driving.set_motor_input.rpc_id(1, 0.0, 0.0)
+	driving = null
+	_helm_sent = Vector2(9.0, 9.0)
+
+
 func _press_interact(action: String) -> void:
+	# The helm is taken here, not by the host: F at a fuelled outboard, aboard.
+	if focus_id.begins_with("boat:") and focus_id.ends_with(":transom") and survivor.inventory.count_of("fuel_drum") == 0:
+		var helm_boat: Boat = GameState.find_boat(focus_id.split(":")[1])
+		if helm_boat != null and helm_boat.motor_fitted and helm_boat.fuel > 0.05 and platform == helm_boat:
+			paddling = false
+			driving = helm_boat
+			if not GameState.hints_shown.has("helm"):
+				GameState.hints_shown["helm"] = true
+				survivor.notified.emit("At the helm: W / S throttle, A / D steer, F lets go.")
+			return
 	if focus_id.ends_with(":ladder") or focus_id.ends_with(":ladder_port"):
 		var bits := focus_id.split(":")
 		var boat: Boat = GameState.find_boat(bits[1])

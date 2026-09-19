@@ -25,6 +25,9 @@ const FALL_BAND := 26.0
 const PLUNGE_RADIUS := 4.5
 ## The reef raises the seabed to this depth around the shipwreck, so it's always diveable.
 const WRECK_DEPTH := -8.0
+## The sandbar the freighter is stuck on: its crest depth, and how far it spreads.
+const WRECK_BAR_DEPTH := -3.2
+const WRECK_BAR_RADIUS := 20.0
 const REEF_RADIUS := 45.0
 
 const SAND := Color(0.86, 0.75, 0.50)
@@ -406,7 +409,9 @@ func _base_height(x: float, z: float) -> float:
 	var hill_lift := HILL_PEAK * pow(maxf(0.0, 1.0 - Vector2(x, z).distance_to(hill) / HILL_RADIUS), 1.6)
 	var sea_floor := lerpf(DEEP_SEABED, NEAR_SEABED, clampf(2.2 - d * 1.2, 0.0, 1.0))
 	var reef := maxf(0.0, 1.0 - Vector2(x, z).distance_to(shipwreck) / REEF_RADIUS)
-	var coast := lerpf(lerpf(sea_floor, WRECK_DEPTH, reef), BEACH_HEIGHT, shelf)
+	# The freighter ran aground on a sandbar in the middle of the reef.
+	var bar := smoothstep(WRECK_BAR_RADIUS, WRECK_BAR_RADIUS * 0.4, Vector2(x, z).distance_to(shipwreck))
+	var coast := lerpf(lerpf(lerpf(sea_floor, WRECK_DEPTH, reef), WRECK_BAR_DEPTH, bar), BEACH_HEIGHT, shelf)
 	return coast + lowland * inland + hill_lift * shelf
 
 

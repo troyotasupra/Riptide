@@ -53,6 +53,7 @@ func run() -> void:
 	await _trees()
 	await _shack()
 	await _pickups()
+	await _wreck()
 	await _chart()
 	await _wildfire()
 	print("[tour] saved %d picture(s) to %s" % [saved, dir])
@@ -169,6 +170,21 @@ func _cave() -> void:
 		await _shot(view[0])
 	player.survivor.inventory.hotbar[0] = null
 	player.held_id = ""
+
+
+## The freighter aground on the reef: from a boat's height off her side, from
+## above, and on deck by the drums.
+func _wreck() -> void:
+	if not _wants("wreck"):
+		return
+	var xf := FreighterWreck.transform(island)
+	for view: Array in [["wreck_side", Vector3(-22.0, 2.0, 4.0), Vector3(0.0, 3.0, 0.0)],
+			["wreck_above", Vector3(-26.0, 22.0, 20.0), Vector3(0.0, 2.0, 0.0)],
+			["wreck_gangway", Vector3(-9.0, 5.0, 12.0), Vector3(-4.0, 3.0, 6.0)],
+			["wreck_drums", Vector3(1.5, FreighterWreck.DEPTH + 1.7, 2.0), Vector3(-0.8, FreighterWreck.DEPTH + 0.2, 5.6)]]:
+		_look(xf * Vector3(view[1]), xf * Vector3(view[2]))
+		await _wait(0.8)
+		await _shot(view[0])
 
 
 ## The chart, after a walk round the shack (only that much is filled in), and in

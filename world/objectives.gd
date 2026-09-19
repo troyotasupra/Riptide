@@ -18,6 +18,10 @@ const LIST := [
 	["cook", "Cook food or boil water on a fire"],
 	["sleep", "Sleep through the night in a bed"],
 	["john_boat", "Untie the john boat at the dock and take it out"],
+	["motor", "Find the john boat's missing outboard (someone took it up the hill)"],
+	["fit_motor", "Clamp the outboard onto the john boat's transom"],
+	["tow", "Take the raft in tow from the john boat's stern"],
+	["fuel", "Fetch fuel from the freighter aground on the far reef"],
 ]
 
 
@@ -62,6 +66,18 @@ static func check(id: String, world: Node, player: Player) -> bool:
 		"john_boat":
 			var boat: Boat = world.find_boat("JohnBoat")
 			return boat != null and not boat.is_tied() and player.platform == boat
+		"motor":
+			var boat: Boat = world.find_boat("JohnBoat")
+			return camp.picked.has("outboard_motor") or (boat != null and boat.motor_fitted)
+		"fit_motor":
+			var boat: Boat = world.find_boat("JohnBoat")
+			return boat != null and boat.motor_fitted
+		"tow":
+			var boat: Boat = world.find_boat("JohnBoat")
+			return boat != null and boat.tow_target != null
+		"fuel":
+			var boat: Boat = world.find_boat("JohnBoat")
+			return boat != null and boat.fuel > 0.0
 	return false
 
 

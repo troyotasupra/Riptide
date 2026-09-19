@@ -14,6 +14,11 @@ extends RigidBody3D
 ## physics layer, which players never treat as a moving platform.
 ##
 ## Boats are rowed with oars (see RowMath) and can be tied up with mooring lines.
+##
+## Fittings: the oars sit in the boat's oarlocks, not in anyone's pack. Taking
+## them off is the key: nobody rows a boat away without its oars. A boat with a
+## transom can carry an outboard motor, driven from the helm on the fuel in its
+## tank. Any boat can take another in tow on a line from its stern.
 
 const SEND_EVERY_TICKS := 3
 const PROXY_BASE := Vector3(0.0, -5000.0, 0.0)
@@ -56,6 +61,34 @@ var parts := {}
 ## {"local": boat-space cleat, "anchor": world point, "length": metres}
 var mooring: Array[Dictionary] = []
 
+## Fittings (host truth, mirrored on every peer by _fittings).
+var oars_fitted := false
+var motor_fitted := false
+## Litres in the outboard's tank.
+var fuel := 0.0
+## Motor push and turn (0: this hull takes no motor), and where it clamps on.
+var motor_force := 0.0
+var motor_torque := 0.0
+var motor_mount := Vector3.ZERO
+## Where a tow line is made fast on this boat (its stern), boat space.
+var tow_local := Vector3.ZERO
+## The boat we're towing, and the line's length.
+var tow_target: Boat = null
+var tow_length := 0.0
+const TANK_LITRES := 12.0
+## At full throttle a full tank lasts ten minutes.
+const FUEL_PER_SECOND := TANK_LITRES / 600.0
+const TOW_STIFFNESS_PER_KG := 6.0
+const TOW_DAMPING_PER_KG := 3.0
+
+## peer -> {"throttle": -1..1, "steer": -1..1}: who's at the helm.
+var _helm := {}
+var _fuel_sent := 0.0
+var _fuel_accum := 0.0
+var _motor_node: Node3D
+var _steer_look := 0.0
+var _tow_rope: MeshInstance3D
+var _cargo_look: Node3D
 var _ropes: Array[MeshInstance3D] = []
 var _rower_check := 0.0
 var _snapshots: Array[Dictionary] = []
@@ -143,6 +176,11 @@ static func create_raft(index: int) -> Boat:
 		for z: float in [-0.45, 0.45]:
 			boat.probes.append(Vector3(size.x * x, 0.0, size.z * z))
 	boat.probes.append(Vector3.ZERO)
+	boat.tow_local = Vector3(0.0, size.y, size.z * 0.5)
+	# Oarlocks on the right-hand edge, cargo lashed on the deck, a tow post aft.
+	boat._add_part("oars", Vector3(0.4, 0.4, 0.8), Vector3(size.x * 0.5, size.y + 0.15, 0.0))
+	boat._add_part("cargo", Vector3(1.4, 0.5, 1.4), Vector3(0.0, size.y + 0.25, -0.3))
+	boat._add_part("tow", Vector3(0.4, 0.4, 0.3), boat.tow_local + Vector3(0.0, 0.15, -0.1))
 	return boat
 
 
@@ -188,10 +226,18 @@ func _physics_process(_delta: float) -> void:
 		_follow_host()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var xf := get_global_transform_interpolated()
+	if _tow_rope != null:
+		if tow_target != null and is_instance_valid(tow_target):
+			_tow_rope.visible = true
+			_tow_rope.global_transform = _rope_transform(xf * tow_local, tow_target.get_global_transform_interpolated() * tow_target.bow_point(), 0.02)
+		else:
+			_tow_rope.visible = false
+	if _motor_node != null:
+		_motor_node.rotation.y = lerp_angle(_motor_node.rotation.y, -_steer_look * 0.6, 1.0 - exp(-6.0 * delta))
 	if _ropes.is_empty():
 		return
-	var xf := get_global_transform_interpolated()
 	for i in mini(_ropes.size(), mooring.size()):
 		var from: Vector3 = xf * Vector3(mooring[i].local)
 		_ropes[i].global_transform = _rope_transform(from, mooring[i].anchor, 0.025)
@@ -226,6 +272,7 @@ func _simulate() -> void:
 			point_velocity(wp).y, support, float_depth, heave_damping)
 		apply_force(Vector3.UP * lift, wp - global_position)
 	_pull_mooring_lines()
+	_pull_tow_line()
 	if submerged == 0:
 		return
 	var wet := float(submerged) / probes.size()
@@ -240,6 +287,7 @@ func _simulate() -> void:
 	if _rower_check >= 0.5:
 		_rower_check = 0.0
 		_drop_stale_rowers()
+	_run_motor(wet)
 	if rowers.is_empty():
 		return
 	# Sitting to one side only matters when someone's there to row the other side.
@@ -263,9 +311,12 @@ func _drop_stale_rowers() -> void:
 		return
 	for peer: int in rowers.keys():
 		var player := GameState.world.players_root.get_node_or_null(str(peer)) as Player
-		if player == null or player.platform != self or player.survivor == null or player.survivor.downed \
-				or not player.survivor.inventory.tool_types().has("oar"):
+		if player == null or player.platform != self or player.survivor == null or player.survivor.downed or not oars_fitted:
 			rowers.erase(peer)
+	for peer: int in _helm.keys():
+		var player := GameState.world.players_root.get_node_or_null(str(peer)) as Player
+		if player == null or player.platform != self or player.survivor == null or player.survivor.downed or not motor_fitted:
+			_helm.erase(peer)
 
 
 ## How far a rower sits off the centreline (boat space), or 0 if unknown.
@@ -414,7 +465,7 @@ func set_row_input(left: float, right: float, power: bool) -> void:
 		rowers.erase(sender)
 		return
 	var player: Player = GameState.world.players_root.get_node_or_null(str(sender)) if GameState.world != null else null
-	if player == null or player.platform != self or player.survivor == null or not player.survivor.inventory.tool_types().has("oar"):
+	if player == null or player.platform != self or player.survivor == null or not oars_fitted:
 		rowers.erase(sender)
 		return
 	if player.survivor.downed:
@@ -422,3 +473,152 @@ func set_row_input(left: float, right: float, power: bool) -> void:
 		return
 	rowers[sender] = {"left": clampf(left, -1.0, 1.0), "right": clampf(right, -1.0, 1.0), "power": power,
 		"strength": SharkMath.arm_factor(player.survivor.missing_limbs, player.survivor.prosthetics)}
+
+
+# --- fittings: oars, motor, fuel, tow line, cargo ----------------------------------
+
+## The bow, where a tow line is made fast on the boat being towed.
+func bow_point() -> Vector3:
+	return Vector3(0.0, deck_top, hull_aabb.position.z + 0.1)
+
+
+## Host: set what's fitted and tell everyone.
+func set_fittings(oars: bool, motor: bool, litres: float) -> void:
+	_fittings(oars, motor, litres)
+	_fuel_sent = fuel
+	Net.send_to_ready(self, "_fittings", [oars, motor, fuel])
+
+
+@rpc("authority", "call_remote", "reliable")
+func _fittings(oars: bool, motor: bool, litres: float) -> void:
+	oars_fitted = oars
+	motor_fitted = motor and motor_force > 0.0
+	fuel = clampf(litres, 0.0, TANK_LITRES)
+	if motor_fitted and _motor_node == null:
+		_motor_node = Node3D.new()
+		_motor_node.name = "Outboard"
+		_motor_node.position = motor_mount
+		_motor_node.add_child(ItemModels.build("outboard_motor"))
+		add_child(_motor_node)
+	elif not motor_fitted and _motor_node != null:
+		_motor_node.queue_free()
+		_motor_node = null
+	if not motor_fitted:
+		_helm.clear()
+
+
+## Someone at the helm: throttle -1..1 (W/S), steer -1..1 (A/D).
+@rpc("any_peer", "call_local", "reliable")
+func set_motor_input(throttle: float, steer: float) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender == 0:
+		sender = multiplayer.get_unique_id()
+	var player: Player = GameState.world.players_root.get_node_or_null(str(sender)) if GameState.world != null else null
+	if is_zero_approx(throttle) and is_zero_approx(steer) or player == null or player.platform != self \
+			or player.survivor == null or player.survivor.downed or not motor_fitted:
+		_helm.erase(sender)
+		_send_steer(0.0)
+		return
+	_helm[sender] = {"throttle": clampf(throttle, -1.0, 1.0), "steer": clampf(steer, -1.0, 1.0)}
+	_send_steer(clampf(steer, -1.0, 1.0))
+
+
+func _send_steer(steer: float) -> void:
+	if absf(steer - _steer_look) < 0.01:
+		return
+	_steer_look = steer
+	Net.send_to_ready(self, "_steer", [steer])
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func _steer(steer: float) -> void:
+	_steer_look = steer
+
+
+## Host: the outboard pushes the boat along and swings its stern round, burning fuel.
+func _run_motor(wet: float) -> void:
+	if not motor_fitted or _helm.is_empty() or fuel <= 0.0:
+		return
+	var throttle := 0.0
+	var steer := 0.0
+	for peer: int in _helm:
+		throttle = _helm[peer].throttle
+		steer = _helm[peer].steer
+	var dt := get_physics_process_delta_time()
+	var forward := -global_basis.z
+	forward.y = 0.0
+	if forward.length_squared() < 0.001:
+		return
+	forward = forward.normalized()
+	# Astern it only makes a fraction of the push.
+	var push := throttle if throttle >= 0.0 else throttle * 0.4
+	apply_central_force(forward * push * motor_force * wet)
+	var speed := linear_velocity.dot(forward)
+	# Steering bites harder the faster you're going (and reverses going astern).
+	var bite := clampf(0.35 + absf(speed) / 3.0, 0.0, 1.6) * (1.0 if speed >= -0.2 else -1.0)
+	apply_torque(Vector3.UP * -steer * motor_torque * bite * wet)
+	fuel = maxf(0.0, fuel - (0.15 + 0.85 * absf(throttle)) * FUEL_PER_SECOND * dt)
+	_fuel_accum += dt
+	if (_fuel_accum >= 2.0 and absf(fuel - _fuel_sent) > 0.02) or fuel <= 0.0:
+		_fuel_accum = 0.0
+		set_fittings(oars_fitted, motor_fitted, fuel)
+
+
+## Host: take `target` in tow (null casts off).
+func set_tow(target: Boat) -> void:
+	var length := 0.0
+	if target != null:
+		length = maxf(3.0, (global_transform * tow_local).distance_to(target.global_transform * target.bow_point()) + 0.5)
+	_set_tow(String(target.name) if target != null else "", length)
+	Net.send_to_ready(self, "_set_tow", [String(target.name) if target != null else "", length])
+
+
+@rpc("authority", "call_remote", "reliable")
+func _set_tow(target_name: String, length: float) -> void:
+	tow_target = GameState.find_boat(target_name) if not target_name.is_empty() else null
+	tow_length = length
+	if tow_target != null and _tow_rope == null:
+		_tow_rope = MeshInstance3D.new()
+		_tow_rope.mesh = _unit_rope()
+		_tow_rope.material_override = Materials.rope(Color(0.8, 0.7, 0.5))
+		_tow_rope.top_level = true
+		_tow_rope.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+		add_child(_tow_rope)
+
+
+## Host: a taut tow line pulls the towed boat after us, and drags on us a little.
+func _pull_tow_line() -> void:
+	if tow_target == null or not is_instance_valid(tow_target):
+		return
+	var a := global_transform * tow_local
+	var b := tow_target.global_transform * tow_target.bow_point()
+	var to_us := a - b
+	var distance := to_us.length()
+	if distance <= tow_length or distance < 0.001:
+		return
+	var dir := to_us / distance
+	var closing := (tow_target.point_velocity(b) - point_velocity(a)).dot(dir)
+	var m := tow_target.mass
+	var tension := maxf(0.0, (distance - tow_length) * TOW_STIFFNESS_PER_KG * m - closing * TOW_DAMPING_PER_KG * m)
+	tension = minf(tension, m * 8.0)
+	tow_target.freeze = false
+	tow_target.apply_force(dir * tension, b - tow_target.global_position)
+	apply_force(-dir * tension, a - global_position)
+
+
+## Shows `drums` fuel drums standing on the deck (the raft's cargo).
+func show_cargo(drums: int) -> void:
+	if _cargo_look != null:
+		_cargo_look.queue_free()
+		_cargo_look = null
+	if drums <= 0:
+		return
+	_cargo_look = Node3D.new()
+	add_child(_cargo_look)
+	for i in mini(drums, 6):
+		var drum := ItemModels.build("fuel_drum")
+		drum.position = Vector3((i % 2 - 0.5) * 0.7, deck_top, -0.6 + int(i / 2) * 0.62)
+		drum.rotation.y = i * 0.7
+		_cargo_look.add_child(drum)

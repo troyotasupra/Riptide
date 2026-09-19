@@ -425,9 +425,16 @@ func _starter_loop() -> void:
 	_check(pack.count_of("raft_kit") == 1 and pack.count_of("log") >= 6, "made a raft frame from driftwood and rope, keeping the logs")
 	pack.add("rope", maxi(0, 3 - pack.count_of("rope")))
 
-	var shore: Vector3 = world.island.find_shore_point(Vector2(0.0, 1.0))
-	var site := Vector3(shore.x + 3.0, 0.0, shore.z - 1.0)
-	site.y = world.island.height_at(site.x, site.z)
+	# A stretch of beach low enough, with open water close by (worlds differ, so look round).
+	var site := Vector3.ZERO
+	for k in 24:
+		var shore: Vector3 = world.island.find_shore_point(Vector2.from_angle(PI * 0.5 + k * 0.26))
+		var inland := -Vector3(shore.x, 0.0, shore.z).normalized()
+		var probe := shore + inland * 3.0
+		probe.y = world.island.height_at(probe.x, probe.z)
+		if probe.y > 0.35 and probe.y < StructureTable.SHORE_MAX_HEIGHT and not world.water_spot(probe).is_empty():
+			site = probe
+			break
 	player.teleport(site + Vector3(0.0, 1.0, -3.5))
 	await _wait(1.0)
 	var slot := pack.hotbar.find(null)
@@ -438,6 +445,8 @@ func _starter_loop() -> void:
 	for id: String in camp.structures:
 		floating = floating or camp.structures[id].type == "raft_site"
 	_check(not floating, "can't build a raft frame in mid-air")
+	player.teleport(site + Vector3(0.0, 1.0, 0.0))
+	await _wait(0.5)
 	camp.request_place(slot, site, 0.0)
 	var site_id := ""
 	for id: String in camp.structures:
@@ -461,6 +470,7 @@ func _starter_loop() -> void:
 		return
 	_check(absf(raft.global_position.y) < 1.0 and world.ground_height(raft.global_position.x, raft.global_position.z) < -0.5, "it floats in open water")
 
+	_check(raft.oars_fitted and pack.count_of("oar") == 0, "the oars went into the raft's oarlocks when it was launched")
 	player.teleport_aboard(String(raft.name), Vector3(0.0, raft.deck_top + 0.05, 0.0))
 	await _wait(1.0)
 	var start := raft.global_position
@@ -473,9 +483,10 @@ func _starter_loop() -> void:
 	await _wait(3.0)
 	_check(absf(angle_difference(raft.global_rotation.y, yaw_before)) > 0.2, "a left-oar stroke alone turns it")
 	raft.set_row_input(0.0, 0.0, false)
-	pack.take(_uid(pack, "oar"))
+	camp.interact_boat_part(s, raft, "oars", 0)
+	_check(not raft.oars_fitted and pack.count_of("oar") == 1, "took the oars out of the raft (the key)")
 	raft.set_row_input(1.0, 1.0, false)
-	_check(raft.rowers.is_empty(), "no oar, no rowing")
+	_check(raft.rowers.is_empty(), "no oars, no rowing")
 
 	var john: Boat = world.find_boat("JohnBoat")
 	_check(john != null and john.is_tied(), "the john boat waits tied up at the fishing shack's dock")
@@ -485,18 +496,52 @@ func _starter_loop() -> void:
 	await _wait(1.0)
 	camp.interact_boat_part(s, john, "cleat", 0)
 	_check(not john.is_tied(), "untied her at the bow cleat")
-	pack.add("oar", 1)
+	_check(john.oars_fitted, "her own oars are in her oarlocks")
 	var john_start := john.global_position
 	john.set_row_input(1.0, 1.0, true)
 	await _wait(5.0)
 	john.set_row_input(0.0, 0.0, false)
 	_check(john.global_position.distance_to(john_start) > 3.0, "rowed the john boat away from the dock (%.1f m)" % john.global_position.distance_to(john_start))
 
+	# Out in open water, heading away from land, for the motor and the tow.
+	var open_sea := _deep_water(world)
+	var away := Vector3(open_sea.x - world.camp_island.center.x, 0.0, open_sea.y - world.camp_island.center.y).normalized()
+	john.global_transform = Transform3D(Basis.looking_at(away, Vector3.UP), Vector3(open_sea.x, 0.0, open_sea.y))
+	john.linear_velocity = Vector3.ZERO
+	john.angular_velocity = Vector3.ZERO
+	await _wait(1.0)
+	# The outboard from the cave, fuel from a drum, and a spin at the helm.
+	pack.add("outboard_motor", 1)
+	camp.interact_boat_part(s, john, "transom", 0)
+	_check(john.motor_fitted and pack.count_of("outboard_motor") == 0, "clamped the outboard onto the transom")
+	pack.add("fuel_drum", 1)
+	camp.interact_boat_part(s, john, "transom", 0)
+	_check(john.fuel > 11.0 and pack.find_first("fuel_drum").get("fuel", 0.0) > 7.0, "poured a drum into the tank, and some's left in it (%.1f L)" % john.fuel)
+	var motor_start := john.global_position
+	john.set_motor_input(1.0, 0.0)
+	await _wait(5.0)
+	var fuel_after := john.fuel
+	john.set_motor_input(0.0, 0.0)
+	_check(john.global_position.distance_to(motor_start) > 8.0, "under power she goes (%.1f m in 5 s)" % john.global_position.distance_to(motor_start))
+	_check(fuel_after < 12.0, "and burns fuel doing it (%.2f L)" % fuel_after)
+	# Take the raft in tow: bring it up astern and make the line fast.
+	raft.global_transform = Transform3D(john.global_transform.basis, john.global_transform * Vector3(0.0, 0.0, 5.0))
+	raft.linear_velocity = Vector3.ZERO
+	await _wait(0.3)
+	camp.interact_boat_part(s, john, "tow", 0)
+	_check(john.tow_target == raft, "took the raft in tow")
+	var raft_start := raft.global_position
+	john.set_motor_input(1.0, 0.0)
+	await _wait(6.0)
+	john.set_motor_input(0.0, 0.0)
+	_check(raft.global_position.distance_to(raft_start) > 6.0, "and it follows on the line (%.1f m)" % raft.global_position.distance_to(raft_start))
+
 	world.save_now()
 	var saved := SaveGame.read()
 	var boats: Dictionary = saved.get("boats", {})
 	_check(boats.has(String(raft.name)) and boats[String(raft.name)].kind == "raft", "the save keeps the raft the crew built")
 	_check(boats.has("JohnBoat") and not boats.JohnBoat.tied, "and remembers the john boat is untied")
+	_check(bool(boats.JohnBoat.get("motor", false)) and String(boats.JohnBoat.get("tow", "")) == String(raft.name), "and her motor and tow")
 
 
 ## Host: sharks patrol → one hunts a swimmer and bites → a spear kills it → the

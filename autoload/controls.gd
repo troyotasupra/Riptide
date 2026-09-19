@@ -96,13 +96,13 @@ const PAD_AXES := {
 
 const KEY_LABELS := {
 	"interact": "F", "primary": "LMB", "lean_left": "Q", "lean_right": "E", "zoom_in": "X", "zoom_out": "Z", "secondary": "RMB", "jump": "Space", "paddle": "F", "sprint": "Shift",
-	"row_left": "Q", "row_right": "E", "move_back": "S",
+	"row_left": "Q", "row_right": "E", "move_back": "S", "move_forward": "W", "move_left": "A", "move_right": "D",
 	"crouch": "C", "rotate": "R", "fire_mode": "X", "dismantle": "Z", "inventory": "Tab", "book": "B", "map": "M", "drop": "Q", "give": "G", "pause": "Esc",
 	"hotbar": "1–8",
 }
 const PAD_LABELS := {
 	"interact": "X", "primary": "RT", "lean_left": "LB", "lean_right": "RB", "zoom_in": "D-pad ↑", "zoom_out": "D-pad ↓", "secondary": "LT", "jump": "A", "paddle": "Y", "sprint": "L3",
-	"row_left": "LT", "row_right": "RT", "move_back": "Stick ↓",
+	"row_left": "LT", "row_right": "RT", "move_back": "Stick ↓", "move_forward": "Stick ↑", "move_left": "Stick ←", "move_right": "Stick →", "map": "D-pad ↓",
 	"crouch": "B", "rotate": "D-pad →", "fire_mode": "R3", "dismantle": "Y", "inventory": "View", "book": "D-pad ←", "drop": "D-pad ↓",
 	"give": "D-pad ↑", "pause": "Menu", "hotbar": "LB/RB",
 }

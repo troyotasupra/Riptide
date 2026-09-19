@@ -54,7 +54,10 @@ func test_cove_is_a_beach_and_the_wreck_is_diveable() -> void:
 		var cove_height: float = island.height_at(island.cove.x, island.cove.y)
 		check(cove_height > 0.3 and cove_height < 3.0, "seed %d cove beach height %.2f" % [island_seed, cove_height])
 		var wreck_depth: float = island.height_at(island.shipwreck.x, island.shipwreck.y)
-		check(wreck_depth > -13.0 and wreck_depth < -4.0, "seed %d wreck seabed %.1f m" % [island_seed, wreck_depth])
+		check(wreck_depth > -4.5 and wreck_depth < -2.0, "seed %d the freighter's sandbar %.1f m down" % [island_seed, wreck_depth])
+		var reef: Vector2 = island.shipwreck + (island.shipwreck - island.center).normalized() * 22.0
+		var reef_depth: float = island.height_at(reef.x, reef.y)
+		check(reef_depth > -20.0 and reef_depth < -4.0, "seed %d the reef round it is diveable (%.1f m)" % [island_seed, reef_depth])
 
 
 func test_chunk_edges_meet_their_neighbours() -> void:

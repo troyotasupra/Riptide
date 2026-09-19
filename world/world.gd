@@ -267,6 +267,8 @@ func _generate() -> void:
 	var john_boat := JohnBoat.create(1)
 	john_boat.transform = camp.shack.boat_xf
 	boats_root.add_child(john_boat)
+	# The john boat's own oars are in her oarlocks when you find her.
+	john_boat._fittings(true, false, 0.0)
 	john_boat.moor(camp.shack.lines, camp.shack.boat_xf)
 	sharks = SharkField.new()
 	sharks.name = "Sharks"
@@ -347,7 +349,9 @@ func save_now() -> void:
 		depleted[id] = maxf(0.0, resources.depleted[id] - now)
 	var boats := {}
 	for boat: Boat in boats_root.get_children():
-		boats[String(boat.name)] = {"kind": boat.kind, "index": boat.proxy_index, "xf": boat.global_transform, "tied": boat.is_tied()}
+		boats[String(boat.name)] = {"kind": boat.kind, "index": boat.proxy_index, "xf": boat.global_transform, "tied": boat.is_tied(),
+			"oars": boat.oars_fitted, "motor": boat.motor_fitted, "fuel": boat.fuel,
+			"tow": String(boat.tow_target.name) if boat.tow_target != null else ""}
 	var ok := SaveGame.write({
 		"version": SAVE_VERSION,
 		"seed": GameState.world_seed,
@@ -400,6 +404,15 @@ func _apply_save(data: Dictionary) -> void:
 			boat.untie()
 		elif boat.kind == "john_boat":
 			boat.moor(camp.shack.lines, camp.shack.boat_xf)
+		# Saved before boats had fittings: the john boat kept its oars, a raft had one aboard.
+		boat.set_fittings(bool(entry.get("oars", true)), bool(entry.get("motor", false)), float(entry.get("fuel", 0.0)))
+	for boat_name: String in boats:
+		var entry = boats[boat_name]
+		if entry is Dictionary and not String(entry.get("tow", "")).is_empty():
+			var boat := find_boat(boat_name)
+			var towed := find_boat(String(entry.tow))
+			if boat != null and towed != null:
+				boat.set_tow(towed)
 	camp.from_save(data.get("camp", {}), now)
 	fire.from_save(data.get("fire", {}), now)
 	if data.has("weather"):
@@ -483,7 +496,8 @@ func request_interact(target_id: String, slot: int) -> void:
 			if parts.size() < 3:
 				return
 			var boat := find_boat(parts[1])
-			var part: Node3D = boat.parts.get(parts[2]) if boat != null else null
+			# Unclamping the motor is done at the transom.
+			var part: Node3D = boat.parts.get(parts[2].trim_suffix("_remove")) if boat != null else null
 			if part != null and at.distance_to(part.global_position) <= INTERACT_RANGE:
 				camp.interact_boat_part(survivor, boat, parts[2], slot)
 		"shack":
@@ -594,6 +608,9 @@ func _on_peer_ready(peer_id: int) -> void:
 		for boat: Boat in boats_root.get_children():
 			if boat.kind == "john_boat" and not boat.is_tied():
 				_set_tied.rpc_id(peer_id, String(boat.name), false)
+			boat._fittings.rpc_id(peer_id, boat.oars_fitted, boat.motor_fitted, boat.fuel)
+			if boat.tow_target != null:
+				boat._set_tow.rpc_id(peer_id, String(boat.tow_target.name), boat.tow_length)
 		for existing: Player in players_root.get_children():
 			_spawn_player.rpc_id(peer_id, existing.peer_id, existing.display_name, existing.player_id, existing.look, existing.worn, existing.world_transform().origin)
 			existing._set_limbs.rpc_id(peer_id, existing.survivor.missing_limbs, existing.survivor.prosthetics)
