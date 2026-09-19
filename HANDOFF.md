@@ -126,8 +126,8 @@ This is for a fresh Claude session picking up Riptide. Read it first, then:
   - knife, machete, fishing rod redrawn; new dagger, bow, arrows, outboard
   - THE CAVE behind the waterfall (world/poi/cave_build.gd; the CampIsland cave_* carve), with the dead thief and hunter and the motor, dagger, bow and arrows
   - waterfall rocks at the lip; all fresh water the same colour
+  - the chart (M, ui/map_panel.gd): fills in as you explore; full in dev mode
 - Still to do from that list:
-  - the map (only seen areas filled in; full map in dev mode)
   - guns with more detail
   - the bow in hand needs a proper draw animation (it uses the gun rig)
   - fitting the outboard to the john boat, plus the fuel-tank shipwreck
