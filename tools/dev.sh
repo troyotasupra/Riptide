@@ -118,6 +118,9 @@ build)
 	# The macOS counterpart to build.ps1. Godot ships one macOS template binary
 	# and it's universal, which is why the project imports ETC2 ASTC textures.
 	"$godot" --headless --path "$project" --import
+	# Godot won't create the output folder, and build/ is gitignored, so on a
+	# fresh clone it isn't there.
+	mkdir -p "$project/build"
 	rm -rf "$project/build/Riptide.app"
 	"$godot" --headless --path "$project" --export-release "macOS" "$project/build/Riptide.app"
 	echo "built $project/build/Riptide.app"
