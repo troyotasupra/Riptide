@@ -16,7 +16,8 @@ generated in code or come from CC0 packs (see Credits).
 
 ## Play
 
-- **From source:** `C:\Tools\Godot\Godot_v4.7.2-stable_win64.exe --path C:\src\riptide`
+- **From source (Windows):** `C:\Tools\Godot\Godot_v4.7.2-stable_win64.exe --path C:\src\riptide`
+- **From source (macOS):** `/Applications/Godot_v4.7.2.app/Contents/MacOS/Godot --path ~/dev/riptide`
 - **Standalone build:** `powershell -File tools\build.ps1` makes `build\Riptide.exe`.
   That single file is the whole game — send it to friends.
 
@@ -24,17 +25,39 @@ On the menu, set your name, open **Character** to make your crew member (and pic
 the crew colour and emblem you fly when you host), then **Host new world** or
 **Continue saved world**. The host autosaves every 2 minutes and when leaving.
 
-## Playing with friends over the internet (Tailscale)
+## Playing with friends
 
-1. Everyone installs [Tailscale](https://tailscale.com/download) and signs in.
-2. The host invites friends to their tailnet (Tailscale admin console → *Share* or *Users → Invite*).
-3. The host opens the game, hosts, and reads their **100.x.x.x** address from the
-   Tailscale tray icon (the pause menu also lists addresses).
-4. Friends type that 100.x.x.x address on the menu and press **Join crew** (port 24570).
+Friends connect straight to the host's address. Only the **host** sets anything
+up, and only once. Everyone needs the same build of the game — a copy on
+different code is turned away with a message saying so.
 
-No router port forwarding is needed. On the same Wi-Fi you can skip Tailscale and
-use the host's LAN address instead. If Windows Firewall asks, allow Riptide on
-private networks.
+**On the same Wi-Fi**, nothing needs forwarding. The host presses **Esc** and reads
+their address (`192.168.x.x`) off the pause menu; friends type it in and press
+**Join crew**.
+
+**Over the internet**, the host forwards one port on their router:
+
+1. Give the host machine a fixed address on the home network — a *DHCP reservation*
+   in the router — so the forward doesn't break when the address changes. The pause
+   menu (**Esc**) shows the address the game is on now.
+2. In the router's admin page, add a port forward:
+   - **external port 24570 → internal port 24570**
+   - **protocol: UDP.** The game speaks ENet, which is UDP. A TCP-only forward
+     looks right and never works.
+   - **to:** the host machine's fixed address
+3. Let the game through the host's firewall. On Windows, say yes when it asks, for
+   private *and* public networks. On macOS, *System Settings → Network → Firewall →
+   Options*, and allow incoming connections for Godot (or Riptide).
+4. The host finds their public address — search "what is my ip", or run
+   `curl https://api.ipify.org`. This is **not** the address in the pause menu,
+   which only lists the home network.
+5. Friends type that public address and press **Join crew**.
+
+The port is **24570** and a world holds **6 players**. If someone can't get in, the
+usual causes in order: the forward is TCP instead of UDP; the host's address on the
+home network changed; the firewall is still blocking; or the ISP puts you behind
+CGNAT — if the router's own WAN address doesn't match what "what is my ip" says,
+nothing can reach you from outside and you'd need a VPN or relay instead.
 
 ## Controls
 
