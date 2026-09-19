@@ -166,12 +166,15 @@ func request_fire_mode() -> void:
 ## Fit an attachment from the pack onto the gun in hand (or take one off, when
 ## `attachment_uid` is 0 and `slot` says which).
 @rpc("any_peer", "call_local", "reliable")
-func request_fit(slot: String, attachment_uid: int) -> void:
+func request_fit(slot: String, attachment_uid: int, gun_uid: int = 0) -> void:
 	if not multiplayer.is_server():
 		return
 	var player := _player(_sender())
-	var stack := held_gun(player)
-	if stack.is_empty():
+	if player == null or player.survivor == null:
+		return
+	# A gun laid out in the pack can be worked on too, not only the one in hand.
+	var stack := player.survivor.inventory.get_stack(gun_uid) if gun_uid != 0 else held_gun(player)
+	if stack.is_empty() or not ItemTable.get_item(String(stack.get("id", ""))).has("weapon"):
 		return
 	var s := player.survivor
 	var weapon: String = ItemTable.get_item(String(stack.id)).get("weapon", "")
