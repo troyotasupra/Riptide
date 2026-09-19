@@ -1147,6 +1147,12 @@ func _look() -> void:
 	world.weather.set_wind(0.8, 3.0)
 	# A face can carry an argument after a colon, e.g. "guns:m4".
 	match GameState.face.split(":")[0]:
+		"raininside":
+			# Standing in the shack in a downpour, looking out of the door.
+			world.weather.set_state("storm", true)
+			world.weather.set_wind(0.8, 14.0)
+			var inside: Transform3D = camp.shack.xf
+			_fixed_camera(inside * Vector3(0.0, 1.6, 0.4), inside * Vector3(0.0, 0.9, -7.0))
 		"storm":
 			world.weather.set_state("storm", true)
 			world.weather.set_wind(0.8, 16.0)
