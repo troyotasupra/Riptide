@@ -455,7 +455,7 @@ func _process(delta: float) -> void:
 	_downed_overlay.visible = player.downed
 	if player.downed:
 		_downed_label.text = "YOU'RE DOWN\nBleeding out in %ds — a crewmate can revive you (hold %s on you)" % [ceili(player.bleed_left), Controls.tag("interact")]
-	var temperature := "Body %.1f°C · feels %.0f°C" % [survival.body_temp, _bound.air_temp]
+	var temperature := "Body %.1f°F · feels %.0f°F" % [Survival.fahrenheit(survival.body_temp), Survival.fahrenheit(_bound.air_temp)]
 	if _bound.warmth > 0.0:
 		temperature += " · sheltered"
 	if _bound.wetness > 0.05:

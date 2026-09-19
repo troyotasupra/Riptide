@@ -79,3 +79,9 @@ func test_round_trips_through_dict() -> void:
 	copy.from_dict(s.to_dict())
 	near(copy.hunger, 12.0, 0.0001, "hunger survives save")
 	near(copy.body_temp, 35.5, 0.0001, "body temp survives save")
+
+
+func test_the_reading_is_in_fahrenheit() -> void:
+	near(SurvivalScript.fahrenheit(0.0), 32.0, 0.001, "freezing is 32")
+	near(SurvivalScript.fahrenheit(100.0), 212.0, 0.001, "boiling is 212")
+	near(SurvivalScript.fahrenheit(SurvivalScript.NORMAL_TEMP), 98.6, 0.05, "and a well body reads 98.6")
