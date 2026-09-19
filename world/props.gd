@@ -106,10 +106,13 @@ static func _palm_model(pick: int) -> Dictionary:
 	for i in 3 + pick % 3:
 		var a := i * TAU / 4.0 + rng.randf_range(-0.4, 0.4)
 		_instance(coconuts, nut, husk, Vector3(cos(a) * 0.16, rng.randf_range(-0.08, 0.04), sin(a) * 0.16), Vector3(rng.randf(), rng.randf(), 0.0), Vector3.ONE * 0.27)
+	# You bump into the foot of the trunk, nothing more. A bent palm leans away
+	# overhead, and a tall collider hung out under its crown used to stand in the
+	# sand like an invisible post you couldn't walk past.
 	var shape := CylinderShape3D.new()
 	shape.radius = maxf(0.22, ModelLib.base_radius(spec[0], spec[1], height, TRUNK_WORDS))
-	shape.height = height * 0.8
-	var built := _result(root, [coconuts], shape, Vector3(top.x * 0.35, height * 0.4, top.z * 0.35), true, false, 500.0)
+	shape.height = 2.4
+	var built := _result(root, [coconuts], shape, Vector3(top.x * 0.06, 1.2, top.z * 0.06), true, false, 500.0)
 	built.charred = ModelLib.surfaces_named(model, TRUNK_WORDS)
 	built.leaves = ModelLib.surfaces_named(model, LEAF_WORDS)
 	return built
