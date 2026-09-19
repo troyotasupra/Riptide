@@ -111,6 +111,8 @@ var shack_door := {"open": false, "locked": false}
 ## The shack's two windows: open or shut.
 var shack_windows := [false, false]
 var shack_glow: OmniLight3D
+## Smoke from the shack's chimney, on while the stove burns.
+var shack_smoke: GPUParticles3D
 ## peer id -> true (host)
 var sleeping := {}
 ## Owner-side mirrors for the local player's UI.
@@ -1401,6 +1403,8 @@ func _apply_station_visual(id: String) -> void:
 			node.set_lit(station.lit)
 	elif id == "shack:stove" and shack_glow != null:
 		shack_glow.visible = station.lit
+		if shack_smoke != null:
+			shack_smoke.emitting = station.lit
 
 
 func _apply_picked(id: String) -> void:

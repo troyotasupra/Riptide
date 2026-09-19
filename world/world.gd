@@ -262,6 +262,7 @@ func _generate() -> void:
 	resources.populate_start(island)
 	camp_root.add_child(CampIslandPois.build(camp_island))
 	camp.shack_glow = camp_root.find_child("StoveGlow", true, false) as OmniLight3D
+	camp.shack_smoke = camp_root.find_child("StoveSmoke", true, false) as GPUParticles3D
 	add_child(StarterWreckage.build(island, start_direction()))
 
 	var john_boat := JohnBoat.create(1)
