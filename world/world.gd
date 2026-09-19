@@ -355,6 +355,7 @@ func save_now() -> void:
 		"emblem": GameState.emblem,
 		"time_of_day": GameState.time_of_day(),
 		"resources": depleted,
+		"resources_burnt": resources.burnt.keys(),
 		"boats": boats,
 		"next_boat_index": _next_boat_index,
 		"weather": weather.to_save(),
@@ -370,6 +371,9 @@ func _apply_save(data: Dictionary) -> void:
 	var depleted: Dictionary = data.get("resources", {})
 	for id: String in depleted:
 		resources.depleted[id] = now + float(depleted[id])
+	for id: String in data.get("resources_burnt", []):
+		if resources.depleted.has(id):
+			resources.burnt[id] = true
 	_next_boat_index = maxi(_next_boat_index, int(data.get("next_boat_index", FIRST_BUILT_BOAT_INDEX)))
 	var boats: Dictionary = data.get("boats", {})
 	for boat_name: String in boats:

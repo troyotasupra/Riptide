@@ -12,6 +12,8 @@ const HARVEST_SOUNDS := {"tree": "tree_fall", "palm": "thud", "stone": "stone", 
 var nodes := {}
 ## id -> regrow time on the ocean clock
 var depleted := {}
+## id -> true for the depleted ones fire took (they show charred, not cut)
+var burnt := {}
 
 var _pending: Array[Dictionary] = []
 var _regrow_accum := 0.0
@@ -34,7 +36,7 @@ func _process(delta: float) -> void:
 		add_child(node)
 		nodes[spot.id] = node
 		if depleted.has(spot.id):
-			node.set_depleted(true)
+			node.set_depleted(true, burnt.has(spot.id))
 	_regrow_accum += delta
 	if _regrow_accum >= REGROW_CHECK_SECONDS:
 		_regrow_accum = 0.0
@@ -86,12 +88,12 @@ func burn(id: String, regrow_seconds: float) -> void:
 	if not nodes.has(id) or depleted.has(id):
 		return
 	var regrow_at: float = Ocean.time + regrow_seconds
-	_apply(id, regrow_at)
-	Net.send_to_ready(self, "_sync_one", [id, regrow_at])
+	_apply(id, regrow_at, true)
+	Net.send_to_ready(self, "_sync_one", [id, regrow_at, true])
 
 
 func sync_to(peer_id: int) -> void:
-	_sync_all.rpc_id(peer_id, depleted)
+	_sync_all.rpc_id(peer_id, depleted, burnt.keys())
 
 
 func _regrow_due() -> void:
@@ -105,24 +107,28 @@ func _regrow_due() -> void:
 		Net.send_to_ready(self, "_sync_one", [id, 0.0])
 
 
-func _apply(id: String, regrow_at: float) -> void:
+func _apply(id: String, regrow_at: float, by_fire: bool = false) -> void:
 	if regrow_at > 0.0:
 		depleted[id] = regrow_at
 	else:
 		depleted.erase(id)
+	if regrow_at > 0.0 and by_fire:
+		burnt[id] = true
+	else:
+		burnt.erase(id)
 	var node: ResourceNode = nodes.get(id)
 	if node != null:
-		node.set_depleted(regrow_at > 0.0)
+		node.set_depleted(regrow_at > 0.0, by_fire)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _sync_one(id: String, regrow_at: float) -> void:
-	_apply(id, regrow_at)
+func _sync_one(id: String, regrow_at: float, by_fire: bool = false) -> void:
+	_apply(id, regrow_at, by_fire)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _sync_all(all: Dictionary) -> void:
+func _sync_all(all: Dictionary, fire_ids: Array = []) -> void:
 	for id: String in depleted.keys():
 		_apply(id, 0.0)
 	for id: String in all:
-		_apply(id, all[id])
+		_apply(id, all[id], fire_ids.has(id))

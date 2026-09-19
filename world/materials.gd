@@ -322,6 +322,19 @@ static func foliage(color: Color) -> StandardMaterial3D:
 		return m)
 
 
+## A trunk the fire went through: black char with a faint grey bloom of ash,
+## the cracks glinting a little.
+static func charred() -> StandardMaterial3D:
+	return _cached("charred", func() -> StandardMaterial3D:
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.07, 0.065, 0.06)
+		m.albedo_texture = _texture(_noise(83, 0.35, Vector2(1.0, 3.0), 4), _ramp(Color(0.55, 0.55, 0.55), Color(1.6, 1.55, 1.5), 0.62))
+		m.roughness = 0.95
+		m.uv1_triplanar = true
+		m.uv1_scale = Vector3.ONE * 0.8
+		return m)
+
+
 ## Palm trunk rings.
 static func palm_bark(color: Color) -> StandardMaterial3D:
 	return textured("palm_tree_bark", color, 0.5) if has_texture("palm_tree_bark") else bark(color)

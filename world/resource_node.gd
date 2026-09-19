@@ -7,6 +7,10 @@ var kind := ""
 var depleted := false
 var _harvest_parts: Array = []
 var _hide_when_depleted := false
+var _charred: Array = []
+var _leaves: Array = []
+var _burnt_keep: Array = []
+var _felled: Array = []
 var _base_layer := 0
 
 
@@ -21,6 +25,12 @@ func setup(spot: Dictionary) -> void:
 	add_child(visual)
 	_harvest_parts = built.harvest
 	_hide_when_depleted = built.hide_when_depleted
+	_charred = built.get("charred", [])
+	_leaves = built.get("leaves", [])
+	_burnt_keep = built.get("burnt_keep", [])
+	_felled = built.get("felled", [])
+	for part: Node3D in _felled:
+		part.visible = false
 	var collider := CollisionShape3D.new()
 	collider.shape = built.shape
 	collider.position = built.shape_position
@@ -50,9 +60,18 @@ func hold_seconds(player: Node) -> float:
 	return maxf(0.0, ResourceTable.harvest_seconds(kind, player.survivor.inventory.tool_types()))
 
 
-func set_depleted(value: bool) -> void:
+## Picked clean, felled, or (`burnt`) taken by fire: then trunks stay up, charred
+## and bare, instead of showing a cut stump.
+func set_depleted(value: bool, burnt: bool = false) -> void:
 	depleted = value
+	var charred := value and burnt and not _charred.is_empty()
 	for part: Node3D in _harvest_parts:
-		part.visible = not value
+		part.visible = not value or (charred and _burnt_keep.has(part))
+	for leaf: Node3D in _leaves:
+		leaf.visible = not charred
+	for part: Node3D in _felled:
+		part.visible = value and not charred
+	for mesh: MeshInstance3D in _charred:
+		mesh.material_override = Materials.charred() if charred else null
 	if _hide_when_depleted:
 		collision_layer = 0 if value else _base_layer
