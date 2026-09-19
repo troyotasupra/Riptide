@@ -14,13 +14,16 @@ authored in code or is CC0. `README.md` is the player-facing guide.
 | --- | --- | --- |
 | Role | Repo owner, designer, playtester | Developer |
 | Machine | Windows, `C:\src\riptide` | macOS, `~/dev/riptide` |
-| Godot | `C:\Tools\Godot\Godot_v4.7.2-stable_win64.exe` (+ `_console.exe`) | `/Applications/Godot.app/Contents/MacOS/Godot` |
+| Godot | `C:\Tools\Godot\Godot_v4.7.2-stable_win64.exe` (+ `_console.exe`) | `/Applications/Godot_v4.7.2.app/Contents/MacOS/Godot` |
 
 **Neither side can see the other's working tree.** Assume the other developer is
 editing the same files right now. Everything below follows from that.
 
-If the two machines disagree about an import or a `.uid`, check the Godot patch
-version on both before debugging anything else.
+**Both machines run Godot 4.7.2-stable.** Patch versions must match: a different
+build reimports assets differently, and the result looks like someone else's
+commit broke your machine. Check `--version` on both before debugging any import
+or `.uid` disagreement. `tools/dev.sh` warns when it finds the wrong version, and
+nobody upgrades Godot without telling the other developer first.
 
 ---
 
@@ -111,7 +114,7 @@ Touch these with care; append rather than reorder.
   is in there you did not mean to add, it does not get committed.
 - End every commit message with the co-author trailer:
 
-  ```
+  ```text
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   ```
 
@@ -146,7 +149,7 @@ Set `GODOT` once per shell, then the commands are identical on both machines.
 
 ```bash
 # macOS
-export GODOT=/Applications/Godot.app/Contents/MacOS/Godot
+export GODOT=/Applications/Godot_v4.7.2.app/Contents/MacOS/Godot
 # Windows (headless work uses the _console build)
 export GODOT="/c/Tools/Godot/Godot_v4.7.2-stable_win64_console.exe"
 ```
