@@ -53,6 +53,8 @@ static func layout(shape: CampIsland) -> Dictionary:
 	# The door, and bolting it (both reached at the doorway).
 	parts["door"] = xf * Vector3(0.0, 1.0, -SIZE.z * 0.5)
 	parts["door_bolt"] = parts["door"]
+	for i in 2:
+		parts["window%d" % i] = xf * Vector3((-1.0 if i == 0 else 1.0) * SIZE.x * 0.5, ShackWindow.CENTER.y, ShackWindow.CENTER.z)
 
 	var dock_start := shape.cove - out * 2.5 + side * DOCK_SIDE
 	var dock_end := shape.cove + out * 14.0 + side * DOCK_SIDE
@@ -160,8 +162,22 @@ static func _hut(shape: CampIsland, shack: Dictionary) -> Node3D:
 	# Walls: plank siding with battens, a doorway facing the sea, a window.
 	var wall := 0.1
 	_box(node, Vector3(SIZE.x, SIZE.y, wall), Vector3(0.0, half.y, half.z - wall * 0.5), planks, true)
+	# Side walls, each built round a window opening (ShackWindow).
+	var win_lo := ShackWindow.CENTER.y - ShackWindow.HEIGHT * 0.5
+	var win_hi := ShackWindow.CENTER.y + ShackWindow.HEIGHT * 0.5
+	var win_back := ShackWindow.CENTER.z - ShackWindow.WIDTH * 0.5
+	var win_front := ShackWindow.CENTER.z + ShackWindow.WIDTH * 0.5
 	for sx: float in [-1.0, 1.0]:
-		_box(node, Vector3(wall, SIZE.y, SIZE.z), Vector3(sx * (half.x - wall * 0.5), half.y, 0.0), planks, true)
+		var x := sx * (half.x - wall * 0.5)
+		_box(node, Vector3(wall, win_lo, SIZE.z), Vector3(x, win_lo * 0.5, 0.0), planks, true)
+		_box(node, Vector3(wall, SIZE.y - win_hi, SIZE.z), Vector3(x, (win_hi + SIZE.y) * 0.5, 0.0), planks, true)
+		_box(node, Vector3(wall, win_hi - win_lo, win_back + half.z), Vector3(x, (win_lo + win_hi) * 0.5, (-half.z + win_back) * 0.5), planks, true)
+		_box(node, Vector3(wall, win_hi - win_lo, half.z - win_front), Vector3(x, (win_lo + win_hi) * 0.5, (win_front + half.z) * 0.5), planks, true)
+		var window := ShackWindow.make(node, 0 if sx < 0.0 else 1, sx, x, wall, dark)
+		window.text_provider = func(player: Node) -> String:
+			if GameState.world == null or GameState.world.camp == null:
+				return ""
+			return GameState.world.camp.shack_prompt("window%d" % window.index, player)
 		_box(node, Vector3(half.x - 0.55, SIZE.y, wall), Vector3(sx * (0.55 + (half.x - 0.55) * 0.5), half.y, -half.z + wall * 0.5), planks, true)
 	_box(node, Vector3(1.1, 0.45, wall), Vector3(0.0, SIZE.y - 0.225, -half.z + wall * 0.5), planks, true)
 	for i in 7:
@@ -176,11 +192,6 @@ static func _hut(shape: CampIsland, shack: Dictionary) -> Node3D:
 		if GameState.world == null or GameState.world.camp == null:
 			return ""
 		return GameState.world.camp.shack_prompt("door", player)
-	for sx: float in [-1.0, 1.0]:
-		_box(node, Vector3(0.03, 0.72, 0.92), Vector3(sx * (half.x + 0.012), 1.5, -0.4), dark)
-		_box(node, Vector3(0.035, 0.56, 0.76), Vector3(sx * (half.x + 0.02), 1.5, -0.4), Materials.glow(Color(0.55, 0.62, 0.66), 0.08))
-		_box(node, Vector3(0.05, 0.56, 0.05), Vector3(sx * (half.x + 0.03), 1.5, -0.4), dark)
-		_box(node, Vector3(0.05, 0.05, 0.76), Vector3(sx * (half.x + 0.03), 1.5, -0.4), dark)
 
 	# A tin shed roof, high over the door and sloping down to the back, with a
 	# porch overhang; the walls rise to meet it.

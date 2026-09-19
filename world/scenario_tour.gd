@@ -473,7 +473,10 @@ func _shack() -> void:
 	if not _wants("shack"):
 		return
 	var xf: Transform3D = camp.shack.xf
-	for view: Array in [["shack_door", Vector3(0.0, 1.5, -5.0), Vector3(0.0, 0.6, 0.5)],
+	camp._apply_windows([true, false])
+	for view: Array in [["shack_window_open_out", Vector3(-5.5, 1.8, -1.6), Vector3(-2.5, 1.5, -0.4)],
+			["shack_window_shut_in", Vector3(-1.2, 1.6, 0.2), Vector3(2.5, 1.5, -0.4)],
+			["shack_door", Vector3(0.0, 1.5, -5.0), Vector3(0.0, 0.6, 0.5)],
 			["shack_dock", Vector3(14.0, 5.5, -29.0), Vector3(4.5, 0.4, -18.0)],
 			["shack_inside", Vector3(0.3, 1.6, -1.6), Vector3(-0.6, 0.6, 1.5)],
 			["shack_inside_back", Vector3(-0.4, 1.6, 1.4), Vector3(0.4, 0.8, -1.8)],

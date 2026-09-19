@@ -108,6 +108,8 @@ var respawns := {}
 var shack := {}
 ## The shack's door: open or shut, and bolted from inside (host truth, mirrored everywhere).
 var shack_door := {"open": false, "locked": false}
+## The shack's two windows: open or shut.
+var shack_windows := [false, false]
 var shack_glow: OmniLight3D
 ## peer id -> true (host)
 var sleeping := {}
@@ -223,6 +225,7 @@ func sync_to(peer_id: int) -> void:
 		"chart": chart_read,
 		"unlocked": unlocked.keys(),
 		"door": shack_door,
+		"windows": shack_windows,
 	})
 
 
@@ -250,12 +253,14 @@ func to_save(now: float) -> Dictionary:
 		"respawns": respawns.duplicate(true),
 		"seeded": seeded.keys(),
 		"shack_door": shack_door.duplicate(),
+		"shack_windows": shack_windows.duplicate(),
 	}
 
 
 func from_save(data: Dictionary, now: float) -> void:
 	var door: Dictionary = data.get("shack_door", {})
 	_apply_door.call_deferred(bool(door.get("open", false)), bool(door.get("locked", false)))
+	_apply_windows.call_deferred(data.get("shack_windows", [false, false]))
 	var saved_structures: Dictionary = data.get("structures", {})
 	for id: String in saved_structures:
 		var entry: Dictionary = saved_structures[id]
@@ -353,6 +358,7 @@ func _full_sync(data: Dictionary) -> void:
 		unlocked[id] = true
 	var door: Dictionary = data.get("door", {})
 	_apply_door(bool(door.get("open", false)), bool(door.get("locked", false)))
+	_apply_windows(data.get("windows", [false, false]))
 	recipes_changed.emit()
 	chart_changed.emit()
 
@@ -610,6 +616,8 @@ func part_prompt(boat: Boat, part_name: String, _player: Node) -> String:
 func shack_prompt(part_name: String, player: Node) -> String:
 	var container_id := "shack:" + part_name
 	match part_name:
+		"window0", "window1":
+			return "Shut the window" if shack_windows[int(part_name.right(1))] else "Open the window"
 		"door":
 			var inside := player != null and in_shack((player as Player).world_transform().origin)
 			var bolt := Controls.tag("rotate")
@@ -731,6 +739,13 @@ func interact_shack_part(survivor: Survivor, part_name: String, slot: int) -> vo
 	var at: Vector3 = shack.parts[part_name]
 	var inside := in_shack(survivor.player.world_transform().origin)
 	match part_name:
+		"window0", "window1":
+			var windows: Array = shack_windows.duplicate()
+			var which := int(part_name.right(1))
+			windows[which] = not bool(windows[which])
+			_apply_windows(windows)
+			Net.send_to_ready(self, "_apply_windows", [windows])
+			world.sfx_at("latch", at)
 		"door":
 			if shack_door.locked:
 				if not inside:
@@ -1192,6 +1207,15 @@ func _notify_crew(message: String) -> void:
 func _set_door(open: bool, locked: bool) -> void:
 	_apply_door(open, locked)
 	Net.send_to_ready(self, "_apply_door", [open, locked])
+
+
+@rpc("authority", "call_remote", "reliable")
+func _apply_windows(windows: Array) -> void:
+	shack_windows = [bool(windows[0]) if windows.size() > 0 else false, bool(windows[1]) if windows.size() > 1 else false]
+	if not is_inside_tree():
+		return
+	for window in get_tree().get_nodes_in_group("shack_window"):
+		(window as ShackWindow).set_open(shack_windows[(window as ShackWindow).index])
 
 
 @rpc("authority", "call_remote", "reliable")
