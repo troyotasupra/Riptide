@@ -253,13 +253,18 @@ func _camp_loop() -> void:
 	player.teleport(ground + Vector3(8.0, 1.0, 6.0))
 	await _wait(1.0)
 	_to_hotbar(pack, "tent_kit", 0)
-	var tent_at := Vector3(ground.x + 8.0, 0.0, ground.z + 9.0)
-	tent_at.y = world.ground_height(tent_at.x, tent_at.z)
-	camp.request_place(0, tent_at, 0.0)
+	# The first dry spot within reach, clear of everything built so far.
+	var stand := player.world_transform().origin
 	var tent_id := ""
-	for id: String in camp.structures:
-		if camp.structures[id].type == "tent" and id != CampSystems.CASTAWAY_TENT:
-			tent_id = id
+	for k in 16:
+		var tent_at := stand + Vector3(cos(k * 0.9), 0.0, sin(k * 0.9)) * (3.5 + (k % 3))
+		tent_at.y = world.ground_height(tent_at.x, tent_at.z)
+		camp.request_place(0, tent_at, 0.0)
+		for id: String in camp.structures:
+			if camp.structures[id].type == "tent" and id != CampSystems.CASTAWAY_TENT:
+				tent_id = id
+		if not tent_id.is_empty():
+			break
 	_check(not tent_id.is_empty(), "pitched a tent frame")
 	if not tent_id.is_empty():
 		camp.interact_structure(s, tent_id, 0)
@@ -763,7 +768,20 @@ func _gun_loop() -> void:
 	await _wait(0.3)
 
 	# A bullet is not instant: a shark 200 m out is hit a moment later.
-	var far_at := player.global_position + ahead * 200.0 + Vector3.UP * Player.EYE_HEIGHT
+	# Along a line of open sea: on some worlds an island sits in the way straight ahead.
+	var clear := ahead
+	for turn in 16:
+		var dir := ahead.rotated(Vector3.UP, turn * TAU / 16.0)
+		var open := true
+		for k in 21:
+			var p := player.global_position + dir * (k * 10.0)
+			var ground: float = world.ground_height(p.x, p.z)
+			open = open and (ground == -INF or ground < -2.0)
+		if open:
+			clear = dir
+			break
+	# A few metres up, so a shot from someone swimming doesn't skim into the swell.
+	var far_at := player.global_position + clear * 200.0 + Vector3.UP * (Player.EYE_HEIGHT + 3.0)
 	var far_shark: Shark = world.sharks.spawn(far_at, far_at, 6.0)
 	far_shark.set_physics_process(false)
 	await _wait(0.5)
@@ -776,6 +794,12 @@ func _gun_loop() -> void:
 	await get_tree().physics_frame
 	_check(far_shark.health == far_before, "a 200 m shot hasn't arrived after two frames")
 	await _wait(0.8)
+	# Aimed spread still wanders ~0.5 m at 200 m, so give it a few rounds to connect.
+	for retry in 3:
+		if far_shark.health < far_before:
+			break
+		world.combat.request_shot(at_far, 1.0)
+		await _wait(0.9)
 	_check(far_shark.health < far_before, "but it gets there (%.0f → %.0f)" % [far_before, far_shark.health])
 
 	# Empty it, then reload from the pack.
