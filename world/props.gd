@@ -386,7 +386,7 @@ static func _driftwood(variant: int) -> Dictionary:
 
 static func _boulder(variant: int) -> Dictionary:
 	var root := Node3D.new()
-	_instance(root, MeshKit.rock(20 + variant, 0.35, 0.7), Materials.stone(Color(0.48, 0.46, 0.43)), Vector3(0.0, 0.35, 0.0), Vector3(0.2, variant * 1.7, 0.0), Vector3(2.4, 1.8, 2.0))
+	_instance(root, MeshKit.rock(20 + variant, 0.18, 0.7), Materials.stone(Color(0.48, 0.46, 0.43)), Vector3(0.0, 0.35, 0.0), Vector3(0.2, variant * 1.7, 0.0), Vector3(2.4, 1.8, 2.0))
 	var shape := SphereShape3D.new()
 	shape.radius = 1.1
 	return _result(root, [], shape, Vector3(0.0, 0.4, 0.0), true, false, 450.0)

@@ -42,6 +42,9 @@ static func generate(shape: CampIsland) -> Array[Dictionary]:
 				var kind := pick(shape.biome_at(x, z, h), shape.normal_y_at(x, z), roll)
 				if kind.is_empty() or _crowds_landmark(shape, landmarks, Vector2(x, z)) or shape.in_cave(Vector2(x, z), 2.5):
 					continue
+				# No boulder piles on the summit: the hilltop stays a clean peak.
+				if kind == "rock" and Vector2(x, z).distance_to(shape.hill) < CampIsland.HILL_RADIUS * 0.4:
+					continue
 				spots.append({"id": "%d_%d_%d" % [ix, iz, i], "kind": kind, "pos": Vector3(x, h, z), "yaw": yaw, "scale": size})
 	return spots
 

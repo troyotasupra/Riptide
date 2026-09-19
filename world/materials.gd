@@ -168,7 +168,10 @@ static func bark(color: Color) -> StandardMaterial3D:
 ## Speckled, pitted stone.
 static func stone(color: Color) -> StandardMaterial3D:
 	if has_texture("rock_boulder_dry"):
-		return textured("rock_boulder_dry", color, 0.7)
+		# Softened: the photo's cracks and speckle read as noise on low-poly rocks.
+		var m := textured("rock_boulder_dry", color, 0.85, 3.0, 1.0)
+		m.normal_scale = 0.35
+		return m
 	return _cached("stone_" + color.to_html(false), func() -> StandardMaterial3D:
 		var m := StandardMaterial3D.new()
 		m.albedo_texture = _texture(_noise(31, 0.08, Vector2.ONE, 5), _ramp(color.darkened(0.3), color.lightened(0.15)))

@@ -80,7 +80,7 @@ static func _spring(shape: CampIsland) -> Node3D:
 	spring.add_child(collider)
 	var water := MeshInstance3D.new()
 	water.mesh = _pool_mesh(shape, shape.spring, CampIsland.POND_RADIUS * 2.4, shape.spring_height)
-	water.material_override = _flow_material("pool", 0.0, 0.0, 0.035, 0.8, true)
+	water.material_override = _flow_material("pool", 0.0, 0.0, 0.035, 1.0, true)
 	spring.add_child(water)
 	return spring
 
@@ -217,7 +217,7 @@ static func _stream(shape: CampIsland) -> Node3D:
 				var b0 := left.lerp(right, (x0 + 1.0) * 0.5)
 				var b1 := left.lerp(right, (x1 + 1.0) * 0.5)
 				var quad := [[a0, x0, previous_travelled], [a1, x1, previous_travelled], [b1, x1, travelled], [b0, x0, travelled]]
-				var order := [0, 1, 2, 0, 2, 3] if (i + c) % 2 == 0 else [0, 1, 3, 1, 2, 3]
+				var order := [0, 2, 1, 0, 3, 2] if (i + c) % 2 == 0 else [0, 3, 1, 1, 3, 2]
 				for k: int in order:
 					vertices.append(quad[k][0])
 					normals.append(Vector3.UP)
@@ -238,7 +238,7 @@ static func _stream(shape: CampIsland) -> Node3D:
 		had_previous = true
 	var water := MeshInstance3D.new()
 	water.mesh = _surface(vertices, normals, uvs)
-	water.material_override = _flow_material("stream", 1.4, 0.12, 0.035, 0.82)
+	water.material_override = _flow_material("stream", 1.4, 0.12, 0.035, 1.0)
 	stream.add_child(water)
 	return stream
 
@@ -258,12 +258,26 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 	var across := forward.cross(Vector3.UP).normalized() * CampIsland.STREAM_WIDTH * 0.9
 
 	var path := _fall_path(shape, top, foot, forward)
-	for layer: Array in [[1.0, 0.0, _flow_material("fall", 5.5, 0.72, 0.07, 0.9)], [0.45, 0.14, _flow_material("fall_strand", 7.0, 0.9, 0.05, 0.95)]]:
+	for layer: Array in [[1.0, 0.0, _flow_material("fall", 5.5, 0.38, 0.07, 1.0)], [0.45, 0.14, _flow_material("fall_strand", 7.0, 0.55, 0.05, 1.0)]]:
 		var sheet := MeshInstance3D.new()
 		sheet.mesh = _fall_sheet(path, across, layer[0], layer[1])
 		sheet.material_override = layer[2]
 		sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		node.add_child(sheet)
+	# The lip: boulders the stream pours between and over, either side of the fall
+	# and a couple breaking the flow right at the edge.
+	var lip_rng := RandomNumberGenerator.new()
+	lip_rng.seed = hash("lip:%d" % shape.island_seed)
+	var side_dir := across.normalized()
+	for spot: Array in [[-1.25, 0.1, 1.5], [1.3, -0.1, 1.6], [-2.3, -0.6, 2.0], [2.4, -0.5, 1.9], [-0.45, 0.35, 0.55], [0.55, 0.25, 0.5]]:
+		var at := top + side_dir * float(spot[0]) * CampIsland.STREAM_WIDTH + forward * float(spot[1])
+		at.y = maxf(shape.height_at(at.x, at.z), top.y - 0.2)
+		var size: float = spot[2] * lip_rng.randf_range(0.85, 1.15)
+		_mesh(node, MeshKit.rock(160 + lip_rng.randi() % 8, 0.2, 0.75), "fall_rock", Color(0.36, 0.35, 0.34), at,
+			Vector3(lip_rng.randf() * 0.4, lip_rng.randf() * TAU, lip_rng.randf() * 0.4)).scale = Vector3(size * 1.2, size * 0.8, size)
+		var stone := SphereShape3D.new()
+		stone.radius = size * 0.45
+		_solid(node, stone, at)
 	# White water boiling up where it lands.
 	var splash := FlameSheets.new()
 	splash.set_palette([Color(1.0, 1.0, 1.0), Color(0.88, 0.95, 1.0), Color(0.7, 0.86, 0.94), Color(0.55, 0.76, 0.86)], 1.0)
@@ -280,7 +294,7 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 
 	var plunge := MeshInstance3D.new()
 	plunge.mesh = _pool_mesh(shape, Vector2(foot.x, foot.z), CampIsland.PLUNGE_RADIUS * 2.0, foot.y + 0.3)
-	plunge.material_override = _flow_material("pool", 0.0, 0.0, 0.035, 0.8, true)
+	plunge.material_override = _flow_material("pool", 0.0, 0.0, 0.035, 1.0, true)
 	node.add_child(plunge)
 
 	var rng := RandomNumberGenerator.new()
@@ -385,7 +399,7 @@ static func _fall_sheet(path: Array[Vector3], across: Vector3, width_scale: floa
 		for c in COLUMNS:
 			var quad := [rows[i][c], rows[i][c + 1], rows[i + 1][c + 1], rows[i + 1][c]]
 			# Alternate the diagonal, so the facets zigzag like the fire's.
-			var order := [0, 1, 2, 0, 2, 3] if (i + c) % 2 == 0 else [0, 1, 3, 1, 2, 3]
+			var order := [0, 2, 1, 0, 3, 2] if (i + c) % 2 == 0 else [0, 3, 1, 1, 3, 2]
 			for k: int in order:
 				vertices.append(quad[k][0])
 				normals.append(quad[k][1])

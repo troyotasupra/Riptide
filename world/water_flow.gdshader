@@ -16,7 +16,7 @@ uniform float speed = 3.0;
 // 0..1: how much of the surface is white water.
 uniform float foam_amount = 0.3;
 uniform float ripple = 0.05;
-uniform float alpha = 0.85;
+uniform float alpha = 1.0;
 uniform bool still = false;
 
 varying flat vec3 facet;
