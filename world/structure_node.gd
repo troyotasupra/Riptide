@@ -261,7 +261,8 @@ func _tent() -> void:
 	var wood := Materials.wood(Color(0.55, 0.42, 0.28))
 	for z: float in [-TENT_HALF_LENGTH - 0.03, TENT_HALF_LENGTH + 0.03]:
 		for side: float in [-1.0, 1.0]:
-			_pole(Vector3(side * (TENT_HALF_WIDTH + 0.02), 0.0, z), Vector3(0.0, TENT_RIDGE + 0.1, z), 0.028, 96 + int(side), wood)
+			# The poles are footed a little into the ground, not sat on top of it.
+			_pole(Vector3(side * (TENT_HALF_WIDTH + 0.02), -0.12, z), Vector3(0.0, TENT_RIDGE + 0.1, z), 0.028, 96 + int(side), wood)
 	_pole(Vector3(0.0, TENT_RIDGE + 0.04, -TENT_HALF_LENGTH - 0.15), Vector3(0.0, TENT_RIDGE + 0.04, TENT_HALF_LENGTH + 0.15), 0.03, 97, wood)
 
 
@@ -272,20 +273,25 @@ func _tent_progress(progress: Dictionary) -> void:
 	var r := TENT_RIDGE
 	var w := TENT_HALF_WIDTH
 	var l := TENT_HALF_LENGTH
+	# The canvas carries on below the ground line, so on uneven ground the tent
+	# never stands on stilts with daylight under its walls.
+	var skirt := -0.28
 	if int(progress.get("tarp", 0)) >= 1:
 		for side: float in [-1.0, 1.0]:
-			_part_node(_sheet(Vector3(0.0, r, -l), Vector3(0.0, r, l), Vector3(side * w, 0.02, l), Vector3(side * w, 0.02, -l), 0.05 * side, canvas))
+			_part_node(_sheet(Vector3(0.0, r, -l), Vector3(0.0, r, l), Vector3(side * w, skirt, l), Vector3(side * w, skirt, -l), 0.05 * side, canvas))
 		# Closed back wall.
-		_part_node(_triangle(Vector3(-w, 0.02, -l), Vector3(0.0, r, -l), Vector3(w, 0.02, -l), canvas))
+		_part_node(_triangle(Vector3(-w, skirt, -l), Vector3(0.0, r, -l), Vector3(w, skirt, -l), canvas))
 		# Door flaps, rolled back and tied either side of the opening.
 		for side: float in [-1.0, 1.0]:
-			_part_node(_triangle(Vector3(0.0, r, l), Vector3(side * w, 0.02, l), Vector3(side * w * 0.55, 0.02, l + 0.02), canvas))
+			_part_node(_triangle(Vector3(0.0, r, l), Vector3(side * w, skirt, l), Vector3(side * w * 0.55, skirt, l + 0.02), canvas))
 			var roll := MeshKit.tube(PackedVector3Array([Vector3(side * w * 0.57, 0.05, l + 0.05), Vector3(side * w * 0.3, r * 0.52, l + 0.05), Vector3(side * 0.06, r - 0.05, l + 0.05)]),
 				PackedFloat32Array([0.05, 0.045, 0.03]), 6)
 			_part(roll, canvas, Vector3.ZERO)
+		# The groundsheet is laid a touch under the sod and reaches the walls, so
+		# no strip of bare ground shows inside.
 		var ground := BoxMesh.new()
-		ground.size = Vector3(w * 2.0 - 0.05, 0.012, l * 2.0)
-		_part(ground, Materials.cloth(Color(0.22, 0.24, 0.2)), Vector3(0.0, 0.01, 0.0))
+		ground.size = Vector3(w * 2.0, 0.05, l * 2.0 + 0.04)
+		_part(ground, Materials.cloth(Color(0.22, 0.24, 0.2)), Vector3(0.0, -0.012, 0.0))
 		if worn:
 			# Faded, and patched with whatever the castaway had.
 			var patch := _double_sided(Materials.cloth(Color(0.55, 0.44, 0.30)))
