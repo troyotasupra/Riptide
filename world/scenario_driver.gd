@@ -69,6 +69,16 @@ func _wait(seconds: float) -> void:
 	await get_tree().create_timer(seconds).timeout
 
 
+## Somewhere properly deep between the islands (the worlds are random, so look).
+static func _deep_water(world: Node) -> Vector2:
+	var center: Vector2 = world.camp_island.center
+	for k in 60:
+		var probe: Vector2 = center * (0.3 + 0.01 * k) + Vector2.from_angle(k * 0.7) * 20.0
+		if world.ground_height(probe.x, probe.y) < -8.0:
+			return probe
+	return center * 0.45
+
+
 static func _uid(pack: Pack, id: String) -> int:
 	return int(pack.find_first(id).get("uid", 0))
 
@@ -470,7 +480,7 @@ func _starter_loop() -> void:
 	pack.add("oar", 1)
 	var john_start := john.global_position
 	john.set_row_input(1.0, 1.0, true)
-	await _wait(4.0)
+	await _wait(5.0)
 	john.set_row_input(0.0, 0.0, false)
 	_check(john.global_position.distance_to(john_start) > 3.0, "rowed the john boat away from the dock (%.1f m)" % john.global_position.distance_to(john_start))
 
@@ -493,13 +503,7 @@ func _shark_loop() -> void:
 	var pack := s.inventory
 	_check(field.sharks.size() >= 3, "sharks patrol the crossing and the reef (%d)" % field.sharks.size())
 
-	# Somewhere properly deep between the islands (the worlds are random, so look).
-	var sea: Vector2 = world.camp_island.center * 0.45
-	for k in 40:
-		var probe: Vector2 = world.camp_island.center * (0.3 + 0.01 * k) + Vector2.from_angle(k * 0.7) * 20.0
-		if world.ground_height(probe.x, probe.y) < -6.0:
-			sea = probe
-			break
+	var sea := _deep_water(world)
 	player.teleport(Vector3(sea.x, -2.6, sea.y))
 	await _wait(2.0)
 	_check(player.swimming, "swimming in open water, far from land")
@@ -950,7 +954,7 @@ func _walk_loop() -> void:
 
 	# Diving: down, breath running out, and back up.
 	var s := player.survivor
-	var sea: Vector2 = world.camp_island.center * 0.5
+	var sea := _deep_water(world)
 	player.teleport(Vector3(sea.x, 0.6, sea.y))
 	await _wait(2.5)
 	_check(player.swimming, "swimming out in open water")

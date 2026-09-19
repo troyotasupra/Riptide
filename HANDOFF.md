@@ -40,7 +40,7 @@ This is for a fresh Claude session picking up Riptide. Read it first, then:
 "/c/Tools/Godot/Godot_v4.7.2-stable_win64_console.exe" --headless --path . --import
 # scenarios (print [scenario] PASS/FAIL, then quit)
 ... --path . --no-focus --mute -- --host --profile=testhost --spawn=shack --scenario=camp --dev --port=24616
-... --path . --no-focus --mute -- --scenario=guns --dev --profile=test_a --port=24610   # also: walk, starter, outdoors, sharks, client
+... --path . --no-focus --mute -- --host --scenario=guns --dev --profile=test_a --port=24610   # also: walk, starter, outdoors, sharks, gear. EVERY scenario needs --host (the menu never auto-hosts), and add --audio-driver Dummy before --
 # screenshots: saved on a delay; --shot-delay=30 for slow views
 ... --path . --no-focus --mute -- --scenario=look --face=<face> --dev --profile=test_a --port=24617 --shot=<abs path>.png
 ```
