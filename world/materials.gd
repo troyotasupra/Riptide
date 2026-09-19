@@ -6,6 +6,82 @@ extends RefCounted
 ## scaled and generated meshes.
 
 static var _cache := {}
+static var _means := {}
+
+const TEXTURES := "res://assets/textures/"
+## How many metres one repeat of each photo texture covers.
+const TEXTURE_METRES := {
+	"sand_01": 2.5, "coast_sand_01": 2.5, "brown_mud_leaves_01": 3.0, "rock_face_03": 4.0,
+	"coast_sand_rocks_02": 3.0, "gravelly_sand": 2.0, "rock_boulder_dry": 1.2, "bark_brown_02": 1.4,
+	"palm_tree_bark": 1.0, "weathered_brown_planks": 2.0, "rough_wood": 1.2, "fine_grained_wood": 0.5,
+	"rough_linen": 0.6, "hessian_230": 0.5, "corrugated_iron": 2.0, "grass_001": 2.0, "rope_001": 0.25,
+	"metal_027": 0.35, "painted_metal_004": 0.5, "plastic_010": 0.3,
+}
+
+
+static func has_texture(folder: String) -> bool:
+	return ResourceLoader.exists(TEXTURES + folder + "/albedo.jpg")
+
+
+static func texture_map(folder: String, map: String) -> Texture2D:
+	var path := "%s%s/%s.jpg" % [TEXTURES, folder, map]
+	return load(path) if ResourceLoader.exists(path) else null
+
+
+## The photo's average colour, so a material can be tinted toward the colour a
+## caller asked for without the texture's own colour doubling up on it.
+static func texture_mean(folder: String) -> Color:
+	if _means.has(folder):
+		return _means[folder]
+	var mean := Color(0.5, 0.5, 0.5)
+	var texture := texture_map(folder, "albedo")
+	if texture != null:
+		var image := texture.get_image()
+		if image != null:
+			if image.is_compressed():
+				image.decompress()
+			image.clear_mipmaps()
+			while image.get_width() > 16 or image.get_height() > 16:
+				image.shrink_x2()
+			var total := Color(0, 0, 0)
+			for y in image.get_height():
+				for x in image.get_width():
+					total += image.get_pixel(x, y)
+			var n := float(image.get_width() * image.get_height())
+			mean = Color(total.r / n, total.g / n, total.b / n)
+	_means[folder] = mean
+	return mean
+
+
+## A photo-textured material: `folder` under assets/textures, tinted toward `color`
+## (strength 0 keeps the photo's own colour, 1 matches `color` on average).
+## `metres` overrides how big one repeat is; `world` maps it in world space so
+## neighbouring pieces line up (terrain-like props), otherwise per object.
+static func textured(folder: String, color: Color, strength: float = 0.6, metres: float = -1.0, roughness_scale: float = 1.0, world := false) -> StandardMaterial3D:
+	var key := "tex_%s_%s_%.2f_%.2f_%.2f_%s" % [folder, color.to_html(false), strength, metres, roughness_scale, world]
+	return _cached(key, func() -> StandardMaterial3D:
+		var m := StandardMaterial3D.new()
+		var mean := texture_mean(folder)
+		var tint := Color(color.r / maxf(mean.r, 0.02), color.g / maxf(mean.g, 0.02), color.b / maxf(mean.b, 0.02))
+		m.albedo_color = Color.WHITE.lerp(tint, strength)
+		m.albedo_texture = texture_map(folder, "albedo")
+		var normal := texture_map(folder, "normal")
+		if normal != null:
+			m.normal_enabled = true
+			m.normal_texture = normal
+			m.normal_scale = 1.0
+		var rough := texture_map(folder, "rough")
+		if rough != null:
+			m.roughness_texture = rough
+			m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+		m.roughness = roughness_scale
+		var size: float = metres if metres > 0.0 else float(TEXTURE_METRES.get(folder, 1.0))
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = world
+		m.uv1_triplanar_sharpness = 4.0
+		m.uv1_scale = Vector3.ONE / size
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+		return m)
 
 
 static func _noise(noise_seed: int, frequency: float, stretch: Vector2, octaves: int = 3, type: FastNoiseLite.NoiseType = FastNoiseLite.TYPE_SIMPLEX_SMOOTH) -> FastNoiseLite:
@@ -56,6 +132,8 @@ static func plain(color: Color, roughness: float = 0.85) -> StandardMaterial3D:
 
 ## Planed wood with long grain.
 static func wood(color: Color) -> StandardMaterial3D:
+	if has_texture("rough_wood"):
+		return textured("rough_wood", color, 0.75)
 	return _cached("wood_" + color.to_html(false), func() -> StandardMaterial3D:
 		var noise := _noise(11, 0.02, Vector2(1.0, 8.0), 4)
 		noise.frequency = 0.012
@@ -72,6 +150,8 @@ static func wood(color: Color) -> StandardMaterial3D:
 
 ## Rough, furrowed bark.
 static func bark(color: Color) -> StandardMaterial3D:
+	if has_texture("bark_brown_02"):
+		return textured("bark_brown_02", color, 0.6)
 	return _cached("bark_" + color.to_html(false), func() -> StandardMaterial3D:
 		var noise := _noise(21, 0.05, Vector2.ONE, 5, FastNoiseLite.TYPE_CELLULAR)
 		var m := StandardMaterial3D.new()
@@ -87,6 +167,8 @@ static func bark(color: Color) -> StandardMaterial3D:
 
 ## Speckled, pitted stone.
 static func stone(color: Color) -> StandardMaterial3D:
+	if has_texture("rock_boulder_dry"):
+		return textured("rock_boulder_dry", color, 0.7)
 	return _cached("stone_" + color.to_html(false), func() -> StandardMaterial3D:
 		var m := StandardMaterial3D.new()
 		m.albedo_texture = _texture(_noise(31, 0.08, Vector2.ONE, 5), _ramp(color.darkened(0.3), color.lightened(0.15)))
@@ -101,6 +183,8 @@ static func stone(color: Color) -> StandardMaterial3D:
 
 ## Woven fabric.
 static func cloth(color: Color) -> StandardMaterial3D:
+	if has_texture("rough_linen"):
+		return textured("rough_linen", color, 0.9)
 	return _cached("cloth_" + color.to_html(false), func() -> StandardMaterial3D:
 		var m := StandardMaterial3D.new()
 		m.albedo_color = color
@@ -128,6 +212,11 @@ static func leather(color: Color) -> StandardMaterial3D:
 
 
 static func metal(color: Color, roughness: float = 0.35) -> StandardMaterial3D:
+	if has_texture("metal_027"):
+		var m := textured("metal_027", color, 0.9, -1.0, roughness / 0.35)
+		m.metallic = 0.45 if roughness < 0.45 else 0.25
+		m.metallic_specular = 0.55
+		return m
 	return _cached("metal_%s_%.2f" % [color.to_html(false), roughness], func() -> StandardMaterial3D:
 		var m := StandardMaterial3D.new()
 		m.albedo_color = color
@@ -141,6 +230,9 @@ static func metal(color: Color, roughness: float = 0.35) -> StandardMaterial3D:
 ## Board siding and floors: grain with dark seams between boards (`board_width`
 ## metres wide) and staggered butt joints. Triplanar, so walls get vertical boards.
 static func planks(color: Color, board_width: float = 0.25) -> StandardMaterial3D:
+	if has_texture("weathered_brown_planks"):
+		# The photo is eight boards across its two metres.
+		return textured("weathered_brown_planks", color, 0.4, board_width * 8.0)
 	return _cached("planks_%s_%.2f" % [color.to_html(false), board_width], func() -> StandardMaterial3D:
 		var m := StandardMaterial3D.new()
 		m.albedo_color = color
@@ -228,3 +320,70 @@ static func foliage(color: Color) -> StandardMaterial3D:
 		m.backlight = color.darkened(0.3)
 		m.uv1_triplanar = true
 		return m)
+
+
+## Palm trunk rings.
+static func palm_bark(color: Color) -> StandardMaterial3D:
+	return textured("palm_tree_bark", color, 0.5) if has_texture("palm_tree_bark") else bark(color)
+
+
+## Rope and lashings.
+static func rope(color: Color) -> StandardMaterial3D:
+	return textured("rope_001", color, 0.6) if has_texture("rope_001") else cloth(color)
+
+
+## Tin roofing.
+static func tin(color: Color) -> StandardMaterial3D:
+	if not has_texture("corrugated_iron"):
+		return metal(color, 0.5)
+	var m := textured("corrugated_iron", color, 0.5)
+	m.metallic = 0.5
+	return m
+
+
+## Burlap sacks and packs.
+static func burlap(color: Color) -> StandardMaterial3D:
+	return textured("hessian_230", color, 0.7) if has_texture("hessian_230") else cloth(color)
+
+
+## A flat colour carrying only a photo's surface detail — its bumps and where it's
+## rough or polished — for finishes whose colour matters more than the photo's.
+static func detail(folder: String, color: Color, metres: float, roughness: float, metallic: float = 0.0) -> StandardMaterial3D:
+	var key := "detail_%s_%s_%.2f_%.2f_%.2f" % [folder, color.to_html(false), metres, roughness, metallic]
+	return _cached(key, func() -> StandardMaterial3D:
+		var m := StandardMaterial3D.new()
+		m.albedo_color = color
+		m.metallic = metallic
+		m.metallic_specular = 0.6
+		var normal := texture_map(folder, "normal")
+		if normal != null:
+			m.normal_enabled = true
+			m.normal_texture = normal
+			m.normal_scale = 0.6
+		var rough := texture_map(folder, "rough")
+		if rough != null:
+			m.roughness_texture = rough
+			m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+		m.roughness = roughness
+		m.uv1_triplanar = true
+		m.uv1_triplanar_sharpness = 6.0
+		m.uv1_scale = Vector3.ONE / metres
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+		return m)
+
+
+## Gun parts: their own finish, with fine wear and machining marks from photos.
+static func gun_steel(color: Color, roughness: float = 0.4) -> StandardMaterial3D:
+	if not has_texture("metal_027"):
+		return metal(color, roughness)
+	return detail("metal_027", color, 0.15, clampf(roughness * 1.6, 0.3, 1.0), 0.55)
+
+
+static func gun_polymer(color: Color) -> StandardMaterial3D:
+	if not has_texture("plastic_010"):
+		return plain(color, 0.8)
+	return detail("plastic_010", color, 0.06, 1.0)
+
+
+static func gun_wood(color: Color) -> StandardMaterial3D:
+	return textured("fine_grained_wood", color, 0.85, 0.25) if has_texture("fine_grained_wood") else wood(color)

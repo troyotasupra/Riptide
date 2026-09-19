@@ -71,7 +71,7 @@ const ITEMS := {
 	"stone_hatchet": {"name": "Stone hatchet", "category": "tool", "tool": "hatchet", "weight": 1.2, "stack": 1, "hint": "Look at a tree and hold left click to chop it down for logs."},
 	"oar": {"name": "Oar", "category": "tool", "tool": "oar", "weight": 1.4, "stack": 1, "hint": "Carry it aboard a raft or boat and press F to row: Q strokes the left oar, E the right, both to go straight. Hold S to back-row, Shift to pull hard."},
 	"lighter": {"name": "Lighter", "category": "tool", "tool": "lighter", "weight": 0.05, "stack": 1, "uses": 20, "hint": "Press E on a campfire or stove that has wood in it to light it."},
-	"torch": {"name": "Torch", "category": "tool", "tool": "torch", "weight": 0.5, "stack": 3, "hint": "Lights your way while it's in your hand."},
+	"torch": {"name": "Torch", "category": "tool", "tool": "torch", "weight": 0.5, "stack": 3, "hint": "Lights your way while it's in your hand. Left click on dry grass or brush to set it alight — fire spreads with the wind."},
 	"canteen": {"name": "Canteen (empty)", "category": "tool", "tool": "canteen", "weight": 0.3, "stack": 1, "hint": "Hold it and press E at the spring (clean) or the stream (boil it first)."},
 	"fishing_rod": {"name": "Fishing rod", "category": "tool", "tool": "fishing_rod", "weight": 1.0, "stack": 1, "hint": "Hold left click to wind up a cast and let go to throw. When the bobber dips, left click to strike, then hold to reel and ease off before the line snaps. Right click picks your bait."},
 	"spear": {"name": "Spear", "category": "weapon", "tool": "spear", "weight": 1.5, "stack": 1, "hint": "Look at a shark and left click to strike — the best reach and damage you've got."},
@@ -127,9 +127,9 @@ const ITEMS := {
 	"compartment_key": {"name": "Small brass key", "category": "key", "weight": 0.02, "stack": 1, "hint": "Opens the locked footlocker in the fishing shack — press E on it."},
 
 	# --- structure kits ---
-	"campfire_kit": {"name": "Campfire (place)", "category": "placeable", "weight": 3.0, "stack": 1, "places": "campfire"},
+	"campfire_kit": {"name": "Campfire ring (place)", "category": "placeable", "weight": 1.5, "stack": 1, "places": "campfire"},
 	"lean_to_kit": {"name": "Lean-to (place)", "category": "placeable", "weight": 2.5, "stack": 1, "places": "lean_to"},
-	"tent_kit": {"name": "Tent (place)", "category": "placeable", "weight": 4.0, "stack": 1, "places": "tent"},
+	"tent_kit": {"name": "Tent frame (place)", "category": "placeable", "weight": 3.0, "stack": 1, "places": "tent"},
 	"drying_rack_kit": {"name": "Drying rack (place)", "category": "placeable", "weight": 3.0, "stack": 1, "places": "drying_rack"},
 	"storage_crate_kit": {"name": "Storage crate (place)", "category": "placeable", "weight": 6.0, "stack": 1, "places": "storage_crate"},
 	"raft_kit": {"name": "Raft frame (place)", "category": "placeable", "weight": 5.0, "stack": 1, "places": "raft_site"},

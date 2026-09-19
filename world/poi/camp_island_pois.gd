@@ -98,9 +98,18 @@ static func _pool_mesh(shape: CampIsland, center: Vector2, extent: float, level:
 		if not filled.get("spilled", false):
 			break
 		level -= 0.35
+	# Two more rings of cells past the last fully-wet one: the bank rises through
+	# them, so the ground hides the square edge and the shoreline follows the terrain.
+	var wet: Dictionary = filled.wet.duplicate()
+	for ring in 2:
+		var grown := wet.duplicate()
+		for key: Vector2i in wet:
+			for step_to: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1)]:
+				grown[key + step_to] = true
+		wet = grown
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
-	for key: Vector2i in filled.wet:
+	for key: Vector2i in wet:
 		var x := origin.x + key.x * STEP
 		var z := origin.y + key.y * STEP
 		var a := Vector3(x, level, z)
@@ -339,19 +348,36 @@ static func _castaway_camp(shape: CampIsland) -> Node3D:
 	node.position = _ground(shape, shape.camp)
 	node.rotation.y = yaw_toward(shape.camp, shape.center)
 	var wood := Color(0.45, 0.36, 0.26)
-	for x: float in [-1.1, 1.1]:
-		_mesh(node, _cylinder(0.06, 0.08, 2.0), "old_wood", wood, Vector3(x, 1.0, -1.0), Vector3(0.0, 0.0, 0.1 * x))
-	_mesh(node, _box(Vector3(2.6, 0.06, 2.3)), "old_tarp", Color(0.42, 0.48, 0.40), Vector3(0.0, 1.2, 0.0), Vector3(-0.75, 0.0, 0.08))
-	for i in 8:
-		var a := i * TAU / 8.0
-		_mesh(node, _box(Vector3(0.28, 0.2, 0.22)), "ring_stone", Color(0.45, 0.44, 0.42), Vector3(cos(a) * 0.85, 0.1, 2.6 + sin(a) * 0.85), Vector3(0.0, a, 0.0))
-	_mesh(node, _cylinder(0.08, 0.08, 1.0), "charcoal", Color(0.12, 0.10, 0.09), Vector3(0.0, 0.1, 2.6), Vector3(0.0, 0.6, PI / 2.0))
+	# The castaway's tent itself is a real structure (CampSystems seeds it), so the
+	# crew can sleep in it or take it apart; this is just the camp around it.
+	for i in 9:
+		var a := i * TAU / 9.0
+		var stone := _mesh(node, MeshKit.rock(60 + i % 6, 0.3, 0.7), "ring_stone", Color(0.45, 0.44, 0.42), Vector3(cos(a) * 0.8, 0.07, 2.6 + sin(a) * 0.8), Vector3(0.0, a * 1.7, 0.1))
+		stone.scale = Vector3(0.3, 0.2, 0.26) * (0.85 + 0.3 * absf(sin(i * 3.7)))
+	var ash := _mesh(node, MeshKit.rock(70, 0.1, 0.25), "charcoal", Color(0.14, 0.12, 0.11), Vector3(0.0, 0.0, 2.6))
+	ash.scale = Vector3(1.1, 0.25, 1.1)
+	for i in 3:
+		var a := i * TAU / 3.0 + 0.4
+		var burnt := _mesh(node, MeshKit.branch(120 + i, 0.8, 0.05, 0.04, 0.03, 5), "charcoal", Color(0.1, 0.08, 0.07), Vector3(cos(a) * 0.35, 0.05, 2.6 + sin(a) * 0.35))
+		burnt.rotation = Vector3(0.0, -a, PI / 2.0 - 0.25)
 	# The log the machete is stuck in.
-	_mesh(node, _cylinder(0.22, 0.25, 0.7), "old_wood", wood, Vector3(1.4, 0.35, 1.8))
+	_mesh(node, _cylinder(0.22, 0.25, 0.7), "old_wood", wood, Vector3(2.1, 0.35, 2.0))
 	var smoke := _smoke()
-	smoke.position = Vector3(0.0, 0.3, 2.6)
+	# The tall landmark column starts above head height, so it doesn't fog the camp itself.
+	smoke.position = Vector3(0.0, 4.0, 2.6)
 	node.add_child(smoke)
+	# Still smouldering: low flames in the pit.
+	var fire := FireFx.new()
+	fire.size = 0.55
+	fire.intensity = 0.7
+	fire.position = Vector3(0.0, 0.08, 2.6)
+	node.add_child(fire)
 	return node
+
+
+## Where the castaway's tent stands (world space), facing its fire pit.
+static func castaway_tent_spot(shape: CampIsland) -> Vector3:
+	return _ground(shape, shape.camp)
 
 
 static func _smoke() -> GPUParticles3D:

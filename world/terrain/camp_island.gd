@@ -292,6 +292,28 @@ func biome_at(x: float, z: float, h: float) -> Biome:
 	return Biome.MEADOW
 
 
+## Each photo layer's own colour, which color_for's colours are measured against.
+const LAYER_BASE := [SAND, MEADOW_GRASS, JUNGLE_FLOOR, ROCK, WET_SAND]
+
+
+## Which photo layer (TerrainLayers) the ground here is.
+static func layer_for(biome: Biome, h: float, normal_y: float) -> int:
+	if biome == Biome.SEA:
+		return TerrainLayers.WET
+	if normal_y < 0.72 and biome != Biome.BEACH:
+		return TerrainLayers.ROCK
+	match biome:
+		Biome.BEACH:
+			return TerrainLayers.SAND if h > 0.35 else TerrainLayers.WET
+		Biome.ROCK_SHORE:
+			return TerrainLayers.ROCK
+		Biome.PALM_COAST, Biome.MEADOW:
+			return TerrainLayers.GRASS
+		Biome.JUNGLE:
+			return TerrainLayers.JUNGLE
+	return TerrainLayers.ROCK if h > 40.0 else TerrainLayers.GRASS
+
+
 static func color_for(biome: Biome, h: float, normal_y: float) -> Color:
 	if biome == Biome.SEA:
 		return WET_SAND.darkened(clampf(-h / 30.0, 0.0, 0.5))

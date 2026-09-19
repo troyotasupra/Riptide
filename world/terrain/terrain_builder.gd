@@ -15,14 +15,11 @@ var _built: Array[Dictionary] = []
 var _mutex := Mutex.new()
 var _task := -1
 var _handled := 0
-var _material := StandardMaterial3D.new()
+var _material: Material = TerrainLayers.material()
 
 
 func start(shape: CampIsland) -> void:
 	_shape = shape
-	_material.vertex_color_use_as_albedo = true
-	_material.vertex_color_is_srgb = true
-	_material.roughness = 1.0
 	var extent := CampIsland.RADIUS * 1.5
 	var first := ((shape.center - Vector2(extent, extent)) / TerrainChunk.SIZE).floor() * TerrainChunk.SIZE
 	var count := int(ceil(extent * 2.0 / TerrainChunk.SIZE)) + 1

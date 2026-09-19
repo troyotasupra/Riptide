@@ -6,6 +6,8 @@ extends Node
 ## world. Everyone else sees the flash, the tracer and the splash.
 
 ## More bullets than this in the air at once and the oldest stop being tracked.
+## Share of a bullet's damage a structure takes.
+const STRUCTURE_DAMAGE := 0.3
 const MAX_BULLETS := 200
 ## A shot is allowed a hair early, to be kind about the shooter's lag.
 const RATE_SLACK := 0.85
@@ -327,6 +329,9 @@ func _hit_something(hit: Dictionary, bullet: Dictionary) -> void:
 				if shooter != null and shooter.survivor != null and shark.state == "dead":
 					shooter.survivor.notify("The shark goes still.")
 				return
+		if id.begins_with("struct:") and world.camp != null:
+			# Bullets chew through canvas and planks, slowly.
+			world.camp.damage_structure(id.substr(7), damage * STRUCTURE_DAMAGE, "shot")
 		if id.begins_with("fish:") and world.fishing != null:
 			var fish: LandedFish = world.fishing.landed.get(id.substr(5))
 			if fish != null and fish.alive:

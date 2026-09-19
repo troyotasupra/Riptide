@@ -2,7 +2,7 @@ class_name TerrainChunk
 extends RefCounted
 ## One 64 m square of island terrain. build_data() is pure — no nodes — so it
 ## runs on worker threads and in tests; make_node() turns the data into a
-## flat-shaded mesh with cheap heightmap collision on the main thread.
+## smooth, photo-splatted mesh with cheap heightmap collision on the main thread.
 
 const SIZE := 64.0
 const CELL := 2.0
@@ -19,28 +19,43 @@ static func build_data(shape: CampIsland, origin: Vector2) -> Dictionary:
 			heights[iz * SAMPLES + ix] = h
 			max_height = maxf(max_height, h)
 
+	# One vertex per grid sample, shared by its triangles: smooth normals from the
+	# heightfield (sampled past the edge, so neighbouring chunks agree), and the
+	# ground layer and tint for the photo splat.
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
+	var uv := PackedVector2Array()
+	var uv2 := PackedVector2Array()
+	for iz in SAMPLES:
+		for ix in SAMPLES:
+			var wx := origin.x + ix * CELL
+			var wz := origin.y + iz * CELL
+			var h := heights[iz * SAMPLES + ix]
+			var left := heights[iz * SAMPLES + ix - 1] if ix > 0 else shape.height_at(wx - CELL, wz)
+			var right := heights[iz * SAMPLES + ix + 1] if ix < SAMPLES - 1 else shape.height_at(wx + CELL, wz)
+			var back := heights[(iz - 1) * SAMPLES + ix] if iz > 0 else shape.height_at(wx, wz - CELL)
+			var front := heights[(iz + 1) * SAMPLES + ix] if iz < SAMPLES - 1 else shape.height_at(wx, wz + CELL)
+			var normal := Vector3(left - right, 2.0 * CELL, back - front).normalized()
+			var biome := shape.biome_at(wx, wz, h)
+			var layer := CampIsland.layer_for(biome, h, normal.y)
+			var jitter := fposmod(sin(wx * 12.9898 + wz * 78.233) * 43758.5453, 1.0)
+			var wanted := CampIsland.color_for(biome, h, normal.y).darkened(jitter * 0.07)
+			var layer_uvs := TerrainLayers.uvs(layer)
+			vertices.append(Vector3(ix * CELL, h, iz * CELL))
+			normals.append(normal)
+			colors.append(TerrainLayers.tint(wanted, CampIsland.LAYER_BASE[layer]))
+			uv.append(layer_uvs[0])
+			uv2.append(layer_uvs[1])
+	var indices := PackedInt32Array()
 	for iz in SAMPLES - 1:
 		for ix in SAMPLES - 1:
-			var a := Vector3(ix * CELL, heights[iz * SAMPLES + ix], iz * CELL)
-			var b := Vector3((ix + 1) * CELL, heights[iz * SAMPLES + ix + 1], iz * CELL)
-			var c := Vector3(ix * CELL, heights[(iz + 1) * SAMPLES + ix], (iz + 1) * CELL)
-			var d := Vector3((ix + 1) * CELL, heights[(iz + 1) * SAMPLES + ix + 1], (iz + 1) * CELL)
-			for tri: Array in [[a, b, c], [b, d, c]]:
-				var p0: Vector3 = tri[0]
-				var p1: Vector3 = tri[1]
-				var p2: Vector3 = tri[2]
-				var normal := (p2 - p0).cross(p1 - p0).normalized()
-				var centroid := (p0 + p1 + p2) / 3.0
-				var biome := shape.biome_at(origin.x + centroid.x, origin.y + centroid.z, centroid.y)
-				var jitter := fposmod(sin((origin.x + p0.x) * 12.9898 + (origin.y + p0.z) * 78.233) * 43758.5453, 1.0)
-				var color := CampIsland.color_for(biome, centroid.y, normal.y).darkened(jitter * 0.07)
-				for p: Vector3 in [p0, p1, p2]:
-					vertices.append(p)
-					normals.append(normal)
-					colors.append(color)
+			var a := iz * SAMPLES + ix
+			var b := a + 1
+			var c := a + SAMPLES
+			var d := c + 1
+			# Clockwise from above: Godot's front faces.
+			indices.append_array([a, b, c, b, d, c])
 	return {
 		"origin": origin,
 		"heights": heights,
@@ -48,6 +63,9 @@ static func build_data(shape: CampIsland, origin: Vector2) -> Dictionary:
 		"vertices": vertices,
 		"normals": normals,
 		"colors": colors,
+		"uv": uv,
+		"uv2": uv2,
+		"indices": indices,
 	}
 
 
@@ -64,6 +82,9 @@ static func make_node(data: Dictionary, material: Material) -> StaticBody3D:
 	arrays[Mesh.ARRAY_VERTEX] = data.vertices
 	arrays[Mesh.ARRAY_NORMAL] = data.normals
 	arrays[Mesh.ARRAY_COLOR] = data.colors
+	arrays[Mesh.ARRAY_TEX_UV] = data.uv
+	arrays[Mesh.ARRAY_TEX_UV2] = data.uv2
+	arrays[Mesh.ARRAY_INDEX] = data.indices
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	var visual := MeshInstance3D.new()

@@ -87,17 +87,15 @@ func build() -> StaticBody3D:
 				continue
 			_add_triangle(st, a, b, c)
 			_add_triangle(st, b, d, c)
+	st.index()
+	st.generate_normals()
 	var mesh := st.commit()
 
 	var body := StaticBody3D.new()
 	body.name = "Island"
 	var visual := MeshInstance3D.new()
 	visual.mesh = mesh
-	var material := StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.vertex_color_is_srgb = true
-	material.roughness = 1.0
-	visual.material_override = material
+	visual.material_override = TerrainLayers.material()
 	body.add_child(visual)
 	var collider := CollisionShape3D.new()
 	collider.shape = mesh.create_trimesh_shape()
@@ -106,22 +104,39 @@ func build() -> StaticBody3D:
 
 
 func _add_triangle(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
-	var normal := (c - a).cross(b - a).normalized()
-	var h := (a.y + b.y + c.y) / 3.0
-	var color: Color
+	for p: Vector3 in [a, b, c]:
+		# The slope at the vertex (not the face), so shared vertices match and merge.
+		var slope := Vector3(height_at(p.x - CELL, p.z) - height_at(p.x + CELL, p.z), 2.0 * CELL,
+			height_at(p.x, p.z - CELL) - height_at(p.x, p.z + CELL)).normalized()
+		var normal := slope
+		var layer := _layer_at(p.y, normal.y)
+		var jitter := fposmod(sin(p.x * 12.9898 + p.z * 78.233) * 43758.5453, 1.0)
+		var wanted := _color_at(p.y, normal.y).darkened(jitter * 0.08)
+		var layer_uvs := TerrainLayers.uvs(layer)
+		st.set_color(TerrainLayers.tint(wanted, LAYER_BASE[layer]))
+		st.set_uv(layer_uvs[0])
+		st.set_uv2(layer_uvs[1])
+		st.add_vertex(p)
+
+
+const LAYER_BASE := [SAND, GRASS, DARK_GRASS, ROCK, WET_SAND]
+
+
+func _layer_at(h: float, normal_y: float) -> int:
 	if h < -0.4:
-		color = WET_SAND
-	elif h < 1.4:
-		color = SAND
-	elif normal.y < 0.75:
-		color = ROCK
-	elif h < peak * 0.7:
-		color = GRASS
-	else:
-		color = DARK_GRASS
-	var jitter := fposmod(sin(a.x * 12.9898 + a.z * 78.233) * 43758.5453, 1.0)
-	st.set_color(color.darkened(jitter * 0.08))
-	st.set_normal(normal)
-	st.add_vertex(a)
-	st.add_vertex(b)
-	st.add_vertex(c)
+		return TerrainLayers.WET
+	if h < 1.4:
+		return TerrainLayers.SAND if h > 0.35 else TerrainLayers.WET
+	if normal_y < 0.75:
+		return TerrainLayers.ROCK
+	return TerrainLayers.GRASS
+
+
+func _color_at(h: float, normal_y: float) -> Color:
+	if h < -0.4:
+		return WET_SAND
+	if h < 1.4:
+		return SAND
+	if normal_y < 0.75:
+		return ROCK
+	return GRASS if h < peak * 0.7 else DARK_GRASS

@@ -101,8 +101,8 @@ static func build(id: String) -> Node3D:
 		"m1911", "flare_gun":
 			# 216 mm long, 135 mm tall. Slide, frame and grip drawn from the side.
 			var flare := id == "flare_gun"
-			var pistol_body := Materials.metal(PARKER if not flare else Color(0.75, 0.32, 0.06), 0.42)
-			var pistol_steel := Materials.metal(GUNMETAL, 0.38)
+			var pistol_body := Materials.gun_steel(PARKER if not flare else Color(0.75, 0.32, 0.06), 0.42)
+			var pistol_steel := Materials.gun_steel(GUNMETAL, 0.38)
 			_profile(root, [
 				Vector2(-0.008, 0.044), Vector2(0.148, 0.044), Vector2(0.162, 0.056), Vector2(0.162, 0.08),
 				Vector2(0.04, 0.088), Vector2(-0.008, 0.086),
@@ -119,20 +119,20 @@ static func build(id: String) -> Node3D:
 				_profile(root, [
 					Vector2(0.012, 0.014), Vector2(-0.012, 0.012), Vector2(-0.044, -0.086), Vector2(-0.02, -0.1),
 					Vector2(0.022, -0.09), Vector2(0.03, -0.004),
-				], 0.005, Materials.wood(Color(0.32, 0.20, 0.12)) if not flare else Materials.plain(Color(0.2, 0.2, 0.22), 0.8)).position.x = side * 0.018
-			_grooves(root, 7, 0.01, 0.042, 0.082, 0.034, 0.03, Materials.metal(PARKER.darkened(0.3), 0.6))
+				], 0.005, Materials.gun_wood(Color(0.32, 0.20, 0.12)) if not flare else Materials.plain(Color(0.2, 0.2, 0.22), 0.8)).position.x = side * 0.018
+			_grooves(root, 7, 0.01, 0.042, 0.082, 0.034, 0.03, Materials.gun_steel(PARKER.darkened(0.3), 0.6))
 			_tube_along(root, 0.012 if not flare else 0.02, 0.15, 0.176, 0.062, pistol_steel)
-			_tube_along(root, 0.0075 if not flare else 0.017, 0.155, 0.184, 0.062, Materials.metal(DARK_STEEL, 0.32))
+			_tube_along(root, 0.0075 if not flare else 0.017, 0.155, 0.184, 0.062, Materials.gun_steel(DARK_STEEL, 0.32))
 			_span(root, 0.012, 0.004, 0.028, 0.082, 0.098, pistol_steel)
-			_span(root, 0.009, 0.03, 0.05, 0.004, 0.026, Materials.metal(PARKER, 0.5))
+			_span(root, 0.009, 0.03, 0.05, 0.004, 0.026, Materials.gun_steel(PARKER, 0.5))
 			_torus(root, 0.021, 0.0035, Vector3(0.0, 0.038, 0.0), pistol_body, Vector3(0.0, 0.0, PI / 2.0), Vector3(1.0, 1.0, 0.75))
 			_sight(root, 0.146, 0.086, true, pistol_steel)
 			_sight(root, 0.004, 0.086, false, pistol_steel)
 		"uzi":
 			# Stamped box receiver, grip-fed magazine, folding stock alongside.
-			var uzi_metal := Materials.metal(PARKER, 0.48)
-			var uzi_steel := Materials.metal(GUNMETAL, 0.4)
-			var uzi_polymer := Materials.plain(POLYMER, 0.8)
+			var uzi_metal := Materials.gun_steel(PARKER, 0.48)
+			var uzi_steel := Materials.gun_steel(GUNMETAL, 0.4)
+			var uzi_polymer := Materials.gun_polymer(POLYMER)
 			_profile(root, [
 				Vector2(-0.055, 0.004), Vector2(0.195, 0.004), Vector2(0.2, 0.086), Vector2(0.135, 0.092),
 				Vector2(0.128, 0.104), Vector2(0.09, 0.104), Vector2(0.084, 0.092), Vector2(-0.05, 0.088),
@@ -144,11 +144,11 @@ static func build(id: String) -> Node3D:
 			_profile(root, [
 				Vector2(0.062, -0.07), Vector2(0.018, -0.074), Vector2(0.008, -0.22), Vector2(0.056, -0.226),
 			], 0.036, uzi_metal, "uzi_mag")
-			_grooves(root, 6, 0.02, 0.17, 0.086, 0.058, 0.014, Materials.metal(PARKER.darkened(0.28), 0.6))
+			_grooves(root, 6, 0.02, 0.17, 0.086, 0.058, 0.014, Materials.gun_steel(PARKER.darkened(0.28), 0.6))
 			_tube_along(root, 0.015, 0.185, 0.268, 0.048, uzi_steel)
-			_tube_along(root, 0.0095, 0.25, 0.315, 0.048, Materials.metal(DARK_STEEL, 0.35))
+			_tube_along(root, 0.0095, 0.25, 0.315, 0.048, Materials.gun_steel(DARK_STEEL, 0.35))
 			_span(root, 0.026, 0.058, 0.096, 0.086, 0.106, uzi_steel)
-			_span(root, 0.006, 0.08, 0.15, 0.03, 0.062, Materials.metal(PARKER.darkened(0.4), 0.6)).position.x = 0.028
+			_span(root, 0.006, 0.08, 0.15, 0.03, 0.062, Materials.gun_steel(PARKER.darkened(0.4), 0.6)).position.x = 0.028
 			_torus(root, 0.023, 0.0035, Vector3(0.0, 0.03, 0.0), uzi_metal, Vector3(0.0, 0.0, PI / 2.0), Vector3(1.0, 1.0, 0.7))
 			_sight(root, 0.185, 0.1, true, uzi_steel)
 			_sight(root, 0.0, 0.09, false, uzi_steel)
@@ -158,9 +158,9 @@ static func build(id: String) -> Node3D:
 		"m4":
 			# 840 mm carbine. The body, grip, magazine and stock are drawn as side
 			# profiles, so the magwell slopes and the stock has a comb.
-			var rifle_metal := Materials.metal(PARKER, 0.42)
-			var rifle_steel := Materials.metal(GUNMETAL, 0.38)
-			var furniture := Materials.plain(POLYMER, 0.8)
+			var rifle_metal := Materials.gun_steel(PARKER, 0.42)
+			var rifle_steel := Materials.gun_steel(GUNMETAL, 0.38)
+			var furniture := Materials.gun_polymer(POLYMER)
 			_profile(root, [
 				Vector2(-0.03, 0.152), Vector2(0.272, 0.152), Vector2(0.272, 0.094), Vector2(0.206, 0.094),
 				Vector2(0.206, 0.028), Vector2(0.158, 0.006), Vector2(0.088, 0.006), Vector2(0.058, 0.042),
@@ -179,27 +179,27 @@ static func build(id: String) -> Node3D:
 				Vector2(-0.21, 0.064), Vector2(-0.148, 0.074), Vector2(-0.086, 0.062), Vector2(-0.026, 0.058),
 			], 0.046, furniture, "m4_stock")
 			_tube_along(root, 0.019, -0.19, -0.02, 0.113, rifle_steel)
-			_span(root, 0.05, -0.222, -0.206, 0.058, 0.132, Materials.plain(PARKER.darkened(0.2), 0.9))
+			_span(root, 0.05, -0.222, -0.206, 0.058, 0.132, Materials.gun_polymer(PARKER.darkened(0.2)))
 			# Rails, ejection port and charging handle.
 			_rail(root, -0.02, 0.27, 0.158, 0.032)
-			_span(root, 0.006, 0.14, 0.212, 0.104, 0.136, Materials.metal(PARKER.darkened(0.4), 0.6)).position.x = 0.024
+			_span(root, 0.006, 0.14, 0.212, 0.104, 0.136, Materials.gun_steel(PARKER.darkened(0.4), 0.6)).position.x = 0.024
 			_span(root, 0.03, -0.058, -0.022, 0.116, 0.142, rifle_steel)
-			_torus(root, 0.024, 0.0035, Vector3(0.0, 0.05, 0.018), Materials.metal(PARKER, 0.5), Vector3(0.0, 0.0, PI / 2.0), Vector3(1.0, 1.0, 0.7))
-			_span(root, 0.009, 0.05, 0.075, 0.02, 0.046, Materials.metal(PARKER, 0.5))
+			_torus(root, 0.024, 0.0035, Vector3(0.0, 0.05, 0.018), Materials.gun_steel(PARKER, 0.5), Vector3(0.0, 0.0, PI / 2.0), Vector3(1.0, 1.0, 0.7))
+			_span(root, 0.009, 0.05, 0.075, 0.02, 0.046, Materials.gun_steel(PARKER, 0.5))
 			# Handguard over the barrel, gas block, barrel, flash hider.
 			_tube_along(root, 0.032, 0.256, 0.5, 0.122, furniture)
 			_rail(root, 0.27, 0.49, 0.156, 0.03)
 			_span(root, 0.03, 0.492, 0.532, 0.122, 0.17, rifle_steel)
-			_tube_along(root, 0.0115, 0.45, 0.79, 0.122, Materials.metal(DARK_STEEL, 0.34))
+			_tube_along(root, 0.0115, 0.45, 0.79, 0.122, Materials.gun_steel(DARK_STEEL, 0.34))
 			_tube_along(root, 0.017, 0.772, 0.836, 0.122, rifle_steel)
-			_grooves(root, 3, 0.785, 0.825, 0.142, 0.036, 0.014, Materials.metal(DARK_STEEL, 0.5))
+			_grooves(root, 3, 0.785, 0.825, 0.142, 0.036, 0.014, Materials.gun_steel(DARK_STEEL, 0.5))
 			_sight(root, 0.505, 0.168, true, rifle_steel)
 			_sight(root, -0.005, 0.162, false, rifle_steel)
 		"mossberg":
 			# A metre of pump gun: barrel over its tube, and one piece of walnut.
-			var shotgun_steel := Materials.metal(GUNMETAL.darkened(0.12), 0.38)
-			var shotgun_black := Materials.metal(PARKER, 0.48)
-			var wood := Materials.wood(GUN_WOOD)
+			var shotgun_steel := Materials.gun_steel(GUNMETAL.darkened(0.12), 0.38)
+			var shotgun_black := Materials.gun_steel(PARKER, 0.48)
+			var wood := Materials.gun_wood(GUN_WOOD)
 			_profile(root, [
 				Vector2(-0.02, 0.014), Vector2(0.21, 0.014), Vector2(0.215, 0.09), Vector2(-0.02, 0.094),
 			], 0.05, shotgun_black, "mossberg_body")
@@ -209,20 +209,20 @@ static func build(id: String) -> Node3D:
 				Vector2(-0.3, -0.028), Vector2(-0.21, -0.012), Vector2(-0.11, 0.012), Vector2(-0.04, 0.016),
 				Vector2(-0.018, 0.03),
 			], 0.052, wood, "mossberg_stock")
-			_span(root, 0.056, -0.318, -0.298, -0.03, 0.052, Materials.plain(PARKER.darkened(0.2), 0.9))
-			_span(root, 0.006, 0.05, 0.13, 0.03, 0.07, Materials.metal(PARKER.darkened(0.4), 0.6)).position.x = 0.026
+			_span(root, 0.056, -0.318, -0.298, -0.03, 0.052, Materials.gun_polymer(PARKER.darkened(0.2)))
+			_span(root, 0.006, 0.05, 0.13, 0.03, 0.07, Materials.gun_steel(PARKER.darkened(0.4), 0.6)).position.x = 0.026
 			_tube_along(root, 0.019, 0.19, 0.77, 0.072, shotgun_steel)
 			_tube_along(root, 0.015, 0.19, 0.64, 0.028, shotgun_steel)
 			_sphere(root, 0.006, Vector3(0.0, 0.762, 0.093), Materials.plain(Color(0.9, 0.85, 0.4), 0.3))
 			_tube_along(root, 0.03, 0.36, 0.53, 0.028, wood)
-			_grooves(root, 7, 0.375, 0.515, 0.058, 0.056, 0.018, Materials.wood(GUN_WOOD.darkened(0.25)))
-			_span(root, 0.009, 0.03, 0.055, 0.0, 0.016, Materials.metal(PARKER, 0.5))
+			_grooves(root, 7, 0.375, 0.515, 0.058, 0.056, 0.018, Materials.gun_wood(GUN_WOOD.darkened(0.25)))
+			_span(root, 0.009, 0.03, 0.055, 0.0, 0.016, Materials.gun_steel(PARKER, 0.5))
 			_torus(root, 0.024, 0.0035, Vector3(0.0, 0.042, 0.012), shotgun_black, Vector3(0.0, 0.0, PI / 2.0), Vector3(1.0, 1.0, 0.7))
 		"intervention":
 			# 1.27 m bolt gun: heavy fluted barrel, chassis stock with a cut-out.
-			var sniper_black := Materials.metal(PARKER, 0.4)
-			var sniper_steel := Materials.metal(GUNMETAL.darkened(0.08), 0.36)
-			var chassis := Materials.plain(Color(0.30, 0.32, 0.28), 0.8)
+			var sniper_black := Materials.gun_steel(PARKER, 0.4)
+			var sniper_steel := Materials.gun_steel(GUNMETAL.darkened(0.08), 0.36)
+			var chassis := Materials.gun_polymer(Color(0.30, 0.32, 0.28))
 			_profile(root, [
 				Vector2(-0.04, 0.012), Vector2(0.28, 0.012), Vector2(0.3, 0.098), Vector2(-0.04, 0.1),
 			], 0.055, sniper_black, "intervention_body")
@@ -231,7 +231,7 @@ static func build(id: String) -> Node3D:
 				Vector2(-0.235, 0.06), Vector2(-0.15, 0.062), Vector2(-0.12, 0.03), Vector2(-0.06, 0.012),
 				Vector2(-0.035, 0.012),
 			], 0.05, chassis, "intervention_stock")
-			_span(root, 0.056, -0.335, -0.315, 0.024, 0.1, Materials.plain(PARKER.darkened(0.2), 0.9))
+			_span(root, 0.056, -0.335, -0.315, 0.024, 0.1, Materials.gun_polymer(PARKER.darkened(0.2)))
 			_profile(root, [
 				Vector2(0.062, 0.016), Vector2(0.004, 0.016), Vector2(-0.03, -0.1), Vector2(0.0, -0.122),
 				Vector2(0.05, -0.11), Vector2(0.066, -0.01),
@@ -243,18 +243,18 @@ static func build(id: String) -> Node3D:
 			_tube_along(root, 0.021, 0.27, 0.93, 0.07, sniper_steel)
 			for i in 4:
 				var flute := i * TAU / 4.0 + 0.4
-				var rib := _cylinder(root, 0.005, 0.5, Vector3(0.0, 0.62, 0.07 + sin(flute) * 0.019), Materials.metal(GUNMETAL.darkened(0.3), 0.5))
+				var rib := _cylinder(root, 0.005, 0.5, Vector3(0.0, 0.62, 0.07 + sin(flute) * 0.019), Materials.gun_steel(GUNMETAL.darkened(0.3), 0.5))
 				rib.position.x = cos(flute) * 0.019
 			_tube_along(root, 0.028, 0.9, 1.0, 0.07, sniper_black)
-			_grooves(root, 4, 0.915, 0.985, 0.096, 0.058, 0.016, Materials.metal(DARK_STEEL, 0.5))
+			_grooves(root, 4, 0.915, 0.985, 0.096, 0.058, 0.016, Materials.gun_steel(DARK_STEEL, 0.5))
 			var bolt := _cylinder(root, 0.011, 0.085, Vector3(0.045, 0.13, 0.062), sniper_steel)
 			bolt.rotation.z = PI / 2.0 - 0.3
 			_sphere(root, 0.013, Vector3(0.08, 0.108, 0.062), sniper_steel)
-			_span(root, 0.01, 0.04, 0.07, 0.0, 0.016, Materials.metal(PARKER, 0.5))
+			_span(root, 0.01, 0.04, 0.07, 0.0, 0.016, Materials.gun_steel(PARKER, 0.5))
 			_torus(root, 0.024, 0.0035, Vector3(0.0, 0.05, 0.012), sniper_black, Vector3(0.0, 0.0, PI / 2.0), Vector3(1.0, 1.0, 0.7))
 		"red_dot", "holo_sight", "prism_3x", "lpvo_6x", "sniper_scope":
 			var glass := Materials.glow(Color(0.35, 0.75, 0.95), 0.6)
-			var housing := Materials.metal(Color(0.15, 0.15, 0.16), 0.5)
+			var housing := Materials.gun_steel(Color(0.15, 0.15, 0.16), 0.5)
 			var long: bool = id in ["lpvo_6x", "sniper_scope"]
 			var tube := 0.3 if id == "sniper_scope" else (0.24 if id == "lpvo_6x" else (0.12 if id == "prism_3x" else 0.07))
 			var fat := 0.028 if long else 0.022
@@ -265,50 +265,50 @@ static func build(id: String) -> Node3D:
 			if long:
 				_cylinder(root, fat * 0.7, 0.02, Vector3(0.028, 0.05 + tube * 0.45, 0.0), housing, Vector3(0.0, 0.0, PI / 2.0))
 		"suppressor", "compensator", "muzzle_brake":
-			var can_metal := Materials.metal(Color(0.13, 0.13, 0.14), 0.45)
+			var can_metal := Materials.gun_steel(Color(0.13, 0.13, 0.14), 0.45)
 			var length := 0.2 if id == "suppressor" else 0.07
 			var girth := 0.026 if id == "suppressor" else 0.021
 			_cylinder(root, girth, length, Vector3(0.0, length * 0.5, 0.0), can_metal)
 			if id != "suppressor":
 				for cut: float in [0.02, 0.04]:
-					_box(root, Vector3(girth * 2.2, 0.006, girth * 1.2), Vector3(0.0, cut, 0.0), Materials.metal(DARK_STEEL))
+					_box(root, Vector3(girth * 2.2, 0.006, girth * 1.2), Vector3(0.0, cut, 0.0), Materials.gun_steel(DARK_STEEL))
 			else:
 				for ring: float in [0.05, 0.1, 0.15]:
-					_torus(root, girth, 0.003, Vector3(0.0, ring, 0.0), Materials.metal(DARK_STEEL))
+					_torus(root, girth, 0.003, Vector3(0.0, ring, 0.0), Materials.gun_steel(DARK_STEEL))
 		"vertical_grip", "angled_grip":
-			var grip_material := Materials.plain(Color(0.12, 0.12, 0.13), 0.8)
+			var grip_material := Materials.gun_polymer(Color(0.12, 0.12, 0.13))
 			var handle := _box(root, Vector3(0.032, 0.11, 0.032), Vector3(0.0, 0.06, 0.0), grip_material)
 			if id == "angled_grip":
 				handle.rotation.x = 0.6
-			_box(root, Vector3(0.04, 0.02, 0.05), Vector3(0.0, 0.01, 0.0), Materials.metal(DARK_STEEL))
+			_box(root, Vector3(0.04, 0.02, 0.05), Vector3(0.0, 0.01, 0.0), Materials.gun_steel(DARK_STEEL))
 		"bipod":
-			var leg_metal := Materials.metal(Color(0.16, 0.16, 0.17), 0.5)
+			var leg_metal := Materials.gun_steel(Color(0.16, 0.16, 0.17), 0.5)
 			_box(root, Vector3(0.04, 0.03, 0.06), Vector3(0.0, 0.02, 0.0), leg_metal)
 			for side: float in [-1.0, 1.0]:
 				var leg := _cylinder(root, 0.006, 0.16, Vector3(side * 0.03, 0.09, 0.0), leg_metal)
 				leg.rotation.z = side * 0.35
 		"extended_mag", "quickdraw_mag":
-			var mag_metal := Materials.metal(Color(0.14, 0.14, 0.15), 0.5)
+			var mag_metal := Materials.gun_steel(Color(0.14, 0.14, 0.15), 0.5)
 			var tall := 0.2 if id == "extended_mag" else 0.12
 			var mag := _box(root, Vector3(0.028, tall, 0.05), Vector3(0.0, tall * 0.5, 0.0), mag_metal)
 			mag.rotation.x = 0.12
 			_box(root, Vector3(0.03, 0.015, 0.052), Vector3(0.0, tall, 0.0), Materials.plain(Color(0.2, 0.2, 0.22), 0.7))
 		"light_stock", "heavy_stock", "folding_stock":
-			var stock_material := Materials.plain(Color(0.16, 0.17, 0.15), 0.8)
+			var stock_material := Materials.gun_polymer(Color(0.16, 0.17, 0.15))
 			var depth := 0.16 if id == "heavy_stock" else 0.12
 			_box(root, Vector3(0.045, 0.1, depth), Vector3(0.0, 0.1, 0.0), stock_material)
-			_box(root, Vector3(0.03, 0.09, 0.05), Vector3(0.0, 0.03, -0.03), Materials.metal(DARK_STEEL))
+			_box(root, Vector3(0.03, 0.09, 0.05), Vector3(0.0, 0.03, -0.03), Materials.gun_steel(DARK_STEEL))
 			if id == "folding_stock":
-				_torus(root, 0.018, 0.004, Vector3(0.0, 0.05, -0.05), Materials.metal(STEEL), Vector3(0.0, PI / 2.0, 0.0))
+				_torus(root, 0.018, 0.004, Vector3(0.0, 0.05, -0.05), Materials.gun_steel(STEEL), Vector3(0.0, PI / 2.0, 0.0))
 		"laser", "flashlight":
-			var body_metal := Materials.metal(Color(0.15, 0.15, 0.16), 0.5)
+			var body_metal := Materials.gun_steel(Color(0.15, 0.15, 0.16), 0.5)
 			_cylinder(root, 0.015, 0.08, Vector3(0.0, 0.05, 0.0), body_metal)
 			_cylinder(root, 0.012, 0.008, Vector3(0.0, 0.09, 0.0),
 				Materials.glow(Color(0.95, 0.15, 0.12) if id == "laser" else Color(1.0, 0.95, 0.8), 2.0))
 			_box(root, Vector3(0.03, 0.02, 0.04), Vector3(0.0, 0.01, 0.0), body_metal)
 		"cleaning_kit":
 			_box(root, Vector3(0.12, 0.05, 0.07), Vector3(0.0, 0.03, 0.0), Materials.cloth(Color(0.32, 0.34, 0.30)))
-			_cylinder(root, 0.004, 0.16, Vector3(0.03, 0.08, 0.0), Materials.metal(STEEL), Vector3(0.0, 0.0, 0.2))
+			_cylinder(root, 0.004, 0.16, Vector3(0.03, 0.08, 0.0), Materials.gun_steel(STEEL), Vector3(0.0, 0.0, 0.2))
 			_cylinder(root, 0.014, 0.04, Vector3(-0.03, 0.06, 0.0), Materials.plain(Color(0.45, 0.35, 0.2), 0.6))
 		"survival_book", "logbook", "journal":
 			var cover: Color = {"survival_book": Color(0.18, 0.34, 0.24), "logbook": Color(0.36, 0.22, 0.12), "journal": Color(0.45, 0.32, 0.18)}[id]

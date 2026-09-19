@@ -13,13 +13,13 @@ const PART_SPOTS := {
 	"bunk": Vector3(-1.35, 0.45, 1.45),
 	"chest": Vector3(1.7, 0.3, 1.55),
 	"lockers": Vector3(2.15, 0.85, 0.3),
-	"footlocker": Vector3(-1.35, 0.22, 0.7),
+	"footlocker": Vector3(-0.16, 0.22, 1.45),
 	"stove": Vector3(-1.95, 0.5, -1.2),
 	"chart": Vector3(1.5, 0.85, -1.2),
 }
 const PART_SIZES := {
 	"bunk": Vector3(1.9, 0.8, 0.95), "chest": Vector3(0.95, 0.6, 0.6), "lockers": Vector3(0.55, 1.7, 0.95),
-	"footlocker": Vector3(0.85, 0.5, 0.5), "stove": Vector3(0.7, 1.0, 0.7), "chart": Vector3(1.05, 0.4, 0.75),
+	"footlocker": Vector3(0.5, 0.5, 0.85), "stove": Vector3(0.7, 1.0, 0.7), "chart": Vector3(1.05, 0.4, 0.75),
 }
 const SPAWN := Vector3(0.0, 0.05, 0.35)
 const DOCK_SIDE := 4.0
@@ -126,7 +126,7 @@ static func _hut(shape: CampIsland, shack: Dictionary) -> Node3D:
 	var planks := Materials.planks(PLANKS, 0.22)
 	var dark := Materials.wood(DARK_WOOD)
 	var floor_wood := Materials.planks(Color(0.47, 0.37, 0.27), 0.18)
-	var tin := Materials.metal(TIN, 0.72)
+	var tin := Materials.tin(TIN)
 	var iron := Materials.metal(Color(0.2, 0.2, 0.21), 0.6)
 	var half := SIZE * 0.5
 	var lift: float = Transform3D(shack.xf).origin.y - float(shack.ground) + 0.5
@@ -200,8 +200,12 @@ static func _hut(shape: CampIsland, shack: Dictionary) -> Node3D:
 	for z: float in [0.08, 0.52]:
 		_box(node, Vector3(0.02, 1.55, 0.4), Vector3(1.945, 0.85, z), dark)
 	# The locked footlocker at the foot of the bunk.
-	_box(node, Vector3(0.8, 0.38, 0.42), Vector3(-1.35, 0.19, 0.7), Materials.metal(Color(0.24, 0.31, 0.26), 0.6), true)
-	_box(node, Vector3(0.08, 0.1, 0.02), Vector3(-1.35, 0.26, 0.48), Materials.metal(Color(0.8, 0.65, 0.28), 0.35))
+	# Across the end of the bunk, its hasp facing into the room.
+	_box(node, Vector3(0.42, 0.38, 0.8), Vector3(-0.16, 0.19, 1.45), Materials.metal(Color(0.24, 0.31, 0.26), 0.6), true)
+	_box(node, Vector3(0.44, 0.04, 0.82), Vector3(-0.16, 0.39, 1.45), Materials.metal(Color(0.2, 0.26, 0.22), 0.55))
+	_box(node, Vector3(0.02, 0.1, 0.08), Vector3(0.06, 0.28, 1.45), Materials.metal(Color(0.8, 0.65, 0.28), 0.35))
+	for z: float in [1.12, 1.78]:
+		_box(node, Vector3(0.44, 0.03, 0.04), Vector3(-0.16, 0.3, z), Materials.metal(Color(0.15, 0.15, 0.15), 0.5))
 	# Wood stove with its flue out through the roof.
 	_box(node, Vector3(0.55, 0.75, 0.55), Vector3(-1.95, 0.375, -1.2), iron, true)
 	# The firebox faces into the room, not the wall.
@@ -222,7 +226,7 @@ static func _hut(shape: CampIsland, shack: Dictionary) -> Node3D:
 			_box(node, Vector3(0.05, 0.76, 0.05), Vector3(lx, 0.38, lz), dark)
 	_box(node, Vector3(0.62, 0.005, 0.46), Vector3(1.5, 0.805, -1.2), Materials.plain(Color(0.86, 0.8, 0.64)), false, Vector3(0.0, 0.12, 0.0))
 	# Old buoys hung on a rope by the door.
-	var rope := Materials.cloth(Color(0.72, 0.62, 0.45))
+	var rope := Materials.rope(Color(0.72, 0.62, 0.45))
 	for sx: float in [-1.0, 1.0]:
 		var hang := Vector3(sx * 1.35, 1.1, -half.z - 0.16)
 		_post(node, hang + Vector3(0.0, 0.18, 0.0), Vector3(sx * 1.35, 2.0, -half.z - 0.06), 0.012, rope)

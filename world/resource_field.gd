@@ -81,6 +81,15 @@ func harvest(survivor: Survivor, id: String) -> void:
 	survivor.push_inventory()
 
 
+## Host: fire takes it (a tree burns to its stump, a bush to nothing) until it regrows.
+func burn(id: String, regrow_seconds: float) -> void:
+	if not nodes.has(id) or depleted.has(id):
+		return
+	var regrow_at: float = Ocean.time + regrow_seconds
+	_apply(id, regrow_at)
+	Net.send_to_ready(self, "_sync_one", [id, regrow_at])
+
+
 func sync_to(peer_id: int) -> void:
 	_sync_all.rpc_id(peer_id, depleted)
 

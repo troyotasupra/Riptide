@@ -20,24 +20,39 @@ func setup(id: String, label: String, item_id: String, pos: Vector3, yaw: float)
 	var collider := CollisionShape3D.new()
 	collider.shape = shape
 	add_child(collider)
-	match item_id:
-		"machete":
-			_box(Vector3(0.05, 0.02, 0.55), Vector3(0.0, 0.0, -0.1), "blade", Color(0.78, 0.80, 0.82), Vector3(0.5, 0.0, 0.0))
-			_box(Vector3(0.05, 0.05, 0.16), Vector3(0.0, -0.13, 0.22), "handle", Color(0.15, 0.12, 0.10), Vector3(0.5, 0.0, 0.0))
-		"compartment_key":
-			_box(Vector3(0.03, 0.01, 0.08), Vector3.ZERO, "brass", Color(0.8, 0.65, 0.25))
-		"journal":
-			_box(Vector3(0.18, 0.04, 0.25), Vector3.ZERO, "journal_cover", Color(0.35, 0.22, 0.12))
-		_:
-			_box(Vector3(0.2, 0.005, 0.28), Vector3.ZERO, "page", Color(0.90, 0.87, 0.78), Vector3(0.0, 0.4, 0.0))
+	# The same model you'd hold, laid on its side and resting on the ground.
+	var model := ItemModels.build(item_id)
+	var pivot := Node3D.new()
+	add_child(pivot)
+	pivot.add_child(model)
+	# Item models stand nose-up; tip the tall ones over (pages and keys already lie flat).
+	var upright := _bounds_in(pivot)
+	if upright.size.y > maxf(upright.size.x, upright.size.z):
+		pivot.rotation = Vector3(0.0, 0.0, PI * 0.5)
+	var bounds := _bounds_in(pivot)
+	pivot.position = Vector3(-bounds.get_center().x, -bounds.position.y + 0.01, -bounds.get_center().z)
 
 
-func _box(size: Vector3, pos: Vector3, key: String, color: Color, rot: Vector3 = Vector3.ZERO) -> void:
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	var visual := MeshInstance3D.new()
-	visual.mesh = mesh
-	visual.material_override = Props.material(key, color)
-	visual.position = pos
-	visual.rotation = rot
-	add_child(visual)
+## The model's bounding box in this node's space.
+func _bounds_in(root: Node3D) -> AABB:
+	var box := AABB()
+	var first := true
+	for child in root.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := child as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+		var local := _relative(mesh_instance) * mesh_instance.mesh.get_aabb()
+		box = local if first else box.merge(local)
+		first = false
+	return box
+
+
+## A child's transform relative to this node, before the node is in the tree.
+func _relative(node: Node3D) -> Transform3D:
+	var t := Transform3D.IDENTITY
+	var at: Node = node
+	while at != null and at != self:
+		if at is Node3D:
+			t = (at as Node3D).transform * t
+		at = at.get_parent()
+	return t

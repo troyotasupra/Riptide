@@ -21,6 +21,7 @@ const STATION_TICK := 1.0
 const SPOIL_CHECK := 5.0
 const AUTOSAVE_SECONDS := 120.0
 const STRUCTURE_REACH := 7.0
+const CASTAWAY_TENT := "castaway_tent"
 ## Pushing a finished boat in: how far back up the beach it can start, and how
 ## hard the crew shove it.
 const LAUNCH_RUN := 9.0
@@ -57,7 +58,7 @@ const PICKUPS := {
 }
 ## Offsets from the castaway camp (camp space: -Z faces the island centre).
 const PICKUP_SPOTS := {
-	"machete": Vector3(1.4, 0.35, 1.8),
+	"machete": Vector3(2.1, 0.35, 2.0),
 	"compartment_key": Vector3(-0.5, 0.05, 0.3),
 	"journal": Vector3(0.3, 0.05, 0.2),
 	"page_shelter": Vector3(-1.6, 0.05, 1.3),
@@ -78,6 +79,10 @@ var container_titles := {}
 var stations := {}
 ## id -> {"type", "pos", "yaw"}
 var structures := {}
+## World-placed structures already put down once (never re-seeded).
+var seeded := {}
+## peer -> {"id", "since"}: who is holding the dismantle key on what.
+var _dismantling := {}
 var structure_nodes := {}
 ## id -> {"pos", "title"}
 var bags := {}
@@ -121,6 +126,7 @@ func _ready() -> void:
 ## crew what they already know when they wash up.
 func setup_new_world() -> void:
 	_stock_shack()
+	_seed_structures()
 	stations["shack:stove"] = CookStation.new("cook")
 	_make_container("boat:JohnBoat:drybox", DRYBOX_SIZE, "Dry box")
 	for id: String in RecipeTable.KNOWN_AT_START:
@@ -215,6 +221,7 @@ func to_save(now: float) -> Dictionary:
 		"chart": chart_read,
 		"unlocked": unlocked.keys(),
 		"respawns": respawns.duplicate(true),
+		"seeded": seeded.keys(),
 	}
 
 
@@ -223,8 +230,18 @@ func from_save(data: Dictionary, now: float) -> void:
 	for id: String in saved_structures:
 		var entry: Dictionary = saved_structures[id]
 		_spawn_structure(id, entry.type, entry.pos, entry.yaw)
-		_apply_progress(id, entry.get("progress", {}))
+		var progress: Dictionary = entry.get("progress", {})
+		# Built before tents and fires went up in stages: they were already whole.
+		if not entry.has("progress") and not StructureTable.get_type(entry.type).has("launches"):
+			for stage: Dictionary in StructureTable.get_type(entry.type).get("stages", []):
+				progress[stage.item] = int(stage.count)
+		_apply_progress(id, progress)
+		if entry.has("hp"):
+			structures[id].hp = float(entry.hp)
 	_next_structure = data.get("next_structure", _next_structure)
+	for id: String in data.get("seeded", []):
+		seeded[id] = true
+	_seed_structures()
 	var saved_containers: Dictionary = data.get("containers", {})
 	for id: String in saved_containers:
 		var entry: Dictionary = saved_containers[id]
@@ -291,6 +308,8 @@ func _full_sync(data: Dictionary) -> void:
 		var entry: Dictionary = data.structures[id]
 		_spawn_structure(id, entry.type, entry.pos, entry.yaw)
 		_apply_progress(id, entry.get("progress", {}))
+		if entry.get("burning", false):
+			_structure_burning(id, true)
 	for id: String in data.bags:
 		_spawn_bag(id, data.bags[id].pos, data.bags[id].title)
 	for id: String in data.stations:
@@ -304,6 +323,149 @@ func _full_sync(data: Dictionary) -> void:
 		unlocked[id] = true
 	recipes_changed.emit()
 	chart_changed.emit()
+
+
+# --- the world's own structures, dismantling and damage ------------------------
+
+## Structures the world starts with (the castaway's old tent). Each is placed once;
+## after that it's the crew's to keep or take apart.
+func _seed_structures() -> void:
+	if world == null or world.camp_island == null or seeded.has(CASTAWAY_TENT):
+		return
+	seeded[CASTAWAY_TENT] = true
+	var shape: CampIsland = world.camp_island
+	var at: Vector3 = CampIslandPois.castaway_tent_spot(shape)
+	var yaw: float = CampIslandPois.yaw_toward(shape.camp, shape.center)
+	_spawn_structure(CASTAWAY_TENT, "tent", at, yaw)
+	var whole := {}
+	for stage: Dictionary in StructureTable.get_type("tent").stages:
+		whole[stage.item] = int(stage.count)
+	_apply_progress(CASTAWAY_TENT, whole)
+	Net.send_to_ready(self, "_spawn_structure", [CASTAWAY_TENT, "tent", at, yaw])
+	Net.send_to_ready(self, "_structure_progress", [CASTAWAY_TENT, whole])
+
+
+## A crew member starts holding the dismantle key on a structure.
+@rpc("any_peer", "call_local", "reliable")
+func request_dismantle_start(id: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var player := _sender_player()
+	if player == null or not structures.has(id):
+		return
+	_dismantling[player.peer_id] = {"id": id, "since": Time.get_ticks_msec() * 0.001}
+
+
+## ...and held it long enough: take it apart and hand back most of what went into it.
+@rpc("any_peer", "call_local", "reliable")
+func request_dismantle(id: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var player := _sender_player()
+	if player == null or not structures.has(id):
+		return
+	var started: Dictionary = _dismantling.get(player.peer_id, {})
+	_dismantling.erase(player.peer_id)
+	var held := Time.get_ticks_msec() * 0.001 - float(started.get("since", INF))
+	if started.get("id", "") != id or held < StructureTable.DISMANTLE_SECONDS - 0.4:
+		return
+	var entry: Dictionary = structures[id]
+	if player.world_transform().origin.distance_to(entry.pos) > STRUCTURE_REACH:
+		return
+	var name := String(StructureTable.get_type(entry.type).name).to_lower()
+	var back := StructureTable.refund(entry.type, entry.get("progress", {}), StructureTable.DISMANTLE_SHARE)
+	var left: Array = []
+	for item: String in back:
+		var over: int = player.survivor.inventory.add(item, int(back[item]), Ocean.time)
+		if over > 0:
+			left.append(fresh_stack(item, over))
+	left.append_array(_contents_of(id))
+	if not left.is_empty():
+		drop_loot(Vector3(entry.pos) + Vector3.UP * 0.1, left, "the %s's things" % name)
+	_take_down(id)
+	world.sfx_at("chop", entry.pos)
+	var got: Array[String] = []
+	for item: String in back:
+		got.append("%d %s" % [int(back[item]), _plural(item, int(back[item]))])
+	player.survivor.notify("Took the %s apart%s." % [name, (": " + ", ".join(got)) if not got.is_empty() else ""])
+	player.survivor.push_inventory()
+
+
+## Host: weapons, fire and storms wear structures down; at nothing they fall apart,
+## leaving a little of what they were made of (fire leaves nothing).
+func damage_structure(id: String, amount: float, cause: String = "") -> void:
+	if not multiplayer.is_server() or not structures.has(id) or amount <= 0.0:
+		return
+	var entry: Dictionary = structures[id]
+	var hp := float(entry.get("hp", StructureTable.max_hp(entry.type))) - amount
+	entry.hp = hp
+	if hp > 0.0:
+		return
+	var name := String(StructureTable.get_type(entry.type).name).to_lower()
+	var left: Array = []
+	if cause != "fire":
+		var back := StructureTable.refund(entry.type, entry.get("progress", {}), StructureTable.COLLAPSE_SHARE)
+		for item: String in back:
+			left.append(fresh_stack(item, int(back[item])))
+		left.append_array(_contents_of(id))
+	if not left.is_empty():
+		drop_loot(Vector3(entry.pos) + Vector3.UP * 0.1, left, "what's left of the %s" % name)
+	_take_down(id)
+	world.sfx_at("tree_fall", entry.pos)
+	_notify_crew("The %s %s." % [name, "burned down" if cause == "fire" else "fell apart"])
+
+
+## Host: a structure catches fire (or the rain puts it out).
+func set_structure_burning(id: String, on: bool) -> void:
+	if not structures.has(id):
+		return
+	structures[id].burning = on
+	_structure_burning(id, on)
+	Net.send_to_ready(self, "_structure_burning", [id, on])
+	if on:
+		_notify_crew("The %s is on fire!" % String(StructureTable.get_type(structures[id].type).name).to_lower())
+
+
+@rpc("authority", "call_remote", "reliable")
+func _structure_burning(id: String, on: bool) -> void:
+	if structures.has(id):
+		structures[id].burning = on
+	var node: StructureNode = structure_nodes.get(id)
+	if node != null:
+		node.set_burning(on)
+
+
+## The structure id standing at (or nearest within `radius` of) a point, or "".
+func structure_at(point: Vector3, radius: float) -> String:
+	var best := ""
+	var best_d := radius
+	for id: String in structures:
+		var entry: Dictionary = structures[id]
+		var d := Vector2(entry.pos.x - point.x, entry.pos.z - point.z).length() - float(StructureTable.get_type(entry.type).get("footprint", 1.0)) * 0.5
+		if d < best_d:
+			best_d = d
+			best = id
+	return best
+
+
+## What a structure was holding: a crate's contents, food on a fire or rack.
+func _contents_of(id: String) -> Array:
+	var out: Array = []
+	var grid: ItemGrid = containers.get("struct:" + id)
+	if grid != null:
+		for item: Dictionary in grid.items:
+			out.append(item.duplicate(true))
+	var station: CookStation = stations.get("struct:" + id)
+	if station != null:
+		for slot in station.slots:
+			if slot != null:
+				out.append(fresh_stack(String(slot.id), 1))
+	return out
+
+
+func _take_down(id: String) -> void:
+	_remove_structure(id)
+	Net.send_to_ready(self, "_remove_structure", [id])
 
 
 # --- host tick ---------------------------------------------------------------
@@ -342,6 +504,8 @@ func warmth_for(player: Player) -> float:
 		var entry: Dictionary = structures[id]
 		var info := StructureTable.get_type(entry.type)
 		if at.distance_to(entry.pos) > float(info.get("warm_radius", 0.0)):
+			continue
+		if not StructureTable.is_finished(entry.type, entry.get("progress", {})):
 			continue
 		if info.has("warmth"):
 			var station: CookStation = stations.get("struct:" + id)
@@ -404,15 +568,21 @@ func structure_prompt(id: String, player: Node) -> String:
 	var entry: Dictionary = structures.get(id, {})
 	if entry.is_empty():
 		return ""
+	var main := _structure_action(id, entry, player)
+	var take_apart := "%s hold to take it apart" % Controls.tag("dismantle")
+	return take_apart if main.is_empty() else "%s   ·   %s" % [main, take_apart]
+
+
+func _structure_action(id: String, entry: Dictionary, player: Node) -> String:
 	var info := StructureTable.get_type(entry.type)
-	if StructureTable.is_build_site(entry.type):
-		var progress: Dictionary = entry.get("progress", {})
+	var progress: Dictionary = entry.get("progress", {})
+	if StructureTable.takes_work(entry.type, progress):
 		var stage := StructureTable.next_stage(entry.type, progress)
 		if stage.is_empty():
 			return "%s — push it into the water (hold)" % info.name
 		var have := 0
 		if player != null and player.survivor != null:
-			have = player.survivor.inventory.count_of(stage.item)
+			have = RecipeTable.have(player.survivor.inventory, stage.item)
 		return "%s — add %s (%d/%d)%s" % [info.name, _plural(stage.item, 2), int(progress.get(stage.item, 0)), int(stage.count),
 			"" if have > 0 else " · you're not carrying any"]
 	if info.has("station"):
@@ -507,7 +677,7 @@ func interact_structure(survivor: Survivor, id: String, slot: int) -> void:
 	if entry.is_empty():
 		return
 	var info := StructureTable.get_type(entry.type)
-	if StructureTable.is_build_site(entry.type):
+	if StructureTable.takes_work(entry.type, entry.get("progress", {})):
 		_work_build_site(survivor, id, entry)
 	elif info.has("station"):
 		_use_station(survivor, "struct:" + id, slot, entry.pos)
@@ -1318,18 +1488,21 @@ func _work_build_site(survivor: Survivor, id: String, entry: Dictionary) -> void
 		return
 	var item: String = stage.item
 	var needed: int = int(stage.count) - int(progress.get(item, 0))
-	var adding := mini(needed, survivor.inventory.count_of(item))
+	var adding := mini(needed, RecipeTable.have(survivor.inventory, item))
 	if adding <= 0:
 		survivor.notify("It still needs %d %s." % [needed, _plural(item, needed)])
 		return
-	survivor.inventory.remove(item, adding)
+	_take_need(survivor.inventory, item, adding)
 	progress[item] = int(progress.get(item, 0)) + adding
 	_apply_progress(id, progress)
 	Net.send_to_ready(self, "_structure_progress", [id, progress])
 	world.sfx_at("thud", entry.pos)
 	var next := StructureTable.next_stage(entry.type, progress)
 	if next.is_empty():
-		_notify_crew("The raft is lashed together. Hold E on it to push it into the water.")
+		if StructureTable.get_type(entry.type).has("launches"):
+			_notify_crew("The raft is lashed together. Hold E on it to push it into the water.")
+		else:
+			_notify_crew("%s finished the %s." % [survivor.player.display_name, String(StructureTable.get_type(entry.type).name).to_lower()])
 	elif next.item != item:
 		survivor.notify("Added %d %s. Now it needs %d %s." % [adding, _plural(item, adding), int(next.count), _plural(next.item, int(next.count))])
 	else:
@@ -1370,8 +1543,18 @@ func _launch(survivor: Survivor, id: String, entry: Dictionary) -> void:
 	_notify_crew("%s pushed the raft into the water! Climb aboard with an oar and press F to row — Q and E stroke." % survivor.player.display_name)
 
 
+## Take `count` of an item or a group ("wood" = any driftwood or logs).
+static func _take_need(inventory: Pack, need: String, count: int) -> void:
+	var left := count
+	for item: String in ItemTable.GROUPS.get(need, [need]):
+		var take := mini(left, inventory.count_of(item))
+		if take > 0:
+			inventory.remove(item, take)
+			left -= take
+
+
 static func _plural(item: String, count: int) -> String:
-	var name := ItemTable.display_name(item).to_lower()
+	var name := RecipeTable.need_label(item).to_lower()
 	return name if count == 1 or name.ends_with("s") else name + "s"
 
 

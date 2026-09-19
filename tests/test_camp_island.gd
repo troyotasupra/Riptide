@@ -65,4 +65,8 @@ func test_chunk_edges_meet_their_neighbours() -> void:
 	var samples: int = ChunkScript.SAMPLES
 	for iz in samples:
 		near(a.heights[iz * samples + samples - 1], b.heights[iz * samples], 0.00001, "seam row %d" % iz)
-	check(a.vertices.size() == (samples - 1) * (samples - 1) * 6, "two triangles per cell")
+	check(a.indices.size() == (samples - 1) * (samples - 1) * 6, "two triangles per cell")
+	for iz in samples:
+		var edge_a: Vector3 = a.normals[iz * samples + samples - 1]
+		var edge_b: Vector3 = b.normals[iz * samples]
+		check(edge_a.distance_to(edge_b) < 0.001, "seam normals agree, row %d" % iz)

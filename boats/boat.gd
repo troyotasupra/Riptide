@@ -97,7 +97,7 @@ static func create_raft(index: int) -> Boat:
 
 	var bark := Materials.bark(Color(0.46, 0.34, 0.22))
 	var planks := Materials.wood(Color(0.58, 0.44, 0.28))
-	var cord := Materials.cloth(Color(0.72, 0.62, 0.45))
+	var cord := Materials.rope(Color(0.72, 0.62, 0.45))
 
 	# Lashed logs along the length, each a little crooked...
 	var log_count := 6
@@ -293,7 +293,7 @@ func moor(lines: Array, berth: Transform3D = Transform3D()) -> void:
 		mooring.append({"local": cleat, "anchor": anchor, "length": length})
 		var rope := MeshInstance3D.new()
 		rope.mesh = _unit_rope()
-		rope.material_override = Materials.cloth(Color(0.72, 0.62, 0.45))
+		rope.material_override = Materials.rope(Color(0.72, 0.62, 0.45))
 		rope.top_level = true
 		rope.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 		add_child(rope)

@@ -51,6 +51,8 @@ func _ready() -> void:
 		["Attachments", func() -> void: _send("attachment_kit", [])],
 		["Raft here", func() -> void: _send("raft", [])],
 		["Shark here", func() -> void: _send("shark", [])],
+		["Start a fire", func() -> void: _send("fire", [])],
+		["Put fires out", func() -> void: _send("put_out", [])],
 		["Kill sharks", func() -> void: _send("kill_sharks", [])],
 		["Fast bites", func() -> void:
 			_fast_bites = not _fast_bites

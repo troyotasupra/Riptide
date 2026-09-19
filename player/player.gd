@@ -382,6 +382,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			survivor.notified.emit("You need an oar to row. Carve one from wood and rope (B).")
 	elif paddling:
 		pass  # while rowing, Q and E are oar strokes rather than drop and interact
+	elif event.is_action_pressed("dismantle") and focus_id.begins_with("struct:"):
+		_hold_id = focus_id
+		_hold_time = 0.0
+		_hold_needed = StructureTable.DISMANTLE_SECONDS
+		_hold_action = "dismantle"
+		_swing_timer = 0.0
+		GameState.world.camp.rpc_id(1, "request_dismantle_start", focus_id.substr(7))
 	elif event.is_action_pressed("interact") and not focus_id.is_empty():
 		_press_interact("interact")
 	elif event.is_action_pressed("primary"):
@@ -894,7 +901,22 @@ func _press_primary() -> void:
 				GameState.hints_shown[held_id] = true
 				survivor.notified.emit(ItemTable.get_item(held_id).get("hint", ""))
 		return
+	if (tool == "torch" or tool == "lighter") and focus_id.is_empty() and _try_ignite():
+		return
 	survivor.use_selected()
+
+
+## A lit torch or lighter held to the ground in front of you sets it alight.
+func _try_ignite() -> bool:
+	var from := camera.global_position
+	var to := from - camera.global_basis.z * FireService.IGNITE_REACH
+	var query := PhysicsRayQueryParameters3D.create(from, to, Layers.WORLD, [get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty() or (hit.normal as Vector3).y < 0.6:
+		return false
+	GameState.world.fire.rpc_id(1, "request_ignite", hit.position)
+	Sound.play("cloth", -6.0)
+	return true
 
 
 func _swing(tool: String) -> void:
@@ -920,7 +942,10 @@ func _update_hold(delta: float) -> void:
 		else:
 			Sound.play("cloth", -10.0)
 	if _hold_time >= _hold_needed:
-		GameState.world.rpc_id(1, "request_interact", _hold_id, survivor.selected_slot)
+		if _hold_action == "dismantle":
+			GameState.world.camp.rpc_id(1, "request_dismantle", _hold_id.substr(7))
+		else:
+			GameState.world.rpc_id(1, "request_interact", _hold_id, survivor.selected_slot)
 		_hold_id = ""
 
 

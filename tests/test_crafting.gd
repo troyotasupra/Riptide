@@ -59,17 +59,17 @@ func test_can_craft_only_with_everything() -> void:
 	check(Recipes.missing(inv, "rope") == {"fiber": 1}, "one fiber short")
 	inv.add("fiber", 1)
 	check(Recipes.can_craft(inv, "rope"), "5 fiber makes rope")
-	check(Recipes.missing(inv, "campfire_kit") == {"stone": 6, "wood": 3}, "campfire needs stones and wood")
+	check(Recipes.missing(inv, "campfire_kit") == {"stone": 2}, "a campfire ring starts with stones")
 
 
 func test_any_wood_counts_and_driftwood_goes_first() -> void:
 	var inv = InventoryScript.new()
-	inv.add("stone", 6)
+	inv.add("rope", 3)
 	inv.add("driftwood", 1)
-	inv.add("log", 3)
-	check(Recipes.can_craft(inv, "campfire_kit"), "driftwood and logs together make 3 wood")
-	Recipes.consume(inv, "campfire_kit")
-	check(inv.count_of("driftwood") == 0 and inv.count_of("log") == 1 and inv.count_of("stone") == 0, "used the driftwood before the logs")
+	inv.add("log", 6)
+	check(Recipes.can_craft(inv, "drying_rack_kit"), "driftwood and logs together make 6 wood")
+	Recipes.consume(inv, "drying_rack_kit")
+	check(inv.count_of("driftwood") == 0 and inv.count_of("log") == 1 and inv.count_of("rope") == 0, "used the driftwood before the logs")
 
 
 func test_tool_recipes_need_the_tool() -> void:

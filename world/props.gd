@@ -14,6 +14,21 @@ static var _materials := {}
 
 ## A plain coloured material, cached by key (used by structures, boats and landmarks).
 static func material(key: String, color: Color) -> StandardMaterial3D:
+	# Named surfaces get the real (photo) materials; anything else stays a flat colour.
+	for word: String in ["wood", "mast", "handle", "log"]:
+		if key.contains(word):
+			return Materials.wood(color)
+	for word: String in ["stone", "rock", "boulder", "charcoal"]:
+		if key.contains(word):
+			return Materials.stone(color)
+	if key.contains("tarp"):
+		return Materials.cloth(color)
+	if key == "bag":
+		return Materials.burlap(color)
+	if key.contains("strap") or key.contains("cover"):
+		return Materials.leather(color)
+	if key == "blade" or key == "brass":
+		return Materials.metal(color, 0.3)
 	if not _materials.has(key):
 		var m := StandardMaterial3D.new()
 		m.albedo_color = color
@@ -76,7 +91,7 @@ static func _palm(variant: int) -> Dictionary:
 		var ring := 1.0 + 0.08 * (1.0 if i % 2 == 0 else -1.0)
 		radii.append(lerpf(0.21, 0.13, t) * ring)
 	var trunk := MeshKit.tube(points, radii, 10, "palm_trunk_%d" % variant)
-	_instance(root, trunk, Materials.bark(Color(0.56, 0.45, 0.32)), Vector3.ZERO)
+	_instance(root, trunk, Materials.palm_bark(Color(0.56, 0.45, 0.32)), Vector3.ZERO)
 	var top := points[segments]
 	var crown := Node3D.new()
 	crown.position = top
