@@ -45,6 +45,7 @@ static func build(id: String) -> Node3D:
 		gun.name = "Item_" + id
 		for key: String in anchors:
 			gun.set_meta(key, anchors[key])
+		_gun_details(gun, id, spec[1])
 		return gun
 	var root := Node3D.new()
 	root.name = "Item_" + id
@@ -1072,6 +1073,65 @@ static func _outboard(root: Node3D) -> void:
 	# The tiller reaches forward into the boat (-Z); the propeller is aft (+Z).
 	_cylinder(root, 0.018, 0.42, Vector3(0.0, 0.72, -0.38), dark, Vector3(PI / 2.0 + 0.15, 0.0, 0.0), 0.022)
 	_capsule(root, 0.026, 0.12, Vector3(0.0, 0.75, -0.6), Materials.plain(Color(0.08, 0.08, 0.08), 0.8)).rotation.x = PI / 2.0 + 0.15
+
+
+## Small touches the pack models lack: a brass bead front sight on the shotgun,
+## a stamped maker's panel on each receiver, and a bright glint on the muzzle crown.
+static func _gun_details(gun: Node3D, id: String, length: float) -> void:
+	var muzzle := anchor(gun, "muzzle", Vector3(0.0, length * 0.7, 0.02))
+	var rail := anchor(gun, "rail", Vector3(0.0, length * 0.2, 0.05))
+	var brass := Materials.metal(BRASS, 0.3)
+	var bright := Materials.metal(Color(0.72, 0.72, 0.7), 0.25)
+	if id == "mossberg":
+		_sphere(gun, 0.0035, muzzle + Vector3(0.0, -0.02, 0.012), brass)
+	# The crown: a ring of bare steel where the bluing has worn at the muzzle.
+	_cylinder(gun, 0.0085, 0.004, muzzle + Vector3(0.0, -0.002, 0.0), bright)
+	# A stamped panel on the left of the receiver.
+	var stamp := Materials.metal(Color(0.5, 0.5, 0.48), 0.45)
+	_box(gun, Vector3(0.001, length * 0.07, 0.008), rail + Vector3(-0.0135 if id != "m1911" else -0.0115, -length * 0.06, -0.022), stamp)
+	_box(gun, Vector3(0.001, length * 0.04, 0.004), rail + Vector3(-0.0135 if id != "m1911" else -0.0115, -length * 0.06, -0.032), stamp)
+
+
+## A canvas sling on a long gun: from a swivel under the stock round to one under
+## the barrel, hanging in a shallow curve below it.
+static func _sling(gun: Node3D, length: float) -> void:
+	# Swivels on the real underside of the stock and of the barrel/handguard.
+	var rear := _underside(gun, -length * 0.22)
+	var front := _underside(gun, length * 0.5)
+	if rear == Vector3.INF or front == Vector3.INF:
+		return
+	rear.z -= 0.012
+	front.z -= 0.012
+	var points := PackedVector3Array()
+	var radii := PackedFloat32Array()
+	for i in 9:
+		var t := float(i) / 8.0
+		var p := rear.lerp(front, t)
+		p.z -= sin(t * PI) * length * 0.05
+		points.append(p)
+		radii.append(0.009)
+	var strap := MeshInstance3D.new()
+	strap.mesh = MeshKit.tube(points, radii, 4, "sling_%.2f" % length)
+	strap.material_override = Materials.cloth(Color(0.24, 0.26, 0.2))
+	strap.scale = Vector3(2.2, 1.0, 0.5)  # a flat strap, not a cord
+	gun.add_child(strap)
+	for p: Vector3 in [rear, front]:
+		_torus(gun, 0.008, 0.002, p + Vector3(0.0, 0.0, 0.004), Materials.metal(DARK_STEEL, 0.4), Vector3(0.0, 0.0, PI / 2.0))
+
+
+## The lowest point (sights are +Z, so lowest is -Z) of the gun's mesh across its
+## middle at distance `y` along it, or INF if there's nothing there.
+static func _underside(gun: Node3D, y: float) -> Vector3:
+	var low := INF
+	for child in gun.find_children("*", "MeshInstance3D", true, false):
+		var instance := child as MeshInstance3D
+		var xf := instance.transform
+		for i in instance.mesh.get_surface_count():
+			for v: Vector3 in instance.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]:
+				var p := xf * v
+				if absf(p.y - y) < 0.025 and absf(p.x) < 0.02:
+					low = minf(low, p.z)
+	return Vector3(0.0, y, low) if low != INF else Vector3.INF
 
 
 ## A 20-litre steel fuel drum, red, with rolling hoops, a filler cap and a handle.

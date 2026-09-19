@@ -161,9 +161,53 @@ static func gun(path: String, length: float, muzzle: float, grip: float, anchors
 	instance.mesh = parts[0].mesh
 	instance.transform = laid.xf
 	root.add_child(instance)
+	# Real surfaces instead of flat paint: blued and parkerized steel with worn
+	# edges, textured polymer, grained wood, a lens that reflects.
+	var mesh: Mesh = parts[0].mesh
+	for i in mesh.get_surface_count():
+		var original := mesh.surface_get_material(i) as StandardMaterial3D
+		if original != null:
+			instance.set_surface_override_material(i, _gun_material(original.resource_name, original.albedo_color))
 	for name: String in laid.anchors:
 		anchors[name] = laid.anchors[name]
 	return root
+
+
+static var _gun_materials := {}
+
+
+## The material for one part of a gun, from the pack's name for it.
+static func _gun_material(name: String, color: Color) -> Material:
+	var key := "%s_%s" % [name, color.to_html(false)]
+	if _gun_materials.has(key):
+		return _gun_materials[key]
+	var lower := name.to_lower()
+	var m: StandardMaterial3D
+	if lower.contains("wood"):
+		# Oiled walnut: warm brown grain, a soft sheen.
+		m = Materials.wood(Color(0.38, 0.22, 0.12) if color.v < 0.3 else Color(0.46, 0.3, 0.17)).duplicate()
+		m.roughness = 0.5
+	elif lower.contains("glass"):
+		m = StandardMaterial3D.new()
+		m.albedo_color = Color(0.05, 0.1, 0.16)
+		m.metallic = 0.9
+		m.roughness = 0.05
+		m.rim_enabled = true
+		m.rim = 0.6
+	elif lower.contains("metal") or lower == "grey":
+		# Blued steel: a little brighter than the pack's flat grey, and it catches the light.
+		m = Materials.gun_steel(color.lightened(0.06), 0.3).duplicate()
+		m.rim_enabled = true
+		m.rim = 0.35
+		m.rim_tint = 0.6
+	else:
+		# The black parts: polymer furniture and anodised receivers, matte and grained.
+		m = Materials.gun_polymer(color).duplicate()
+		m.rim_enabled = true
+		m.rim = 0.2
+		m.rim_tint = 0.3
+	_gun_materials[key] = m
+	return m
 
 
 static func _layout_gun(entry: Dictionary, length: float, muzzle: float, grip: float, fore: float) -> Dictionary:

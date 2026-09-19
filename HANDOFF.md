@@ -137,6 +137,19 @@ This is for a fresh Claude session picking up Riptide. Read it first, then:
   - guns: "but it gets there" (a 200 m shot)
   - All three pass with --seed=4242.
 
+## 2026-09-19 (third session): the rest of both lists
+- Done:
+  - swimming no longer gets ducked by the swell (UNDER_MARGIN, tighter float)
+  - scenarios no longer fail on luck; 186 checks pass on random worlds
+  - boats: oars as the key (fitted in the oarlocks); outboard + fuel + helm (W/S/A/D); tow line; raft cargo
+  - the freighter aground on a sandbar in the far reef (world/poi/freighter_wreck.gd), with 5 fuel drums and a gangway
+  - raft lashings wrap round the logs (MeshKit.lash)
+  - the bow: hip carry, draw to the jaw, arrow flight that sticks
+  - guns: blued steel, polymer, walnut, lens; a muzzle crown, receiver stamps, a brass bead
+- Left:
+  - real CC0 gun sounds (ASK Troy before downloading); directional audio
+  - the freighter salvage and the third island (later)
+
 ## Next steps (the approved plan, in order)
 0. **Build `--scenario=tour`.** It visits many stops in one run and saves each to `--shot-dir`. Stops:
    - each gun in hand: hip, aimed, reloading

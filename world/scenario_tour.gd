@@ -246,7 +246,7 @@ func _item_rack() -> void:
 	var lamp := DirectionalLight3D.new()
 	world.add_child(lamp)
 	lamp.global_rotation = Vector3(-0.7, 0.9, 0.0)
-	for id: String in ["knife", "machete", "dagger", "bow", "arrow", "outboard_motor", "fishing_rod", "torch", "lighter"]:
+	for id: String in ["knife", "machete", "dagger", "bow", "arrow", "outboard_motor", "fishing_rod", "torch", "lighter", "m1911", "uzi", "m4", "mossberg", "intervention", "fuel_drum"]:
 		var model := ItemModels.build(id)
 		world.add_child(model)
 		# Laid along the view, top up: its own +Y to the right, +Z up.
