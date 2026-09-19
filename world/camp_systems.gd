@@ -96,6 +96,8 @@ var unlocked := {}
 var respawns := {}
 ## FishingShack.layout() for this world (set by the world before anything else).
 var shack := {}
+## The shack's door: open or shut, and bolted from inside (host truth, mirrored everywhere).
+var shack_door := {"open": false, "locked": false}
 var shack_glow: OmniLight3D
 ## peer id -> true (host)
 var sleeping := {}
@@ -196,6 +198,7 @@ func sync_to(peer_id: int) -> void:
 		"recipes": known_recipes.keys(),
 		"chart": chart_read,
 		"unlocked": unlocked.keys(),
+		"door": shack_door,
 	})
 
 
@@ -222,10 +225,13 @@ func to_save(now: float) -> Dictionary:
 		"unlocked": unlocked.keys(),
 		"respawns": respawns.duplicate(true),
 		"seeded": seeded.keys(),
+		"shack_door": shack_door.duplicate(),
 	}
 
 
 func from_save(data: Dictionary, now: float) -> void:
+	var door: Dictionary = data.get("shack_door", {})
+	_apply_door.call_deferred(bool(door.get("open", false)), bool(door.get("locked", false)))
 	var saved_structures: Dictionary = data.get("structures", {})
 	for id: String in saved_structures:
 		var entry: Dictionary = saved_structures[id]
@@ -321,6 +327,8 @@ func _full_sync(data: Dictionary) -> void:
 	chart_read = data.chart
 	for id: String in data.unlocked:
 		unlocked[id] = true
+	var door: Dictionary = data.get("door", {})
+	_apply_door(bool(door.get("open", false)), bool(door.get("locked", false)))
 	recipes_changed.emit()
 	chart_changed.emit()
 
@@ -560,6 +568,14 @@ func part_prompt(boat: Boat, part_name: String, _player: Node) -> String:
 func shack_prompt(part_name: String, player: Node) -> String:
 	var container_id := "shack:" + part_name
 	match part_name:
+		"door":
+			var inside := player != null and in_shack((player as Player).world_transform().origin)
+			var bolt := Controls.tag("rotate")
+			if shack_door.open:
+				return "Close the door"
+			if shack_door.locked:
+				return "Unbolt and open the door   ·   %s unbolt it" % bolt if inside else "It's bolted from the inside"
+			return "Open the door   ·   %s bolt it" % bolt if inside else "Open the door"
 		"bunk":
 			return "" if local_asleep else "Sleep in the bunk (sets your respawn)"
 		"chest":
@@ -671,7 +687,27 @@ func interact_boat_part(survivor: Survivor, boat: Boat, part_name: String, _slot
 func interact_shack_part(survivor: Survivor, part_name: String, slot: int) -> void:
 	var id := "shack:" + part_name
 	var at: Vector3 = shack.parts[part_name]
+	var inside := in_shack(survivor.player.world_transform().origin)
 	match part_name:
+		"door":
+			if shack_door.locked:
+				if not inside:
+					survivor.notify("It's bolted from the inside.")
+					world.sfx_at("latch", at)
+					return
+				_set_door(true, false)
+			else:
+				_set_door(not shack_door.open, false)
+			world.sfx_at("latch", at)
+		"door_bolt":
+			if not inside:
+				return
+			if shack_door.open:
+				survivor.notify("Shut the door first.")
+				return
+			_set_door(false, not shack_door.locked)
+			world.sfx_at("latch", at)
+			survivor.notify("You slide the bolt across. Nobody's getting in." if shack_door.locked else "You draw the bolt back.")
 		"bunk":
 			request_sleep_at(survivor, {"kind": "shack"})
 		"chest", "lockers":
@@ -1108,6 +1144,21 @@ func _apply_sleeping(asleep: bool) -> void:
 func _notify_crew(message: String) -> void:
 	for player: Player in world.players_root.get_children():
 		player.survivor.notify(message)
+
+
+## Host: open or shut the shack's door, and bolt or unbolt it, for everyone.
+func _set_door(open: bool, locked: bool) -> void:
+	_apply_door(open, locked)
+	Net.send_to_ready(self, "_apply_door", [open, locked])
+
+
+@rpc("authority", "call_remote", "reliable")
+func _apply_door(open: bool, locked: bool) -> void:
+	shack_door = {"open": open, "locked": locked}
+	if not is_inside_tree():
+		return
+	for door in get_tree().get_nodes_in_group("shack_door"):
+		(door as ShackDoor).set_state(open, locked)
 
 
 func _broadcast_station(id: String) -> void:

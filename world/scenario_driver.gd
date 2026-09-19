@@ -847,13 +847,46 @@ func _walk_loop() -> void:
 	var camp: CampSystems = world.camp
 	var player := GameState.local_player as Player
 	var xf: Transform3D = camp.shack.xf
-	player.teleport(xf * Vector3(0.0, 0.8, -4.4))
+	var s0 := player.survivor
+	# Out on the sand past the foot of the steps, facing the door.
+	var start := xf * Vector3(0.0, 0.0, -FishingShack.SIZE.z * 0.5 - 0.1 - FishingShack._stair_run(world.camp_island, xf * Vector3(0.0, 0.0, -FishingShack.SIZE.z * 0.5 - 0.1), xf.basis * Vector3.FORWARD) - 1.5)
+	start.y = world.camp_island.height_at(start.x, start.z) + 0.3
+	player.teleport(start)
 	var facing: Vector3 = xf.basis * Vector3(0.0, 0.0, 1.0)
 	player.yaw = atan2(-facing.x, -facing.z)
 	await _wait(1.5)
 	_check(not camp.in_shack(player.world_transform().origin), "start outside the shack, on the sand")
-	await _hold("move_forward", 3.5)
-	_check(camp.in_shack(player.world_transform().origin), "walked in through the door without jumping")
+	_check(not camp.shack_door.open, "the shack door starts shut")
+	await _hold("move_forward", 2.5)
+	_check(not camp.in_shack(player.world_transform().origin), "a shut door stops you")
+	camp.interact_shack_part(s0, "door", 0)
+	_check(camp.shack_door.open, "and opens")
+	await _hold("move_forward", 4.0)
+	print("[walk] after the steps, shack-local %s" % str(xf.affine_inverse() * player.world_transform().origin))
+	_check(camp.in_shack(player.world_transform().origin), "walked up the steps and in through the door without jumping")
+	camp.interact_shack_part(s0, "door", 0)
+	camp.interact_shack_part(s0, "door_bolt", 0)
+	_check(not camp.shack_door.open and camp.shack_door.locked, "shut and bolted it from the inside")
+	player.teleport(start)
+	await _wait(0.5)
+	camp.interact_shack_part(s0, "door", 0)
+	_check(not camp.shack_door.open, "from outside a bolted door won't open")
+	camp.interact_shack_part(s0, "door_bolt", 0)
+	_check(camp.shack_door.locked, "and there's no bolt to draw from outside")
+	camp._set_door(false, false)
+
+	# Up the steps onto the dock from the beach.
+	var dock_start: Vector3 = camp.shack.dock_start
+	var dock_dir: Vector3 = (Vector3(camp.shack.dock_end) - dock_start).normalized()
+	var beach := dock_start - dock_dir * (FishingShack._stair_run(world.camp_island, dock_start, -dock_dir) + 1.5)
+	beach.y = world.camp_island.height_at(beach.x, beach.z) + 0.3
+	player.teleport(beach)
+	player.yaw = atan2(-dock_dir.x, -dock_dir.z)
+	await _wait(1.0)
+	await _hold("move_forward", 4.0)
+	var on_dock: Vector3 = player.world_transform().origin
+	_check(on_dock.y > FishingShack.DOCK_Y - 0.15 and (on_dock - dock_start).dot(dock_dir) > 0.5,
+		"walked up the steps onto the dock (y %.2f, dock %.2f)" % [on_dock.y, FishingShack.DOCK_Y])
 
 	# Buried in the hillside: freed without touching anything.
 	var hill: Vector2 = world.camp_island.hill

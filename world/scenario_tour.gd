@@ -412,10 +412,17 @@ func _shack() -> void:
 			["shack_dock", Vector3(14.0, 5.5, -29.0), Vector3(4.5, 0.4, -18.0)],
 			["shack_inside", Vector3(0.3, 1.6, -1.6), Vector3(-0.6, 0.6, 1.5)],
 			["shack_inside_back", Vector3(-0.4, 1.6, 1.4), Vector3(0.4, 0.8, -1.8)],
-			["shack_back", Vector3(3.0, 2.0, 6.0), Vector3(0.0, 1.2, 0.0)]]:
+			["shack_back", Vector3(3.0, 2.0, 6.0), Vector3(0.0, 1.2, 0.0)],
+			["shack_steps_side", Vector3(4.5, 0.8, -3.6), Vector3(0.0, 0.0, -3.0)]]:
 		_look(xf * Vector3(view[1]), xf * Vector3(view[2]))
 		await _wait(0.6)
 		await _shot(view[0])
+	var dock_start: Vector3 = camp.shack.dock_start
+	var dock_dir: Vector3 = (Vector3(camp.shack.dock_end) - dock_start).normalized()
+	var across := dock_dir.cross(Vector3.UP)
+	_look(dock_start - dock_dir * 1.5 + across * 5.0 + Vector3.UP * 0.5, dock_start - dock_dir * 1.5)
+	await _wait(0.4)
+	await _shot("shack_dock_steps_side")
 
 
 func _pickups() -> void:

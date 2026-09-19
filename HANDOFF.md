@@ -93,6 +93,22 @@ This is for a fresh Claude session picking up Riptide. Read it first, then:
   - Pickups: the machete pokes straight through its stump; the dropped bag is two lumps with a black slab through them.
   - Shack: the lantern is a plain beige box; the pillow is a box.
 
+## 2026-09-19 session: Troy's list (top of the plan file)
+- Done and committed:
+  - fire: flowing sheets, slow unbroken front
+  - waterfall: faceted flowing water
+  - controls: F interact, Q/E lean, Z/X scope power
+  - tents: sleepable, castaway tent moved back from its fire
+  - Stairs helper: a ramp under the treads, used at the shack door and the dock
+  - dock widened to 2.6 m
+  - shack door that bolts from inside (R)
+- Not yet verified: the walk scenario on several random seeds (it passed on seed 4242). Run it first.
+- Still to do, in order:
+  - raft ropes wrapped round the logs
+  - oars as boat parts, which act as the key
+  - real CC0 gun sounds (ask Troy first) with directional and occluded audio
+  - motor quest: cave behind the plunge pool, thief (dagger) and hunter (bow), fuel tanks at the far-side shipwreck, towing the raft
+
 ## Next steps (the approved plan, in order)
 0. **Build `--scenario=tour`.** It visits many stops in one run and saves each to `--shot-dir`. Stops:
    - each gun in hand: hip, aimed, reloading

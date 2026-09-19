@@ -3,7 +3,8 @@ extends RefCounted
 ## The fishing shack on the camp island's cove: a weathered plank hut on short
 ## stilts with a tin roof, a dock running out into the cove, and the john boat
 ## tied alongside. Inside: a bunk (respawn), the sea chest (the stash), a gear
-## locker, a locked footlocker (the pistol), a wood stove and a chart table.
+## locker, a locked footlocker (the pistol), a wood stove and a chart table. A
+## plank door that bolts from inside; steps up to it and up onto the dock (Stairs).
 ##
 ## layout() is pure math from the island's seed, so the host and every client
 ## agree on where everything is. Shack space: -Z is the door, facing the sea.
@@ -23,7 +24,7 @@ const PART_SIZES := {
 }
 const SPAWN := Vector3(0.0, 0.05, 0.35)
 const DOCK_SIDE := 4.0
-const DOCK_WIDTH := 1.5
+const DOCK_WIDTH := 2.6
 const DOCK_Y := 1.35
 const ROOF_TILT := 0.18
 
@@ -49,6 +50,9 @@ static func layout(shape: CampIsland) -> Dictionary:
 	var parts := {}
 	for part: String in PART_SPOTS:
 		parts[part] = xf * Vector3(PART_SPOTS[part])
+	# The door, and bolting it (both reached at the doorway).
+	parts["door"] = xf * Vector3(0.0, 1.0, -SIZE.z * 0.5)
+	parts["door_bolt"] = parts["door"]
 
 	var dock_start := shape.cove - out * 2.5 + side * DOCK_SIDE
 	var dock_end := shape.cove + out * 14.0 + side * DOCK_SIDE
@@ -85,7 +89,21 @@ static func build(shape: CampIsland) -> Node3D:
 	root.name = "FishingShack"
 	root.add_child(_hut(shape, shack))
 	root.add_child(_dock(shape, shack))
+	_entrances(shape, shack, root)
 	return root
+
+
+## Steps that can't fail: up to the shack's door and up onto the dock from the beach.
+static func _entrances(shape: CampIsland, shack: Dictionary, root: Node3D) -> void:
+	var ground := func(x: float, z: float) -> float: return shape.height_at(x, z)
+	var xf := Transform3D(shack.xf)
+	var tread := Materials.wood(Color(0.55, 0.47, 0.37))
+	var side := Materials.wood(DARK_WOOD)
+	var sill := xf * Vector3(0.0, 0.0, -SIZE.z * 0.5 - 0.1)
+	Stairs.build(root, sill, xf.basis * Vector3.FORWARD, 1.4, ground, tread, side)
+	var dock_start: Vector3 = shack.dock_start
+	var dock_dir: Vector3 = (Vector3(shack.dock_end) - dock_start).normalized()
+	Stairs.build(root, dock_start, -dock_dir, DOCK_WIDTH, ground, tread, side)
 
 
 static func _box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material, solid: bool = false, rot: Vector3 = Vector3.ZERO) -> MeshInstance3D:
@@ -136,18 +154,7 @@ static func _hut(shape: CampIsland, shack: Dictionary) -> Node3D:
 	for cx: float in [-1.0, 1.0]:
 		for cz: float in [-1.0, 1.0]:
 			_post(node, Vector3(cx * (half.x - 0.1), -lift - 0.4, cz * (half.z - 0.1)), Vector3(cx * (half.x - 0.1), 0.0, cz * (half.z - 0.1)), 0.09, dark)
-	# Steps out from the door, following the sand down however far it falls away,
-	# so you walk in instead of jumping the doorsill.
-	var base := Transform3D(shack.xf)
-	var tread := 0.0
-	for i in 10:
-		var z := -half.z - 0.28 - i * 0.44
-		var spot: Vector3 = base * Vector3(0.0, 0.0, z)
-		var sand: float = shape.height_at(spot.x, spot.z) - base.origin.y
-		tread = maxf(tread - 0.24, sand + 0.1)
-		_box(node, Vector3(1.4, 0.14, 0.52), Vector3(0.0, tread - 0.07, z), dark, true)
-		if tread <= sand + 0.14:
-			break
+	# (The steps up to the door are Stairs, built in _entrances.)
 
 	# Walls: plank siding with battens, a doorway facing the sea, a window.
 	var wall := 0.1
@@ -163,6 +170,11 @@ static func _hut(shape: CampIsland, shack: Dictionary) -> Node3D:
 		_box(node, Vector3(0.07, SIZE.y, 0.03), Vector3(x, half.y, half.z + 0.01), dark)
 	_box(node, Vector3(0.14, 2.05, 0.14), Vector3(-0.6, 1.02, -half.z), dark)
 	_box(node, Vector3(0.14, 2.05, 0.14), Vector3(0.6, 1.02, -half.z), dark)
+	var door := ShackDoor.make(node, -half.z + wall * 0.5, planks, dark, iron)
+	door.text_provider = func(player: Node) -> String:
+		if GameState.world == null or GameState.world.camp == null:
+			return ""
+		return GameState.world.camp.shack_prompt("door", player)
 	for sx: float in [-1.0, 1.0]:
 		_box(node, Vector3(0.03, 0.72, 0.92), Vector3(sx * (half.x + 0.012), 1.5, -0.4), dark)
 		_box(node, Vector3(0.035, 0.56, 0.76), Vector3(sx * (half.x + 0.02), 1.5, -0.4), Materials.glow(Color(0.55, 0.62, 0.66), 0.08))
@@ -270,6 +282,17 @@ static func _hut(shape: CampIsland, shack: Dictionary) -> Node3D:
 	return node
 
 
+## How far the dock's steps run out onto the beach (the same walk Stairs.build makes).
+static func _stair_run(shape: CampIsland, top: Vector3, out: Vector3) -> float:
+	var run := 0.0
+	while run < 12.0:
+		var p := top + out * run
+		if top.y - run * tan(Stairs.SLOPE) <= shape.height_at(p.x, p.z) + 0.02:
+			break
+		run += 0.05
+	return run
+
+
 static func _dock(shape: CampIsland, shack: Dictionary) -> Node3D:
 	var node := Node3D.new()
 	node.name = "Dock"
@@ -324,7 +347,7 @@ static func _dock(shape: CampIsland, shack: Dictionary) -> Node3D:
 	node.add_child(fender)
 	# A plank path up the beach from the dock to the shack's steps.
 	var door: Vector3 = Transform3D(shack.xf) * Vector3(0.0, 0.0, -SIZE.z * 0.5 - 1.0)
-	var path_from := Vector3(start.x, 0.0, start.z) - dir * 0.3
+	var path_from := Vector3(start.x, 0.0, start.z) - dir * (_stair_run(shape, start, -dir) + 0.3)
 	var path_dir := (Vector3(door.x, 0.0, door.z) - path_from).normalized()
 	var steps := int(Vector2(door.x - path_from.x, door.z - path_from.z).length() / 0.75)
 	for i in steps:
