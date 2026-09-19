@@ -11,3 +11,6 @@ const JUMP_VELOCITY := 7.0
 const SWIM_JUMP_VELOCITY := 9.0
 ## How deep your feet hang while treading water.
 const SWIM_FLOAT_DEPTH := 1.2
+## Your eyes count as under only this far below the surface, so a swell slapping
+## your face while you swim at the top doesn't start drowning you.
+const UNDER_MARGIN := 0.3

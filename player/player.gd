@@ -669,7 +669,7 @@ func _local_physics(delta: float) -> void:
 	else:
 		swimming = depth > SWIM_DEPTH
 	# The same rule the host uses: your eyes, at standing height, are under the surface.
-	underwater = platform == null and depth > EYE_HEIGHT
+	underwater = platform == null and depth > EYE_HEIGHT + MovementTuning.UNDER_MARGIN
 	if swimming and not _was_swimming:
 		Sound.play("splash", -4.0)
 	_was_swimming = swimming
@@ -729,8 +729,10 @@ func _local_physics(delta: float) -> void:
 		elif deep and Input.is_action_pressed("jump") and active:
 			velocity.y = lerpf(velocity.y, DIVE_SPEED, 1.0 - exp(-5.0 * delta))
 		else:
-			# Float back up to the surface, but never rocket out of a deep dive.
-			velocity.y = lerpf(velocity.y, clampf((depth - SWIM_FLOAT_DEPTH) * 3.0, -4.0, 4.0), 1.0 - exp(-4.0 * delta))
+			# Float back up to the surface, but never rocket out of a deep dive. Near the
+			# top, ride the swell closely so it doesn't wash over your head.
+			var near_top := depth < SWIM_FLOAT_DEPTH + 1.0
+			velocity.y = lerpf(velocity.y, clampf((depth - SWIM_FLOAT_DEPTH) * (6.0 if near_top else 3.0), -4.0, 4.0), 1.0 - exp(-(9.0 if near_top else 4.0) * delta))
 		# At the surface, jump is the heave out of the water onto a deck or rock.
 		if jump and not deep and stamina > SWIM_JUMP_COST:
 			velocity.y = SWIM_JUMP_VELOCITY

@@ -96,7 +96,7 @@ func host_tick(delta: float) -> void:
 	survival.tick(dt, air_temp, equipment.insulation(), player.exertion)
 	_burn_torch(dt)
 	var head := player.world_transform().origin
-	underwater = player.platform == null and Waves.height_at(Vector2(head.x, head.z), Ocean.time) > head.y + Player.EYE_HEIGHT
+	underwater = player.platform == null and Waves.height_at(Vector2(head.x, head.z), Ocean.time) > head.y + Player.EYE_HEIGHT + MovementTuning.UNDER_MARGIN
 	survival.breathe(dt, underwater)
 	if god:
 		survival.health = Survival.MAX

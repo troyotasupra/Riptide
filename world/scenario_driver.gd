@@ -964,7 +964,13 @@ func _walk_loop() -> void:
 	await _hold("crouch", 8.0)
 	_check(player.underwater, "holding crouch takes you under the surface")
 	_check(s.survival.breath < air - 12.0, "and your breath runs down (%.0f)" % s.survival.breath)
-	await _wait(12.0)
+	# Back at the top, and staying there through the swell for a few seconds.
+	await _wait(9.0)
+	var dunked := false
+	for t in 30:
+		await _wait(0.1)
+		dunked = dunked or player.underwater
+	_check(not dunked, "and the swell doesn't keep ducking you once you're up")
 	_check(not player.underwater, "let go and you come back up")
 	# However long the ascent took, breath is back once your head is out.
 	await _wait(3.0)
