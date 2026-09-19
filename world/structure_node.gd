@@ -318,6 +318,44 @@ func _tent_progress(progress: Dictionary) -> void:
 		_part_pole(line[1] - Vector3(0.0, 0.08, 0.0), line[1] + Vector3(0.0, 0.14, 0.0), 0.018, 98, wood)
 
 
+## Filled bags stacked in courses, each one sagging under the one above and
+## offset so the joints break, the way a wall of them is really built.
+func _sandbag_progress(progress: Dictionary) -> void:
+	var bags := mini(int(progress.get("sandbag", 0)), 5)
+	if bags <= 0:
+		return
+	var hessian := Materials.burlap(Color(0.66, 0.58, 0.42))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(structure_id)
+	var per_course := 3
+	var bag_w := 0.52
+	var bag_h := 0.2
+	for i in bags * per_course:
+		var course := i / per_course
+		var along := i % per_course
+		# Every other course is shifted half a bag, so the joints break.
+		var offset := (0.0 if course % 2 == 0 else bag_w * 0.5) + (along - 1) * bag_w
+		var bag := MeshInstance3D.new()
+		var lump := SphereMesh.new()
+		lump.radius = 0.5
+		lump.height = 1.0
+		lump.radial_segments = 10
+		lump.rings = 6
+		bag.mesh = lump
+		bag.material_override = hessian
+		# Squashed flat under its own weight, and a little out of true.
+		bag.scale = Vector3(bag_w, bag_h, 0.34) * rng.randf_range(0.94, 1.04)
+		bag.position = Vector3(offset, bag_h * 0.5 + course * bag_h * 0.92, rng.randf_range(-0.02, 0.02))
+		bag.rotation.y = rng.randf_range(-0.12, 0.12)
+		_build_parts.add_child(bag)
+		if course == 0:
+			continue
+	var wall := BoxShape3D.new()
+	var courses := maxi(1, int(ceil(bags * per_course / float(per_course))))
+	wall.size = Vector3(bag_w * (per_course + 0.5), courses * bag_h * 0.92, 0.36)
+	_part_collider(wall, Vector3(0.0, wall.size.y * 0.5, 0.0))
+
+
 ## A slatted wooden bin with a heap of dark compost showing over the top.
 func _compost_bin() -> void:
 	var wood := Materials.wood(Color(0.5, 0.39, 0.27))
@@ -398,6 +436,9 @@ func set_progress(progress: Dictionary) -> void:
 			return
 		"tent":
 			_tent_progress(progress)
+			return
+		"sandbag_wall":
+			_sandbag_progress(progress)
 			return
 	var bark := Materials.bark(Color(0.46, 0.34, 0.22))
 	var logs := mini(int(progress.get("log", 0)), 6)

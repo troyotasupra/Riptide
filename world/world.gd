@@ -457,6 +457,18 @@ func request_interact(target_id: String, slot: int) -> void:
 	var at := player.world_transform().origin
 	var parts := target_id.split(":")
 	match parts[0]:
+		"dig":
+			if parts.size() < 3:
+				return
+			var spot := Vector3(float(parts[1]), 0.0, float(parts[2]))
+			spot.y = ground_height(spot.x, spot.z)
+			if at.distance_to(spot) > INTERACT_RANGE + 1.0 or not is_diggable(spot):
+				return
+			var started: Dictionary = _interact_started.get(sender, {})
+			if started.get("id", "") != target_id or Ocean.time - float(started.get("at", 0.0)) < Player.DIG_SECONDS * 0.75:
+				return
+			_interact_started.erase(sender)
+			_dig_sand(survivor, spot)
 		"spring":
 			_use_spring(survivor, at, slot)
 		"stream":
@@ -525,6 +537,27 @@ func request_interact(target_id: String, slot: int) -> void:
 			target.survivor.notify("%s pulls you back up. You're hurt — patch yourself up." % player.display_name)
 			survivor.notify("You got %s back on their feet." % target.display_name)
 			target.survivor.push_survival()
+
+
+## Sand you can dig: dry or wet beach sand, not grass, jungle, rock or a floor.
+func is_diggable(at: Vector3) -> bool:
+	if camp_island == null:
+		return false
+	var height := camp_island.height_at(at.x, at.z)
+	if absf(height - at.y) > 0.6:
+		return false  # standing on a deck, a dock or a boat, not on the ground
+	var biome := camp_island.biome_at(at.x, at.z, height)
+	return biome == CampIsland.Biome.BEACH or (biome == CampIsland.Biome.SEA and height > -1.2)
+
+
+## Host: a handful of sand out of the beach, and a scrape left where it came from.
+func _dig_sand(survivor: Survivor, at: Vector3) -> void:
+	if survivor.inventory.add("sand", 1, Ocean.time) > 0:
+		survivor.notify("Your pack is full — nowhere to put the sand.")
+		return
+	survivor.notify("You scoop out a handful of sand.")
+	sfx_at("thud", at)
+	survivor.push_inventory()
 
 
 func _use_spring(survivor: Survivor, at: Vector3, slot: int) -> void:

@@ -152,6 +152,38 @@ func _camp_loop() -> void:
 	camp.request_craft("campfire_kit")
 	_check(pack.count_of("campfire_kit") == 1 and pack.count_of("stone") == 4, "crafted a campfire ring from two stones")
 
+	# Digging the beach, bagging the sand, and stacking the bags into a wall.
+	var beach: Vector2 = world.camp_island.cove
+	var sand_spot := Vector3(beach.x, world.ground_height(beach.x, beach.y), beach.y)
+	_check(world.is_diggable(sand_spot), "the beach is sand you can dig")
+	var inland: Vector2 = world.camp_island.hill
+	_check(not world.is_diggable(Vector3(inland.x, world.ground_height(inland.x, inland.y), inland.y)), "the hillside is not")
+	player.teleport(sand_spot + Vector3(0.0, 1.0, 0.0))
+	await _wait(1.0)
+	var sand_before := pack.count_of("sand")
+	for i in 3:
+		var dig_id := "dig:%.1f:%.1f" % [sand_spot.x, sand_spot.z]
+		world.begin_interact(dig_id)
+		await _wait(Player.DIG_SECONDS + 0.2)
+		world.request_interact(dig_id, 0)
+	_check(pack.count_of("sand") == sand_before + 3, "dug three handfuls of sand out of the beach")
+	pack.add("fiber", 3, Ocean.time)
+	camp.request_craft("sandbag")
+	_check(pack.count_of("sandbag") == 1 and pack.count_of("sand") == sand_before, "filled a sandbag with it")
+	pack.add("sandbag", 4, Ocean.time)
+	_check(_to_hotbar(pack, "sandbag", 2), "took the bags in hand")
+	var walls_before := camp.structures.size()
+	camp.request_place(2, sand_spot + Vector3(2.0, 0.0, 0.0), 0.0)
+	var wall_id := ""
+	for id: String in camp.structures:
+		if camp.structures[id].type == "sandbag_wall":
+			wall_id = id
+	_check(camp.structures.size() == walls_before + 1 and not wall_id.is_empty(), "started a sandbag wall")
+	if not wall_id.is_empty():
+		camp.interact_structure(s, wall_id, 2)
+		camp.interact_structure(s, wall_id, 2)
+		_check(StructureTable.next_stage("sandbag_wall", camp.structures[wall_id].progress).is_empty(), "and stacked it up to full height")
+
 	var island: CampIsland = world.camp_island
 	var ashore: Vector2 = island.cove + (island.center - island.cove).normalized() * 14.0
 	var ground := Vector3(ashore.x, island.height_at(ashore.x, ashore.y), ashore.y)

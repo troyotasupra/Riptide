@@ -7,13 +7,14 @@ extends RefCounted
 ## `tool`: a tool type that must be carried (not used up).
 
 const KNOWN_AT_START := ["rope", "stone_hatchet", "oar", "raft_kit"]
-const STARTING := ["campfire_kit", "lean_to_kit", "spear", "bandage", "torch", "cut_bait", "jig", "compost_bin_kit"]
+const STARTING := ["campfire_kit", "lean_to_kit", "spear", "bandage", "torch", "cut_bait", "jig", "compost_bin_kit", "sandbag"]
 
 const RECIPES := {
 	"rope": {"name": "Rope", "needs": {"fiber": 5}, "makes": "rope", "count": 1},
 	"stone_hatchet": {"name": "Stone hatchet", "needs": {"wood": 1, "flint": 2, "rope": 1}, "makes": "stone_hatchet", "count": 1},
 	"oar": {"name": "Oars", "needs": {"wood": 2, "rope": 1}, "makes": "oar", "count": 1, "tool": "hatchet"},
 	"raft_kit": {"name": "Raft frame", "needs": {"wood": 3, "rope": 2}, "makes": "raft_kit", "count": 1, "tool": "hatchet"},
+	"sandbag": {"name": "Sandbag", "needs": {"sand": 3, "fiber": 3}, "makes": "sandbag", "count": 1},
 	"campfire_kit": {"name": "Campfire ring", "needs": {"stone": 2}, "makes": "campfire_kit", "count": 1},
 	"lean_to_kit": {"name": "Lean-to", "needs": {"tarp": 1, "paracord": 1, "wood": 2}, "makes": "lean_to_kit", "count": 1},
 	"spear": {"name": "Spear", "needs": {"wood": 1, "flint": 1, "fiber": 2}, "makes": "spear", "count": 1},

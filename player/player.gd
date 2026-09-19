@@ -89,6 +89,8 @@ var carried_weight_kg := 0.0
 var held_id := ""
 ## What the crosshair is on (local player only).
 var focus_id := ""
+## How long digging a handful of sand out of the beach takes.
+const DIG_SECONDS := 2.2
 var focus_text := ""
 var give_peer := 0
 var give_text := ""
@@ -915,12 +917,27 @@ func _update_focus() -> void:
 		return
 	var target := hit.collider as Interactable
 	if target == null:
+		# Nothing put there by hand — but sand underfoot can be dug.
+		_focus_sand(hit)
 		return
 	var text := target.interact_text(self)
 	if not text.is_empty():
 		focus_id = target.interact_id
 		focus_text = text
 		_focus_hold = target.hold_seconds(self)
+
+
+## Looking at bare sand within reach: you can dig it out by the handful.
+func _focus_sand(hit: Dictionary) -> void:
+	var world := GameState.world
+	if world == null or world.camp_island == null or swimming or downed:
+		return
+	var at: Vector3 = hit.position
+	if Vector3(hit.normal).y < 0.65 or not world.is_diggable(at):
+		return
+	focus_id = "dig:%.1f:%.1f" % [at.x, at.z]
+	focus_text = "Dig sand (hold %s)" % Controls.tag("interact")
+	_focus_hold = DIG_SECONDS
 
 
 ## Finds a crewmate you're looking at, to hand them what you're holding.
