@@ -454,7 +454,8 @@ func _wildfire() -> void:
 			break
 	world.weather.set_wind(0.0, 7.0)
 	fire.ignite_at(Vector3(meadow.x, 0.0, meadow.y))
-	await _wait(16.0)
+	# It creeps now: give it time to become a fire front worth looking at.
+	await _wait(45.0)
 	var at := _ground(meadow)
 	for view: Array in [["wildfire_2m", 2.0, 1.6], ["wildfire_15m", 15.0, 4.0], ["wildfire_60m", 60.0, 14.0]]:
 		var d: float = view[1]

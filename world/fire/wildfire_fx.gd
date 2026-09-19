@@ -1,25 +1,22 @@
 class_name WildfireFx
 extends Node3D
-## The whole wildfire as one particle system rather than a flame per cell: every
-## burning cell feeds emission points scattered across its ground, and a swarm
-## of tiny glowing chips (FireChips) rises from all of them at once, so the fire
-## reads as one connected front. Smoke drifts off it as a single sheet, and a
-## handful of lights sit at its hottest spots. Rebuilt from the burning cells
-## twice a second.
+## The whole wildfire drawn in a few batches rather than a node per cell: every
+## burning cell stands a crossed pair of flame sheets (FlameSheets), wider than the
+## cell so they overlap their neighbours into one connected fire with no gaps, taller
+## where there was more to burn. Rebuilt twice a second from the burning cells. Embers and smoke rise from points across
+## the burning ground, and a handful of lights sit at the fire's hottest spots.
 
 const POINTS_PER_CELL := 24
 const MAX_POINTS := 14000
-const FLAMES := 24000
-## Chips alive at once over each burning cell (4 m²), until the budget runs out.
-const CHIPS_PER_CELL := 90
-const BODY := 30000
-const SHARDS_PER_CELL := 150
+## At most this many sheets in all (two per burning cell).
+const MAX_SHEETS := 1600
+## A sheet is this much wider than its cell, so neighbours overlap.
+const OVERLAP := 1.45
 const SMOKE := 900
 const EMBERS := 1200
 const LIGHTS := 6
 
-var _flames: GPUParticles3D
-var _body: GPUParticles3D
+var _tongues: FlameSheets
 var _smoke: GPUParticles3D
 var _embers: GPUParticles3D
 var _points: ImageTexture
@@ -32,8 +29,9 @@ var _count := 0
 func _ready() -> void:
 	top_level = true
 	global_transform = Transform3D.IDENTITY
-	_body = _particles(BODY, 0.8, _points_shape(FireChips.body_process(1.4)), FireChips.shard_mesh())
-	_flames = _particles(FLAMES, 1.0, _points_shape(FireChips.flame_process(2.0)), FireChips.chip_mesh())
+	_tongues = FlameSheets.new()
+	_tongues.top_level = true
+	add_child(_tongues)
 	_smoke = _particles(SMOKE, 7.0, _smoke_process(), _smoke_draw())
 	_embers = _particles(EMBERS, 2.8, _points_shape(FireChips.ember_process()), FireChips.ember_mesh())
 	for i in LIGHTS:
@@ -47,10 +45,28 @@ func _ready() -> void:
 	set_cells([], Callable())
 
 
-## `cells` burning (Vector2i); `ground` maps a world xz to its height.
-func set_cells(cells: Array, ground: Callable) -> void:
+## `cells` burning (Vector2i); `ground` maps a world xz to its height; `fuel`
+## maps a cell to how much there was to burn (0..1), which sets the flames' height.
+func set_cells(cells: Array, ground: Callable, fuel: Callable = Callable()) -> void:
 	var points := PackedVector3Array()
 	var rng := RandomNumberGenerator.new()
+	var sheets: Array = []
+	var width := FireGrid.CELL * OVERLAP
+	for cell: Vector2i in cells:
+		if sheets.size() >= MAX_SHEETS:
+			break
+		rng.seed = hash(cell) + 17
+		var f: float = fuel.call(cell) if fuel.is_valid() else 0.8
+		var middle := FireGrid.center_of(cell)
+		var h := (0.45 + f * 1.0) * rng.randf_range(0.85, 1.15)
+		for yaw: float in [0.0, PI / 2.0]:
+			# Sit the base at the lowest ground under the sheet, so it never floats.
+			var along := Vector2(cos(yaw), -sin(yaw)) * width * 0.5
+			var y := INF
+			for xz: Vector2 in [middle, middle + along, middle - along]:
+				y = minf(y, ground.call(xz) if ground.is_valid() else 0.0)
+			sheets.append({"pos": Vector3(middle.x, y, middle.y), "yaw": yaw + rng.randf_range(-0.12, 0.12), "width": width, "height": h, "seed": rng.randi(), "heat": f})
+	_tongues.set_sheets(sheets)
 	for cell: Vector2i in cells:
 		if points.size() >= MAX_POINTS:
 			break
@@ -62,7 +78,8 @@ func set_cells(cells: Array, ground: Callable) -> void:
 			points.append(Vector3(xz.x, y + 0.05, xz.y))
 	_count = points.size()
 	var on := _count > 0
-	for particles: GPUParticles3D in [_body, _flames, _smoke, _embers]:
+	_tongues.visible = on
+	for particles: GPUParticles3D in [_smoke, _embers]:
 		particles.emitting = on
 	if not on:
 		for light in _lights:
@@ -76,16 +93,13 @@ func set_cells(cells: Array, ground: Callable) -> void:
 		_points = ImageTexture.create_from_image(image)
 	else:
 		_points.update(image)
-	for particles: GPUParticles3D in [_body, _flames, _smoke, _embers]:
+	for particles: GPUParticles3D in [_smoke, _embers]:
 		var process := particles.process_material as ParticleProcessMaterial
 		process.emission_point_texture = _points
 		process.emission_point_count = _count
-	# The same density of chips over every burning cell, up to the budget.
 	var cells_burning := float(_count) / POINTS_PER_CELL
-	_flames.amount_ratio = clampf(cells_burning * CHIPS_PER_CELL / FLAMES, 0.01, 1.0)
-	_body.amount_ratio = clampf(cells_burning * SHARDS_PER_CELL / BODY, 0.01, 1.0)
 	_smoke.amount_ratio = clampf(cells_burning * 8.0 / SMOKE, 0.05, 1.0)
-	_embers.amount_ratio = clampf(cells_burning * 6.0 / EMBERS, 0.02, 1.0)
+	_embers.amount_ratio = clampf(cells_burning * 2.0 / EMBERS, 0.02, 1.0)
 	_place_lights(points)
 
 

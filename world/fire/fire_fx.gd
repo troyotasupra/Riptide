@@ -1,7 +1,7 @@
 class_name FireFx
 extends Node3D
-## A particle fire: a swarm of tiny glowing chips licking up from white-hot at the
-## base to red at the tips (FireChips), rising embers, smoke and a flickering light. `size` is roughly
+## A fire: crossed sheets of flame whose tongues lick up from white-hot at the
+## root to red at the tips (FlameSheets), one solid body with no gaps, a few rising embers, smoke and a flickering light. `size` is roughly
 ## the radius of the burning area in metres; `intensity` (0..1) scales how hard it
 ## burns, and 0 puts it out. Used for campfires, the castaway's pit and wildfire.
 
@@ -11,8 +11,7 @@ extends Node3D
 @export var shadows := true
 @export var smoke := true
 
-var _flames: GPUParticles3D
-var _body: GPUParticles3D
+var _tongues: FlameSheets
 var _embers: GPUParticles3D
 var _smoke: GPUParticles3D
 var _light: OmniLight3D
@@ -23,21 +22,13 @@ static var _puff_texture: Texture2D
 
 
 func _ready() -> void:
-	# Faceted shards make the flames; a sprinkle of tiny chips flickers around them (FireChips).
-	var flames := FireChips.flame_process(0.5 + size * 0.9)
-	flames.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	flames.emission_sphere_radius = size * 0.6
-	flames.emission_shape_scale = Vector3(1.0, 0.12, 1.0)
-	_flames = _particles(flames, FireChips.chip_mesh(), int(clampf(260.0 * PI * size * size, 40.0, 1200.0)), 0.8)
-	var body := FireChips.body_process(0.45 + size * 0.9)
-	body.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	body.emission_sphere_radius = size * 0.5
-	body.emission_shape_scale = Vector3(1.0, 0.1, 1.0)
-	_body = _particles(body, FireChips.shard_mesh(), int(clampf(160.0 * PI * size * size, 40.0, 1000.0)), 0.75)
+	_tongues = FlameSheets.new()
+	add_child(_tongues)
+	_tongues.set_sheets(_campfire_sheets())
 	var embers := FireChips.ember_process()
 	embers.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
 	embers.emission_sphere_radius = size * 0.5
-	_embers = _particles(embers, FireChips.ember_mesh(), int(clampf(24.0 * size + 8.0, 8.0, 60.0)), 2.2)
+	_embers = _particles(embers, FireChips.ember_mesh(), int(clampf(10.0 * size + 4.0, 4.0, 24.0)), 2.2)
 	if smoke:
 		_smoke = _particles(_smoke_material(), _smoke_draw(), int(clampf(8.0 * size + 5.0, 5.0, 24.0)), 5.0)
 	_light = OmniLight3D.new()
@@ -51,15 +42,31 @@ func _ready() -> void:
 
 func set_intensity(value: float) -> void:
 	intensity = clampf(value, 0.0, 1.0)
-	if _flames == null:
+	if _tongues == null:
 		return
 	var on := intensity > 0.01
-	for particles: GPUParticles3D in [_body, _flames, _embers, _smoke]:
+	_tongues.visible = on
+	# A fire burning low is a smaller fire, not a thinner one.
+	_tongues.scale = Vector3.ONE * lerpf(0.45, 1.0, intensity)
+	for particles: GPUParticles3D in [_embers, _smoke]:
 		if particles != null:
 			particles.emitting = on
 			particles.amount_ratio = maxf(0.05, intensity)
 	_light.visible = on
 	set_process(on)
+
+
+## Sheets crossed like a star over the fuel, and a lower ring round the edge:
+## from any side and any height it is one fire.
+func _campfire_sheets() -> Array:
+	var list: Array = []
+	var tall := 0.4 + size * 0.95
+	for i in 4:
+		list.append({"pos": Vector3.ZERO, "yaw": i * PI / 4.0 + 0.2, "width": size * 1.7, "height": tall * (1.0 - i * 0.07), "seed": 5150 + i, "heat": 1.0})
+	for i in 6:
+		var a := i * TAU / 6.0
+		list.append({"pos": Vector3(cos(a), 0.0, sin(a)) * size * 0.45, "yaw": -a + PI / 2.0, "width": size * 0.9, "height": tall * 0.55, "seed": 5160 + i, "heat": 0.6})
+	return list
 
 
 func _process(delta: float) -> void:

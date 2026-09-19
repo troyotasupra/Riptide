@@ -146,11 +146,11 @@ func request_ignite(point: Vector3) -> void:
 ## Host: set the ground at `point` alight. False if nothing there will burn.
 func ignite_at(point: Vector3) -> bool:
 	var cell := FireGrid.cell_of(Vector2(point.x, point.z))
-	if not grid.ignite(cell):
-		return false
-	_pending_lit.append(cell)
-	_on_lit(cell)
-	return true
+	var lit := grid.ignite_patch(cell)
+	for each in lit:
+		_pending_lit.append(each)
+		_on_lit(each)
+	return not lit.is_empty()
 
 
 func _physics_process(delta: float) -> void:
@@ -336,7 +336,7 @@ func _update_view() -> void:
 	var ground := func(xz: Vector2) -> float:
 		var h: float = world.ground_height(xz.x, xz.y) if world != null else 0.0
 		return maxf(h, 0.0)
-	_wildfire.set_cells(burning_cells.keys(), ground)
+	_wildfire.set_cells(burning_cells.keys(), ground, grid.fuel)
 
 
 static func _pack(cells: Array) -> PackedInt32Array:

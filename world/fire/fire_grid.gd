@@ -4,17 +4,25 @@ extends RefCounted
 ## here touches nodes, so it runs the same in tests and on the host.
 ##
 ## A cell's `fuel` (0..1) comes from whatever grows there — dry grass and jungle
-## burn, sand, rock and water don't. A burning cell burns for a while and, each
-## step, may set its eight neighbours alight: likelier with more fuel, downwind,
-## and in a stronger wind; rain damps the spread and puts fires out. Burnt ground
+## burn, sand, rock and water don't. A burning cell burns for a while and heats
+## its eight neighbours: faster with more fuel, downwind and in a stronger wind.
+## A cell catches once it has soaked up enough heat, so the fire moves as one
+## steady, unbroken front rather than jumping about. Rain damps the heat and puts
+## fires out. Burnt ground
 ## grows back after REGROW_SECONDS. At most MAX_BURNING cells burn at once.
 
 const CELL := 2.0
 const MAX_BURNING := 600
 ## How long a fully-fuelled cell burns.
-const BURN_SECONDS := 7.0
-## Chance per second that a burning cell lights one full-fuel neighbour in still air.
-const SPREAD_RATE := 0.2
+const BURN_SECONDS := 20.0
+## Heat per second a burning cell gives one full-fuel neighbour in still air; a
+## cell catches at 1. A straight front heats each cell ahead from about 2.4 cells'
+## worth of neighbours, so in still air it creeps a cell (2 m) every ~10 s: slow
+## enough to walk away from, and to beat out. (A lone burning cell can't light
+## anything; a fire starts as a patch, see ignite_patch.)
+const SPREAD_RATE := 0.05
+## Each cell needs a little more or less heat than 1, so the front isn't ruler-straight.
+const CATCH_JITTER := 0.2
 const REGROW_SECONDS := 2400.0
 
 const NEIGHBOURS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
@@ -26,6 +34,8 @@ var fuel_at: Callable
 var burning := {}
 ## cell -> the clock time it grows back
 var burnt := {}
+## cell -> heat soaked up so far from burning neighbours (catches at about 1)
+var heat := {}
 var _fuel_cache := {}
 
 
@@ -68,6 +78,19 @@ func ignite(cell: Vector2i) -> bool:
 	return true
 
 
+## Sets a cell and its eight neighbours alight, where they'll burn: what a torch
+## held to dry grass does. Returns the cells that caught.
+func ignite_patch(cell: Vector2i) -> Array[Vector2i]:
+	var lit: Array[Vector2i] = []
+	if not ignite(cell):
+		return lit
+	lit.append(cell)
+	for offset: Vector2i in NEIGHBOURS:
+		if ignite(cell + offset):
+			lit.append(cell + offset)
+	return lit
+
+
 ## One step of `dt` seconds. `wind` points where the wind blows, its length in m/s;
 ## `rain` 0..1. Returns {"lit": [cells], "out": [cells burnt out], "regrown": [cells]}.
 func step(dt: float, wind: Vector2, rain: float, now: float, rng: RandomNumberGenerator) -> Dictionary:
@@ -92,16 +115,23 @@ func step(dt: float, wind: Vector2, rain: float, now: float, rng: RandomNumberGe
 			if not can_burn(next):
 				continue
 			var along := Vector2(offset).normalized().dot(wind_dir)
-			var lean := maxf(0.08, 1.0 + along * wind_push * 1.6)
+			var lean := maxf(0.08, 1.0 + along * wind_push * 1.1)
 			var diagonal := 0.7 if offset.x != 0 and offset.y != 0 else 1.0
-			var chance := SPREAD_RATE * fuel(next) * lean * diagonal * damp * dt
-			if rng.randf() < chance and ignite(next):
+			var soaked: float = heat.get(next, 0.0) + SPREAD_RATE * fuel(next) * lean * diagonal * damp * dt
+			heat[next] = soaked
+			if soaked >= 1.0 + CATCH_JITTER * (_jitter(next) - 0.5) and ignite(next):
+				heat.erase(next)
 				lit.append(next)
 	for cell: Vector2i in burnt.keys():
 		if now >= burnt[cell]:
 			burnt.erase(cell)
 			regrown.append(cell)
 	return {"lit": lit, "out": out, "regrown": regrown}
+
+
+## The same small offset for a cell every time, 0..1.
+static func _jitter(cell: Vector2i) -> float:
+	return float(absi(hash(cell)) % 1000) / 1000.0
 
 
 ## Times saved relative to `now`, so they survive a new clock.
