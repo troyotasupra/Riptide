@@ -32,28 +32,72 @@ static func tracer(from: Vector3, to: Vector3) -> void:
 
 
 ## The flash at the muzzle. `strength` fades with a suppressor fitted.
+## A hot core with a few flame spikes thrown forward down the barrel's line,
+## a different star every shot, and a quick light.
 static func muzzle_flash(at: Vector3, direction: Vector3, strength: float) -> void:
 	var world := _world()
 	if world == null or strength <= 0.05:
 		return
-	var flash := MeshInstance3D.new()
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.12 * strength
-	mesh.height = 0.24 * strength
-	mesh.radial_segments = 8
-	mesh.rings = 4
-	flash.mesh = mesh
-	flash.material_override = _glow(Color(1.0, 0.82, 0.45), 4.0)
-	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var forward := direction.normalized()
+	var flash := Node3D.new()
 	world.add_child(flash)
-	flash.global_position = at + direction.normalized() * 0.12
-	flash.scale = Vector3(1.0, 1.0, 2.2)
+	var up := Vector3.UP if absf(forward.dot(Vector3.UP)) < 0.95 else Vector3.RIGHT
+	flash.global_transform = Transform3D(Basis.looking_at(forward, up), at)
+	var hot := _glow(Color(1.0, 0.9, 0.62), 5.0)
+	var core := MeshInstance3D.new()
+	core.mesh = _flash_core()
+	core.material_override = hot
+	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	core.scale = Vector3(1.0, 1.0, 1.6) * strength
+	core.position = Vector3(0.0, 0.0, -0.03 * strength)
+	flash.add_child(core)
+	var spin := randf() * TAU
+	for i in 5:
+		var spike := MeshInstance3D.new()
+		spike.mesh = _flash_spike()
+		spike.material_override = hot
+		spike.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# The spike's cone points along its +Y; lay it forward (-Z) and splay it out.
+		var around := spin + i * TAU / 5.0 + randf_range(-0.3, 0.3)
+		var splay := 0.35 if i > 0 else 0.0
+		spike.transform = Transform3D(Basis(Vector3.FORWARD, around) * Basis(Vector3.RIGHT, -PI / 2.0 + splay), Vector3.ZERO)
+		spike.scale = Vector3.ONE * strength * randf_range(0.7, 1.15) * (1.4 if i == 0 else 1.0)
+		# The cone is centred on its middle: slide it out so its base sits at the muzzle.
+		spike.position = spike.basis * Vector3(0.0, 0.055, 0.0)
+		flash.add_child(spike)
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.85, 0.55)
-	light.light_energy = 3.5 * strength
-	light.omni_range = 6.0
+	light.light_energy = 2.2 * strength
+	light.omni_range = 5.0
+	light.position = Vector3(0.0, 0.0, -0.1)
 	flash.add_child(light)
 	_forget(flash, FLASH_SECONDS)
+
+
+static var _core_mesh: SphereMesh
+static var _spike_mesh: CylinderMesh
+
+
+static func _flash_core() -> SphereMesh:
+	if _core_mesh == null:
+		_core_mesh = SphereMesh.new()
+		_core_mesh.radius = 0.028
+		_core_mesh.height = 0.056
+		_core_mesh.radial_segments = 8
+		_core_mesh.rings = 4
+	return _core_mesh
+
+
+## A thin cone, 11 cm long, centred on its middle.
+static func _flash_spike() -> CylinderMesh:
+	if _spike_mesh == null:
+		_spike_mesh = CylinderMesh.new()
+		_spike_mesh.top_radius = 0.0
+		_spike_mesh.bottom_radius = 0.016
+		_spike_mesh.height = 0.11
+		_spike_mesh.radial_segments = 5
+		_spike_mesh.rings = 1
+	return _spike_mesh
 
 
 ## Where the round landed: blood, a splash, or a puff of dirt.

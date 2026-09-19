@@ -12,7 +12,8 @@ func test_every_gun_is_whole() -> void:
 		check(Weapons.CALIBERS.has(gun.caliber), "%s has a real calibre" % id)
 		check(gun.mag > 0 and gun.damage > 0.0 and gun.velocity > 0.0, "%s shoots something" % id)
 		check(not Array(gun.modes).is_empty(), "%s has a fire mode" % id)
-		check(Array(gun.slots).has("optic"), "%s takes an optic" % id)
+		# Every gun can be sighted: an optic slot, or a scope built in.
+		check(Array(gun.slots).has("optic") or float(gun.get("zoom", 1.0)) > 1.0, "%s can take or has an optic" % id)
 	check(Weapons.ammo_item("m4") == "ammo_556" and Weapons.ammo_item("m1911") == "ammo_45", "each gun eats its own rounds")
 	check(Weapons.manual_action("intervention") and Weapons.manual_action("mossberg"), "the bolt gun and the pump are worked by hand")
 	check(not Weapons.manual_action("uzi"), "the Uzi works its own action")
@@ -85,7 +86,7 @@ func test_recoil_climbs_and_settles() -> void:
 
 
 func test_sights_wander_less_when_you_hold_your_breath() -> void:
-	var gun := Math.stats("intervention", {"optic": "sniper_scope"})
+	var gun := Math.stats("intervention")
 	var loose := 0.0
 	var held := 0.0
 	for i in 40:

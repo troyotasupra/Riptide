@@ -21,13 +21,14 @@ const GUN_WOOD := Color(0.34, 0.21, 0.12)
 
 
 ## Guns come from the CC0 model pack (assets/models/guns) when it's there:
-## file, real length (m), which way the barrel points in the file, where the grip is.
+## file, real length (m), which way the barrel points in the file, where the grip is,
+## and where the left hand holds the handguard (0 = grip, 1 = muzzle).
 const GUN_MODELS := {
-	"m1911": ["guns/pistol.glb", 0.216, 1.0, 0.2],
-	"uzi": ["guns/smg.glb", 0.47, 1.0, 0.42],
-	"m4": ["guns/assault_rifle.glb", 0.84, 1.0, 0.33],
-	"mossberg": ["guns/shotgun.glb", 1.0, 1.0, 0.3],
-	"intervention": ["guns/sniper.glb", 1.27, 1.0, 0.3],
+	"m1911": ["guns/pistol.glb", 0.216, 1.0, 0.2, 0.3],
+	"uzi": ["guns/smg.glb", 0.47, 1.0, 0.42, 0.35],
+	"m4": ["guns/assault_rifle.glb", 0.84, 1.0, 0.33, 0.4],
+	"mossberg": ["guns/shotgun.glb", 1.0, 1.0, 0.3, 0.45],
+	"intervention": ["guns/sniper.glb", 1.27, 1.0, 0.3, 0.3],
 }
 
 
@@ -40,7 +41,7 @@ static func build(id: String) -> Node3D:
 	if GUN_MODELS.has(id) and ModelLib.exists(GUN_MODELS[id][0]):
 		var spec: Array = GUN_MODELS[id]
 		var anchors := {}
-		var gun := ModelLib.gun(spec[0], spec[1], spec[2], spec[3], anchors)
+		var gun := ModelLib.gun(spec[0], spec[1], spec[2], spec[3], anchors, spec[4])
 		gun.name = "Item_" + id
 		for key: String in anchors:
 			gun.set_meta(key, anchors[key])

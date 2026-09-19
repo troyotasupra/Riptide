@@ -443,11 +443,15 @@ func _process(delta: float) -> void:
 		# looking around responds every frame.
 		var view := Basis(Vector3.UP, yaw + aim_offset.x) * Basis(Vector3.RIGHT, clampf(pitch + aim_offset.y, -1.55, 1.55))
 		camera.global_transform = Transform3D(base.basis * view, world.origin + base.basis * Vector3(0.0, _eye_height, 0.0))
-		camera.fov = Settings.fov
+		# Sighted in, the gun narrows the view (a scope does its own zoom in ScopeView).
+		camera.fov = aim_fov if aim_fov > 0.0 else Settings.fov
 		_torch_light.visible = ItemTable.get_item(held_id).get("tool", "") == "torch"
 		var skin: Color = AppearanceTable.SKIN[int(AppearanceTable.sanitize(look).skin)]
 		view_model.refresh("oar" if paddling else held_id, worn.get("torso", ""), skin, GameState.crew_color)
 		view_model.rowing = rowing if paddling else 0.0
+		view_model.aim = gun.aim if gun != null else 0.0
+		view_model.reload = gun.reload_progress() if gun != null else -1.0
+		view_model.clearing = gun != null and gun.clearing_jam()
 		view_model.animate(delta, Vector2(velocity.x, velocity.z).length())
 		_update_ambience(world.origin)
 	else:

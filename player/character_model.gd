@@ -649,6 +649,13 @@ func _rebuild_held() -> void:
 	(_arms.r.hand as Node3D).add_child(_held_root)
 
 
+## Where the muzzle of the gun in this character's hand is, or Vector3.INF.
+func held_muzzle() -> Vector3:
+	if _held_root == null or not is_instance_valid(_held_root) or not _held_root.is_inside_tree() or not _held_root.has_meta("muzzle"):
+		return Vector3.INF
+	return _held_root.global_transform * ItemModels.anchor(_held_root, "muzzle")
+
+
 # --- animation --------------------------------------------------------------------
 
 ## speed: horizontal m/s · head_pitch: radians, + looks up.

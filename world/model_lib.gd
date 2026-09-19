@@ -6,7 +6,10 @@ extends RefCounted
 ## into parts, bakes each part's own transform into its mesh, and re-centres it.
 ##
 ##   part_count(path)            how many separate models a file holds
-##   part(path, index)           one of them: base on the ground, centred, in metres
+##   part(path, index)           one of them: base on the ground, centred, in metres,
+##                               one MeshInstance3D per material, named after it
+##                               ("wood", "leaves"...), so trunks and leaves can differ
+##   surface_top / base_radius   where a trunk ends, and how thick it is at the ground
 ##   gun(path, length, muzzle)   a gun laid out the way ItemModels expects:
 ##                               barrel along +Y, sights up +Z, grip at the origin
 
@@ -33,14 +36,104 @@ static func part(path: String, index: int, height: float = 0.0) -> Node3D:
 	if parts.is_empty():
 		return root
 	var entry: Dictionary = parts[posmod(index, parts.size())]
+	var xf := _placement(entry, height)
+	for surface: Dictionary in _split(entry):
+		var instance := MeshInstance3D.new()
+		instance.name = surface.name
+		instance.mesh = surface.mesh
+		instance.transform = xf
+		root.add_child(instance)
+	return root
+
+
+## The MeshInstance3Ds of a part() whose material name contains any of `words`.
+static func surfaces_named(model: Node3D, words: Array) -> Array[MeshInstance3D]:
+	var found: Array[MeshInstance3D] = []
+	for child in model.find_children("*", "MeshInstance3D", true, false):
+		for word: String in words:
+			if String(child.name).contains(word):
+				found.append(child)
+				break
+	return found
+
+
+## The top of the surfaces named with `words` (say a palm's trunk), in part() space:
+## the middle of the highest few vertices, where a crown or coconuts belong.
+static func surface_top(path: String, index: int, height: float, words: Array) -> Vector3:
+	var points := _surface_points(path, index, height, words)
+	if points.is_empty():
+		return Vector3(0.0, height, 0.0)
+	var top := -INF
+	for p in points:
+		top = maxf(top, p.y)
+	var sum := Vector3.ZERO
+	var count := 0
+	for p in points:
+		if p.y > top - 0.25:
+			sum += p
+			count += 1
+	return sum / count
+
+
+## How far out from the middle the named surfaces reach between `low` and `up`
+## metres above the ground (above the root flare, the trunk's own thickness).
+static func base_radius(path: String, index: int, height: float, words: Array, up: float = 0.4, low: float = 0.0) -> float:
+	var reach := 0.0
+	for p in _surface_points(path, index, height, words):
+		if p.y < up and p.y >= low:
+			reach = maxf(reach, Vector2(p.x, p.z).length())
+	return reach if reach > 0.0 else 0.25
+
+
+static var _points := {}
+
+
+static func _surface_points(path: String, index: int, height: float, words: Array) -> PackedVector3Array:
+	var key := "%s_%d_%.2f_%s" % [path, index, height, ",".join(words)]
+	if not _points.has(key):
+		_points[key] = _gather_points(path, index, height, words)
+	return _points[key]
+
+
+static func _gather_points(path: String, index: int, height: float, words: Array) -> PackedVector3Array:
+	var parts := _load(path)
+	var out := PackedVector3Array()
+	if parts.is_empty():
+		return out
+	var entry: Dictionary = parts[posmod(index, parts.size())]
+	var xf := _placement(entry, height)
+	for surface: Dictionary in _split(entry):
+		var named := false
+		for word: String in words:
+			named = named or String(surface.name).contains(word)
+		if named:
+			for v: Vector3 in surface.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]:
+				out.append(xf * v)
+	return out
+
+
+## Puts a part's base on the ground, centred, `height` tall (0 keeps its size).
+static func _placement(entry: Dictionary, height: float) -> Transform3D:
 	var box: AABB = entry.aabb
 	var scale := height / box.size.y if height > 0.0 else 1.0
-	var instance := MeshInstance3D.new()
-	instance.mesh = entry.mesh
-	instance.scale = Vector3.ONE * scale
-	instance.position = -Vector3(box.get_center().x, box.position.y, box.get_center().z) * scale
-	root.add_child(instance)
-	return root
+	return Transform3D(Basis.from_scale(Vector3.ONE * scale), -Vector3(box.get_center().x, box.position.y, box.get_center().z) * scale)
+
+
+## A part's mesh cut into one mesh per surface, named after its material, cached.
+static func _split(entry: Dictionary) -> Array:
+	if entry.has("split"):
+		return entry.split
+	var out: Array = []
+	var mesh: ArrayMesh = entry.mesh
+	for i in mesh.get_surface_count():
+		var single := ArrayMesh.new()
+		single.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(i))
+		var material := mesh.surface_get_material(i)
+		single.surface_set_material(0, material)
+		var name := material.resource_name.to_lower() if material != null and not material.resource_name.is_empty() else "surface%d" % i
+		out.append({"mesh": single, "name": name})
+	entry["split"] = out
+	return out
 
 
 ## The part's size in the file (before any `height` rescale).
@@ -53,15 +146,16 @@ static func part_size(path: String, index: int) -> Vector3:
 ## middle of its grip at the origin. The files lie along X; `muzzle` is +1 or -1
 ## for which way the barrel points in the file. `grip` is how far along the gun
 ## (0 = butt, 1 = muzzle) the hand holds it, and returns anchors in `anchors`:
-## "muzzle", "rail" (top of the receiver), "grip".
-static func gun(path: String, length: float, muzzle: float, grip: float, anchors: Dictionary = {}) -> Node3D:
-	var key := "%s_%.3f_%d_%.3f" % [path, length, int(muzzle), grip]
+## "muzzle", "rail" (top of the receiver), "grip", and "fore": the underside of the
+## handguard, `fore` of the way from the grip to the muzzle, where a left hand holds it.
+static func gun(path: String, length: float, muzzle: float, grip: float, anchors: Dictionary = {}, fore: float = 0.5) -> Node3D:
+	var key := "%s_%.3f_%d_%.3f_%.3f" % [path, length, int(muzzle), grip, fore]
 	var root := Node3D.new()
 	var parts := _load(path)
 	if parts.is_empty():
 		return root
 	if not _guns.has(key):
-		_guns[key] = _layout_gun(parts[0], length, muzzle, grip)
+		_guns[key] = _layout_gun(parts[0], length, muzzle, grip, fore)
 	var laid: Dictionary = _guns[key]
 	var instance := MeshInstance3D.new()
 	instance.mesh = parts[0].mesh
@@ -72,7 +166,7 @@ static func gun(path: String, length: float, muzzle: float, grip: float, anchors
 	return root
 
 
-static func _layout_gun(entry: Dictionary, length: float, muzzle: float, grip: float) -> Dictionary:
+static func _layout_gun(entry: Dictionary, length: float, muzzle: float, grip: float, fore: float) -> Dictionary:
 	var mesh: ArrayMesh = entry.mesh
 	var box: AABB = entry.aabb
 	var s := length / box.size.x
@@ -102,6 +196,16 @@ static func _layout_gun(entry: Dictionary, length: float, muzzle: float, grip: f
 		grip_low = box.position.y
 		grip_high = box.end.y
 	muzzle_y = muzzle_y / muzzle_count if muzzle_count > 0 else box.get_center().y
+	# The handguard's underside: the lowest geometry there that is still close under
+	# the barrel, so bipod legs and magazines hanging lower don't count.
+	var fore_x := lerpf(grip_x, front, fore)
+	var fore_low := INF
+	var reach := 0.09 / s
+	for v in vertices:
+		if absf(v.x - fore_x) < box.size.x * 0.03 and v.y > muzzle_y - reach:
+			fore_low = minf(fore_low, v.y)
+	if fore_low == INF:
+		fore_low = muzzle_y - 0.03 / s
 	# Hold it a third of the way up the grip.
 	var origin_file := Vector3(grip_x, lerpf(grip_low, grip_high, 0.3), box.get_center().z)
 	var xf := Transform3D(basis, -(basis * origin_file))
@@ -112,6 +216,7 @@ static func _layout_gun(entry: Dictionary, length: float, muzzle: float, grip: f
 			"muzzle": to_ours.call(Vector3(front, muzzle_y, box.get_center().z)),
 			"rail": to_ours.call(Vector3(lerpf(butt, front, 0.45), top, box.get_center().z)),
 			"grip": Vector3.ZERO,
+			"fore": to_ours.call(Vector3(fore_x, fore_low, box.get_center().z)),
 		},
 	}
 
@@ -174,6 +279,10 @@ static func _bake(mesh: Mesh, xf: Transform3D) -> ArrayMesh:
 	return baked
 
 
+## Pack materials pulled toward the island's palette (multiplied into albedo).
+const TINTS := {"bush_leaves": Color(0.62, 0.74, 0.5)}
+
+
 ## The packs' flat colours are plastic-shiny; give them a matte, painted look.
 static func _tuned(material: Material) -> Material:
 	var standard := material as StandardMaterial3D
@@ -190,4 +299,13 @@ static func _tuned(material: Material) -> Material:
 		copy.metallic_specular = 0.35
 	if copy.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED or copy.albedo_texture != null:
 		copy.cull_mode = BaseMaterial3D.CULL_DISABLED
+	if TINTS.has(name):
+		copy.albedo_color *= TINTS[name]
+	# Leaf and flower cards: cut out cleanly, no sorting, lit from both sides.
+	for word: String in ["leaves", "leaf", "flower", "petal"]:
+		if name.contains(word) and copy.albedo_texture != null:
+			copy.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+			copy.alpha_scissor_threshold = 0.45
+			copy.cull_mode = BaseMaterial3D.CULL_DISABLED
+			break
 	return copy

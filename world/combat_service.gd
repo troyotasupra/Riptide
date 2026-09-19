@@ -110,8 +110,8 @@ func request_shot(direction: Vector3, aim: float) -> void:
 	while _bullets.size() > MAX_BULLETS:
 		_bullets.pop_front()
 	var quiet := float(gun.quiet)
-	_report_shot(muzzle, look, String(gun.id), quiet)
-	Net.send_to_ready(self, "_report_shot", [muzzle, look, String(gun.id), quiet])
+	_report_shot(muzzle, look, String(gun.id), quiet, peer)
+	Net.send_to_ready(self, "_report_shot", [muzzle, look, String(gun.id), quiet, peer])
 	s.push_inventory()
 
 
@@ -353,13 +353,29 @@ func _splash(at: Vector3) -> void:
 # --- what everyone sees and hears ---------------------------------------------------
 
 @rpc("authority", "call_remote", "reliable")
-func _report_shot(muzzle: Vector3, direction: Vector3, weapon_id: String, quiet: float) -> void:
+func _report_shot(muzzle: Vector3, direction: Vector3, weapon_id: String, quiet: float, shooter: int = 0) -> void:
+	# The bullet leaves from the eye line, but what you see comes out of the gun:
+	# your own view-model muzzle, or the muzzle of the gun in a crewmate's hands.
+	var shown := _visible_muzzle(shooter)
+	if shown != Vector3.INF:
+		muzzle = shown
 	var loud := -4.0 - 16.0 * clampf(quiet, 0.0, 1.0)
 	Sound.play_at("tree_fall", muzzle, loud, 0.08)
 	if quiet > 0.4:
 		Sound.play_at("click", muzzle, -10.0, 0.2)
 	Effects.tracer(muzzle, muzzle + direction.normalized() * TRACER_LENGTH)
 	Effects.muzzle_flash(muzzle, direction.normalized(), 1.0 - clampf(quiet, 0.0, 0.8))
+
+
+func _visible_muzzle(shooter: int) -> Vector3:
+	var player := _player(shooter) if shooter != 0 and GameState.world != null else null
+	if player == null:
+		return Vector3.INF
+	if player == GameState.local_player and player.view_model != null:
+		return player.view_model.muzzle_point()
+	if player.model != null:
+		return player.model.held_muzzle()
+	return Vector3.INF
 
 
 @rpc("authority", "call_remote", "reliable")

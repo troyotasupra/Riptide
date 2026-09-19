@@ -22,6 +22,7 @@ var reloading := false
 
 var _recovery := Vector2.ZERO
 var _reload_left := 0.0
+var _reload_seconds := 0.0
 var _clearing := false
 var _shots := 0
 var _since_shot := 99.0
@@ -160,6 +161,7 @@ func _request_reload() -> void:
 ## The host tells us a reload (or clearing a jam) has started.
 func on_reload_started(seconds: float, clearing: bool) -> void:
 	_reload_left = seconds
+	_reload_seconds = maxf(0.01, seconds)
 	reloading = true
 	_clearing = clearing
 	Sound.play("cloth" if not clearing else "latch", -8.0)
@@ -172,6 +174,15 @@ func _reset() -> void:
 	if player != null:
 		player.aim_offset = Vector2.ZERO
 		player.aim_fov = 0.0
+
+
+## How far through the reload (0..1), or -1 when not reloading.
+func reload_progress() -> float:
+	return 1.0 - _reload_left / _reload_seconds if reloading and _reload_seconds > 0.0 else -1.0
+
+
+func clearing_jam() -> bool:
+	return reloading and _clearing
 
 
 ## What the HUD shows about the gun in hand ("" when you aren't holding one).

@@ -18,7 +18,7 @@ const ATTACHMENTS := {
 	"prism_3x": {"name": "3× prism", "slot": "optic", "zoom": 3.0, "ads": 1.15, "spread": 0.75, "sway": 1.1, "weight": 0.3},
 	"lpvo_6x": {"name": "1–6× LPVO", "slot": "optic", "zoom": 6.0, "ads": 1.25, "spread": 0.7, "sway": 1.15, "weight": 0.42},
 	"sniper_scope": {"name": "Sniper scope", "slot": "optic", "zoom": 10.0, "ads": 1.4, "spread": 0.6, "sway": 1.25,
-		"fits": ["intervention", "m4"], "weight": 0.6},
+		"fits": ["m4"], "weight": 0.6},
 	# --- muzzle ---
 	"compensator": {"name": "Compensator", "slot": "muzzle", "recoil": 0.78, "weight": 0.1},
 	"muzzle_brake": {"name": "Muzzle brake", "slot": "muzzle", "recoil": 0.65, "quiet": -0.25, "weight": 0.16},
