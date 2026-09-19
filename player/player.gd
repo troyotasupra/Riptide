@@ -403,6 +403,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_press_interact("interact")
 	elif event.is_action_pressed("primary"):
 		_press_primary()
+	elif event.is_action_pressed("rotate") and focus_id.begins_with("bag:"):
+		# R on a bag picks the whole thing up.
+		GameState.world.camp.rpc_id(1, "request_take_bag", focus_id.substr(4))
 	elif event.is_action_pressed("rotate") and focus_id == "shack:door":
 		# R at the shack's door works the bolt (from inside).
 		GameState.world.rpc_id(1, "request_interact", "shack:door_bolt", survivor.selected_slot)

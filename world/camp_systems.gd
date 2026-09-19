@@ -1224,6 +1224,50 @@ func _send_container(id: String, peer: int, opening: bool) -> void:
 
 
 ## Host: an emptied bag vanishes for everyone, closing it on anyone looking inside.
+## A crew member picks up a whole bag (R on it): it becomes one item in their pack
+## that holds everything, and weighs what everything in it weighs.
+@rpc("any_peer", "call_local", "reliable")
+func request_take_bag(id: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var player := _sender_player()
+	if player == null or player.survivor == null or not bags.has(id) or not containers.has("bag:" + id):
+		return
+	var at: Vector3 = bags[id].pos
+	if player.world_transform().origin.distance_to(at) > CONTAINER_RANGE:
+		return
+	var grid: ItemGrid = containers["bag:" + id]
+	var stack := {"id": "loot_bag", "count": 1, "spoils_at": 0.0,
+		"contents": grid.to_dict(), "title": String(bags[id].title), "load": grid.total_weight()}
+	if player.survivor.inventory.add_stack(stack) > 0:
+		player.survivor.notify("No room in your pack for the whole bag.")
+		return
+	# Close it for anyone who had it open, then it's gone from the ground.
+	grid.items.clear()
+	_remove_bag_if_empty("bag:" + id)
+	world.sfx_at("cloth", at)
+	player.survivor.notify("Picked up %s (%.1f kg)" % [String(stack.title), float(stack.load) + 0.8])
+	player.survivor.push_inventory()
+
+
+## Host: a carried bag is set down where its owner stands, just as it was.
+func set_down_bag(survivor: Survivor, uid: int) -> void:
+	var stack := survivor.inventory.get_stack(uid)
+	if stack.is_empty() or stack.id != "loot_bag":
+		return
+	survivor.inventory.take(uid, 1)
+	var id := "b%d" % _next_bag
+	_next_bag += 1
+	var at := survivor.player.world_transform().origin + Vector3.UP * 0.05
+	var title := String(stack.get("title", "a bag"))
+	var grid := _make_container("bag:" + id, BAG_SIZE, title)
+	grid.from_dict(stack.get("contents", {}))
+	_spawn_bag(id, at, title)
+	Net.send_to_ready(self, "_spawn_bag", [id, at, title])
+	world.sfx_at("drop", at)
+	survivor.push_inventory()
+
+
 func _remove_bag_if_empty(id: String) -> void:
 	if not id.begins_with("bag:") or not containers.has(id) or not (containers[id] as ItemGrid).is_empty():
 		return
@@ -1413,27 +1457,20 @@ func request_wear_item(source_container: String, uid: int) -> void:
 	if player == null:
 		return
 	if not source_container.is_empty():
-		# Pull it into the pack first so wearing works the same from anywhere.
-		var source := _source_for(player, source_container)
+		# Straight out of the chest, and what you had on goes where it came from.
+		var source: ItemGrid = _source_for(player, source_container) as ItemGrid
 		if source == null:
 			return
-		var stack: Dictionary = source.take(uid)
-		if stack.is_empty() or ItemTable.category(stack.id) != "wearable":
-			if not stack.is_empty():
-				source.add_stack(stack)
+		var item := source.get_item(uid)
+		if item.is_empty() or ItemTable.category(item.id) != "wearable":
 			return
-		var pack := player.survivor.inventory
-		var index := pack.hotbar.find(null)
-		if index >= 0:
-			pack.hotbar[index] = stack
-		elif pack.add_to_storage(stack) > 0:
-			source.add_stack(stack)
-			player.survivor.notify("Make some room in your pack to put that on.")
-			_after_item_change(player, [source_container])
-			return
-		uid = int(pack.find_first(stack.id).get("uid", 0)) if pack.get_stack(int(stack.uid)).is_empty() else int(stack.uid)
+		var spot := {"x": int(item.get("x", -1)), "y": int(item.get("y", -1)), "rot": bool(item.get("rot", false))}
+		var piece := source.take(uid, 1)
+		player.survivor.wear_piece(piece, func(previous: Dictionary) -> bool:
+			return source.place(previous, spot.x, spot.y, spot.rot) or source.add_stack(previous) == 0)
 		_push_container(source_container)
-	player.survivor.wear(uid)
+	else:
+		player.survivor.wear(uid)
 	_after_item_change(player, [source_container])
 
 

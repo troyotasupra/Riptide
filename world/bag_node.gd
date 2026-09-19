@@ -10,7 +10,7 @@ func setup(id: String, title: String, pos: Vector3) -> void:
 	bag_id = id
 	name = "Bag_" + id
 	interact_id = "bag:" + id
-	prompt = "Search %s" % title
+	prompt = "Search %s   ·   %s pick it all up" % [title, Controls.tag("rotate")]
 	position = pos
 	rotation.y = float(hash(id) % 628) / 100.0
 	collision_layer = Layers.INTERACT
@@ -32,10 +32,27 @@ func setup(id: String, title: String, pos: Vector3) -> void:
 	duffel.rotation.z = PI / 2.0
 	duffel.position.y = 0.14
 	add_child(duffel)
-	var strap := BoxMesh.new()
-	strap.size = Vector3(0.05, 0.34, 0.34)
-	var strap_instance := MeshInstance3D.new()
-	strap_instance.mesh = strap
-	strap_instance.material_override = Props.material("bag_strap", Color(0.12, 0.12, 0.12))
-	strap_instance.position.y = 0.15
-	add_child(strap_instance)
+	var band := TorusMesh.new()
+	band.inner_radius = 0.158
+	band.outer_radius = 0.175
+	band.rings = 16
+	band.ring_segments = 6
+	for x: float in [-0.14, 0.14]:
+		var strap := MeshInstance3D.new()
+		strap.mesh = band
+		strap.material_override = Props.material("bag_strap", Color(0.12, 0.12, 0.12))
+		strap.position = Vector3(x, 0.14, 0.0)
+		strap.rotation.z = PI / 2.0
+		add_child(strap)
+	var handle := TorusMesh.new()
+	handle.inner_radius = 0.07
+	handle.outer_radius = 0.085
+	handle.rings = 12
+	handle.ring_segments = 5
+	var grip := MeshInstance3D.new()
+	grip.mesh = handle
+	grip.material_override = Props.material("bag_strap", Color(0.12, 0.12, 0.12))
+	grip.position = Vector3(0.0, 0.3, 0.0)
+	grip.rotation.x = PI / 2.0
+	grip.scale = Vector3(1.0, 1.0, 0.6)
+	add_child(grip)

@@ -35,6 +35,8 @@ func _run() -> void:
 			await _walk_loop()
 		"guns":
 			await _gun_loop()
+		"gear":
+			await _gear_loop()
 		"dock":
 			_dock_view()
 			return  # stays up for a --shot screenshot
@@ -838,6 +840,49 @@ func _gun_loop() -> void:
 	await _wait(1.0)
 	_check(int(pistol.get("ammo", 0)) == 0, "with no .45 in the pack there's nothing to load")
 	player.set_flying(false)
+
+
+## Gear: a swap puts the old piece where the new one was; a canteen is four
+## drinks; a whole bag can be picked up (weight and all) and set down again.
+func _gear_loop() -> void:
+	var world := GameState.world
+	var camp: CampSystems = world.camp
+	var player := GameState.local_player as Player
+	var s := player.survivor
+	var pack := s.inventory
+	s.equipment.wear({"id": "sun_hat", "count": 1, "spoils_at": 0.0})
+	s.refresh_storage()
+	pack.hotbar[3] = null
+	pack.add("wool_beanie", 1)
+	_to_hotbar(pack, "wool_beanie", 3)
+	s.wear(_uid(pack, "wool_beanie"))
+	_check(s.equipment.ids().get("head", "") == "wool_beanie", "put the beanie on")
+	_check(pack.hotbar[3] != null and pack.hotbar[3].id == "sun_hat", "and the sun hat went into the hotbar slot the beanie came from")
+
+	pack.add("canteen", 1)
+	var canteen: Dictionary = pack.find_first("canteen")
+	canteen.id = "canteen_clean"
+	canteen["sips"] = 4
+	s.survival.thirst = 0.0
+	for i in 3:
+		s.use_item(int(canteen.uid))
+	_check(pack.find_first("canteen_clean").get("sips", 0) == 1, "three drinks leave one in the canteen")
+	s.use_item(int(canteen.uid))
+	_check(pack.count_of("canteen") == 1 and pack.count_of("canteen_clean") == 0, "the fourth empties it")
+	_check(s.survival.thirst >= 99.0, "and four drinks take you from parched to full (%.0f)" % s.survival.thirst)
+
+	var here := player.world_transform().origin + Vector3(1.0, 0.0, 0.0)
+	camp.drop_loot(here, [{"id": "stone", "count": 10, "spoils_at": 0.0}, {"id": "log", "count": 2, "spoils_at": 0.0}], "Test bag")
+	var bag_id: String = camp.bags.keys()[camp.bags.size() - 1]
+	var before := pack.total_weight()
+	camp.request_take_bag(bag_id)
+	_check(not camp.bags.has(bag_id) and pack.count_of("loot_bag") == 1, "picked the whole bag up")
+	_check(pack.total_weight() > before + 5.0, "and carry its weight (%.1f kg more)" % (pack.total_weight() - before))
+	var count := camp.bags.size()
+	s.use_item(_uid(pack, "loot_bag"))
+	var set_down: String = camp.bags.keys()[camp.bags.size() - 1]
+	_check(camp.bags.size() == count + 1 and pack.count_of("loot_bag") == 0, "set it down again")
+	_check((camp.containers["bag:" + set_down] as ItemGrid).count_of("stone") == 10, "with everything still in it")
 
 
 ## Getting about on foot: in through the shack door, over a low ledge, and stopped

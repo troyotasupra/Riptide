@@ -253,7 +253,7 @@ func use_item(uid: int) -> void:
 			book_requested.emit()
 		"wearable":
 			Sound.play("cloth")
-		"food", "drink", "medical", "page", "chart", "prosthetic":
+		"food", "drink", "medical", "page", "chart", "prosthetic", "bag":
 			pass
 		_:
 			if item.has("hint"):
@@ -330,6 +330,8 @@ func _request_use(uid: int) -> void:
 			camp().learn(RecipeTable.STARTING, self)
 		"chart":
 			camp().read_chart(self)
+		"bag":
+			camp().set_down_bag(self, uid)
 		"wearable":
 			wear(uid)
 		"prosthetic":
@@ -420,18 +422,37 @@ func _consume(uid: int, item: Dictionary) -> void:
 
 
 ## Host: puts on carried item `uid`; what it replaces goes into the pack.
+## Host: puts on carried item `uid`; what it replaces takes the slot it came from.
 func wear(uid: int) -> bool:
 	var stack := inventory.get_stack(uid)
 	if stack.is_empty() or ItemTable.category(stack.id) != "wearable":
 		return false
+	var where := inventory.locate(uid)
+	var spot := {"x": int(stack.get("x", -1)), "y": int(stack.get("y", -1)), "rot": bool(stack.get("rot", false))}
 	var piece := inventory.take(uid, 1)
+	wear_piece(piece, func(previous: Dictionary) -> bool:
+		if where.get("area", "") == "hotbar":
+			if inventory.hotbar[where.index] == null:
+				inventory.hotbar[where.index] = previous
+				return true
+			return false
+		var grid: ItemGrid = inventory.grids.get(where.get("area", ""))
+		return grid != null and spot.x >= 0 and grid.place(previous, spot.x, spot.y, spot.rot))
+	return true
+
+
+## Host: puts `piece` on. Whatever it replaces goes back via `put_previous`
+## (func(stack) -> bool, true if it found a place: the slot the new piece left),
+## else into the pack, else onto the ground.
+func wear_piece(piece: Dictionary, put_previous: Callable) -> void:
 	var previous := equipment.wear(piece)
 	refresh_storage()
-	if not previous.is_empty() and inventory.add_stack(previous) > 0:
-		_drop_overflow([previous])
+	if not previous.is_empty():
+		var placed := put_previous.is_valid() and bool(put_previous.call(previous))
+		if not placed and inventory.add_stack(previous) > 0:
+			_drop_overflow([previous])
 	notify("Now wearing: %s" % ItemTable.display_name(piece.id))
 	push_inventory()
-	return true
 
 
 ## Host: takes off what's in `slot` into the pack (or onto the ground if full).

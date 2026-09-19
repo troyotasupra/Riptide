@@ -59,6 +59,7 @@ const ITEMS := {
 	"driftwood": {"name": "Driftwood", "category": "material", "weight": 1.2, "stack": 10, "fuel": 90.0, "hint": "Wood for crafting (B), or hold it and press F on a fire to burn it."},
 	"log": {"name": "Log", "category": "material", "weight": 2.5, "stack": 5, "fuel": 200.0, "hint": "Wood for crafting (B), or hold it and press F on a fire to burn it."},
 	"rope": {"name": "Rope", "category": "material", "weight": 0.1, "stack": 20, "hint": "Crafting material for tents, racks and tools (B)."},
+	"loot_bag": {"name": "Bag of gear", "category": "bag", "weight": 0.8, "stack": 1, "hint": "A whole bag, picked up as it was: everything in it comes with you, and so does its weight. Use it (or drop it) to set it down and go through it."},
 	"tarp": {"name": "Tarp", "category": "material", "weight": 1.2, "stack": 2, "hint": "Crafting material — a lean-to or a tent (B)."},
 	"paracord": {"name": "Paracord", "category": "material", "weight": 0.3, "stack": 5, "hint": "Crafting material — lash together a lean-to (B)."},
 	"lure": {"name": "Spoon lure", "category": "material", "weight": 0.02, "stack": 10, "hint": "A shiny metal lure: predators go for it, and it isn't used up by a catch — only lost if the line snaps. With the rod selected, right click to put it on."},
@@ -156,6 +157,7 @@ const ITEMS := {
 
 ## Grid footprint [width, height] in inventory cells. Anything missing is 1×1.
 const SIZES := {
+	"loot_bag": [3, 3],
 	"raw_fish": [2, 1], "cooked_fish": [2, 1], "raw_mullet": [2, 1], "raw_snapper": [2, 1], "raw_grouper": [3, 2], "raw_barracuda": [3, 1],
 	"raw_mahi_mahi": [3, 2], "raw_tuna": [2, 4], "fish_steak": [2, 1], "raw_shark_meat": [2, 1], "cooked_shark": [2, 1], "peg_leg": [1, 3], "hook_hand": [1, 2], "canteen_clean": [1, 2], "canteen_dirty": [1, 2], "canteen": [1, 2],
 	"driftwood": [2, 1], "log": [3, 1], "tarp": [2, 2],

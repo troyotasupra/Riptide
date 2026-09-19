@@ -204,7 +204,7 @@ func remove(id: String, count: int) -> int:
 func total_weight() -> float:
 	var weight := 0.0
 	for item: Dictionary in items:
-		weight += float(ItemTable.get_item(item.id).get("weight", 0.0)) * int(item.count)
+		weight += float(ItemTable.get_item(item.id).get("weight", 0.0)) * int(item.count) + float(item.get("load", 0.0))
 	return weight
 
 

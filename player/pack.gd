@@ -243,7 +243,7 @@ func total_weight() -> float:
 	var weight := 0.0
 	for slot in hotbar:
 		if slot != null:
-			weight += float(ItemTable.get_item(slot.id).get("weight", 0.0)) * int(slot.count)
+			weight += float(ItemTable.get_item(slot.id).get("weight", 0.0)) * int(slot.count) + float(slot.get("load", 0.0))
 	for g: ItemGrid in grids.values():
 		weight += g.total_weight()
 	return weight
