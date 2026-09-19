@@ -17,6 +17,8 @@ uniform vec3 c_mid = vec3(0.97, 0.34, 0.03);
 uniform vec3 c_tip = vec3(0.66, 0.08, 0.02);
 
 varying flat vec3 facet;
+// How near this vertex is to the tip of its tongue, 0 at the root.
+varying float v_up;
 
 vec3 ramp(float k) {
 	if (k < 0.12) return mix(c_root, c_low, k / 0.12);
@@ -43,7 +45,15 @@ float top_at(float x, float time, float phase, float tongues) {
 	// Each tongue rises and falls on its own beat.
 	float beat_a = 0.7 + 0.3 * sin(time * 2.2 + phase + floor(x * tongues) * 1.7);
 	float beat_b = 0.65 + 0.35 * sin(time * 1.6 + phase * 2.0 + x * 2.0);
-	float peaks = max(a * beat_a, b * beat_b * 0.85);
+	// Every so often a tongue shoots up and lets go of the body — fire behaving
+	// like burning gas rather than a rippling liquid.
+	float tongue_id = floor(x * tongues) + phase * 3.0;
+	float rate = 0.5;
+	float cycle = time * rate + hash(tongue_id);
+	float burst = step(0.62, hash(tongue_id + floor(cycle) * 7.3));
+	float k = fract(cycle);
+	float spike = burst * smoothstep(0.0, 0.18, k) * smoothstep(1.0, 0.35, k);
+	float peaks = max(max(a * beat_a, b * beat_b * 0.85), spike * (0.9 + 0.7 * a));
 	float body = 0.4 + 0.06 * sin(time * 2.9 + x * 4.0 + phase);
 	float ends = smoothstep(1.05, 0.6, abs(x));
 	return (body + (1.0 - body) * peaks) * mix(0.55, 1.0, ends);
@@ -65,10 +75,14 @@ void vertex() {
 	float ripple = sin(x * 6.0 + time * 1.9 + phase) * 0.06 + sin(t * 3.0 - time * 3.0 + x * 4.0) * 0.04 * t;
 	VERTEX = vec3(x + sway, y, ripple);
 
+	v_up = t;
 	float k = y * 1.12 + (hash(float(VERTEX_ID) + INSTANCE_CUSTOM.x * 97.0) - 0.5) * 0.14 - INSTANCE_CUSTOM.w * 0.04;
 	facet = ramp(clamp(k, 0.0, 1.0));
 }
 
 void fragment() {
 	ALBEDO = facet * boost;
+	// The very tips thin out into nothing, so a lick that shoots up breaks away
+	// instead of standing there as a solid blade.
+	ALPHA = clamp(1.0 - smoothstep(0.72, 1.0, v_up) * 0.85, 0.0, 1.0);
 }

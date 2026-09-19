@@ -12,6 +12,7 @@ extends Node3D
 @export var smoke := true
 
 var _tongues: FlameSheets
+var _bed: MeshInstance3D
 var _embers: GPUParticles3D
 var _smoke: GPUParticles3D
 var _light: OmniLight3D
@@ -22,6 +23,8 @@ static var _puff_texture: Texture2D
 
 
 func _ready() -> void:
+	_bed = _ember_bed()
+	add_child(_bed)
 	_tongues = FlameSheets.new()
 	add_child(_tongues)
 	_tongues.set_sheets(_campfire_sheets())
@@ -46,6 +49,11 @@ func set_intensity(value: float) -> void:
 		return
 	var on := intensity > 0.01
 	_tongues.visible = on
+	if _bed != null:
+		# The coals outlive the flames and fade as the fire dies.
+		_bed.visible = on
+		var coals: StandardMaterial3D = _bed.material_override
+		coals.emission_energy_multiplier = lerpf(0.3, 1.0, intensity)
 	# A fire burning low is a smaller fire, not a thinner one.
 	_tongues.scale = Vector3.ONE * lerpf(0.45, 1.0, intensity)
 	for particles: GPUParticles3D in [_embers, _smoke]:
@@ -56,17 +64,48 @@ func set_intensity(value: float) -> void:
 	set_process(on)
 
 
-## Sheets crossed like a star over the fuel, and a lower ring round the edge:
-## from any side and any height it is one fire.
+## Sheets stood through the fire at every angle and offset — never a neat star,
+## which reads as an X from above — with a lower ring round the edge, so from
+## any side and any height it is one body of fire with the ground hidden.
 func _campfire_sheets() -> Array:
 	var list: Array = []
 	var tall := 0.4 + size * 0.95
-	for i in 4:
-		list.append({"pos": Vector3.ZERO, "yaw": i * PI / 4.0 + 0.2, "width": size * 1.7, "height": tall * (1.0 - i * 0.07), "seed": 5150 + i, "heat": 1.0})
-	for i in 6:
-		var a := i * TAU / 6.0
-		list.append({"pos": Vector3(cos(a), 0.0, sin(a)) * size * 0.45, "yaw": -a + PI / 2.0, "width": size * 0.9, "height": tall * 0.55, "seed": 5160 + i, "heat": 0.6})
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5150
+	for i in 7:
+		# Each sheet is offset off the middle and turned freely, so the sheets
+		# cross all over the fire rather than all through one line.
+		var offset := Vector2.from_angle(rng.randf() * TAU) * size * rng.randf_range(0.0, 0.42)
+		list.append({"pos": Vector3(offset.x, 0.0, offset.y), "yaw": rng.randf() * TAU,
+			"width": size * rng.randf_range(1.25, 1.8), "height": tall * rng.randf_range(0.78, 1.0),
+			"seed": 5150 + i, "heat": 1.0})
+	for i in 8:
+		var a := i * TAU / 8.0 + rng.randf_range(-0.2, 0.2)
+		list.append({"pos": Vector3(cos(a), 0.0, sin(a)) * size * rng.randf_range(0.4, 0.6),
+			"yaw": -a + PI / 2.0 + rng.randf_range(-0.4, 0.4), "width": size * 0.95,
+			"height": tall * rng.randf_range(0.42, 0.62), "seed": 5170 + i, "heat": 0.6})
 	return list
+
+
+## The ember bed: the fire is sitting on coals, so you never see bare ground
+## through the flames, and it glows on after the flames drop.
+func _ember_bed() -> MeshInstance3D:
+	var bed := MeshInstance3D.new()
+	var disc := CylinderMesh.new()
+	disc.top_radius = size * 0.62
+	disc.bottom_radius = size * 0.78
+	disc.height = 0.06
+	disc.radial_segments = 11
+	bed.mesh = disc
+	var coals := StandardMaterial3D.new()
+	coals.albedo_color = Color(0.14, 0.07, 0.05)
+	coals.emission_enabled = true
+	coals.emission = Color(1.0, 0.30, 0.04)
+	coals.emission_energy_multiplier = 0.9
+	coals.roughness = 0.95
+	bed.material_override = coals
+	bed.position.y = 0.02
+	return bed
 
 
 func _process(delta: float) -> void:
