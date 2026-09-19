@@ -109,6 +109,34 @@ This is for a fresh Claude session picking up Riptide. Read it first, then:
   - real CC0 gun sounds (ask Troy first) with directional and occluded audio
   - motor quest: cave behind the plunge pool, thief (dagger) and hunter (bow), fuel tanks at the far-side shipwreck, towing the raft
 
+## 2026-09-19 (later): Troy's second list (the plan file's top section), progress
+- Done:
+  - walking lurch fixed (step-up only re-applies the blocked part of the move)
+  - the john boat moored on the dock's cove side (old saves are moved)
+  - castaway campfire on the ground, the giant smoke column gone
+  - the castaway's key, journal and page in a "Castaway's pack" bag by the tent
+  - canteens hold 4 drinks; hunger and thirst drain about half as fast
+  - the lighter lights while held, forever; torches burn 30 min
+  - gear swaps into the slot the new piece came from
+  - whole bags picked up with R (the weight counts) and set down again
+  - compost bin (spoiled food turns to soil)
+  - smoother rocks, and no boulder pile on the summit
+  - real shack windows that open
+  - melee swings with a wind-up and a cut, alternating forehand and backhand
+  - knife, machete, fishing rod redrawn; new dagger, bow, arrows, outboard
+  - THE CAVE behind the waterfall (world/poi/cave_build.gd; the CampIsland cave_* carve), with the dead thief and hunter and the motor, dagger, bow and arrows
+  - waterfall rocks at the lip; all fresh water the same colour
+- Still to do from that list:
+  - the map (only seen areas filled in; full map in dev mode)
+  - guns with more detail
+  - the bow in hand needs a proper draw animation (it uses the gun rig)
+  - fitting the outboard to the john boat, plus the fuel-tank shipwreck
+- Flaky scenarios, depending on the random world:
+  - walk: "let go and you come back up". The dive sometimes doesn't surface in 12 s; this may be a real bug.
+  - camp: "pitched a tent frame"
+  - guns: "but it gets there" (a 200 m shot)
+  - All three pass with --seed=4242.
+
 ## Next steps (the approved plan, in order)
 0. **Build `--scenario=tour`.** It visits many stops in one run and saves each to `--shot-dir`. Stops:
    - each gun in hand: hip, aimed, reloading

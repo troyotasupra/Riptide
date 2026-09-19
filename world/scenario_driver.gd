@@ -70,11 +70,14 @@ func _wait(seconds: float) -> void:
 
 
 ## Somewhere properly deep between the islands (the worlds are random, so look).
-static func _deep_water(world: Node) -> Vector2:
+static func _deep_water(world: Node, deepest: float = -INF) -> Vector2:
 	var center: Vector2 = world.camp_island.center
-	for k in 60:
-		var probe: Vector2 = center * (0.3 + 0.01 * k) + Vector2.from_angle(k * 0.7) * 20.0
-		if world.ground_height(probe.x, probe.y) < -8.0:
+	for k in 80:
+		var probe: Vector2 = center * (0.62 + 0.004 * k) + Vector2.from_angle(k * 0.7) * 20.0
+		# Deep, but in the island's lee: the open ocean's swell lifts a swimmer in and
+		# out of the water between checks.
+		var depth: float = world.ground_height(probe.x, probe.y)
+		if depth != -INF and depth < -8.0 and depth > deepest:
 			return probe
 	return center * 0.45
 
@@ -911,7 +914,6 @@ func _walk_loop() -> void:
 	camp.interact_shack_part(s0, "door", 0)
 	_check(camp.shack_door.open, "and opens")
 	await _hold("move_forward", 4.0)
-	print("[walk] after the steps, shack-local %s" % str(xf.affine_inverse() * player.world_transform().origin))
 	_check(camp.in_shack(player.world_transform().origin), "walked up the steps and in through the door without jumping")
 	camp.interact_shack_part(s0, "door", 0)
 	camp.interact_shack_part(s0, "door_bolt", 0)
@@ -954,7 +956,7 @@ func _walk_loop() -> void:
 
 	# Diving: down, breath running out, and back up.
 	var s := player.survivor
-	var sea := _deep_water(world)
+	var sea := _deep_water(world, -14.0)
 	player.teleport(Vector3(sea.x, 0.6, sea.y))
 	await _wait(2.5)
 	_check(player.swimming, "swimming out in open water")
