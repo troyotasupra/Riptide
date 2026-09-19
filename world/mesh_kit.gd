@@ -301,11 +301,10 @@ static func _with_normals(arrays: Array) -> ArrayMesh:
 	return tool.commit()
 
 
-## A rope lashing across a row of logs, the way a raft is really bound: two tight
-## turns round each log, and two binding turns round the whole bundle pulled snug
-## (over a deck laid on the logs, if `top` is given). Logs lie along Z, their
-## middles at `xs` (and `y`), all of radius `radius`; the lashing sits at `z`.
-static func lash(xs: PackedFloat32Array, radius: float, y: float, z: float, material: Material, top: float = -INF) -> Node3D:
+## A rope lashing across a row of logs: two tight turns round each log, and
+## nothing squared off between them. Logs lie along Z, their middles at `xs`
+## (and `y`), all of radius `radius`; the lashing sits at `z`.
+static func lash(xs: PackedFloat32Array, radius: float, y: float, z: float, material: Material, _top: float = -INF) -> Node3D:
 	var root := Node3D.new()
 	const ROPE := 0.016
 	# Clear of the bark even where a log bows out a little.
@@ -323,28 +322,4 @@ static func lash(xs: PackedFloat32Array, radius: float, y: float, z: float, mate
 			# The torus lies flat; stand it up round the log, each turn a little on.
 			loop.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5).rotated(Vector3.UP, 0.04 * (turn - 0.5)), Vector3(x, y, z + (turn - 0.5) * 0.036))
 			root.add_child(loop)
-	# Binding turns round the whole bundle: over the top, down the ends, under.
-	var left := xs[0] - wrap - 0.01
-	var right := xs[xs.size() - 1] + wrap + 0.01
-	var high := maxf(y + wrap + 0.02, top + 0.014)
-	var low := y - wrap - 0.02
-	for turn in 2:
-		var dz := z + 0.075 + turn * 0.036
-		var corners := [Vector3(right, high, dz), Vector3(left, high, dz), Vector3(left, low, dz), Vector3(right, low, dz), Vector3(right, high, dz)]
-		for i in 4:
-			var a: Vector3 = corners[i]
-			var b: Vector3 = corners[i + 1]
-			var seg := MeshInstance3D.new()
-			var cylinder := CylinderMesh.new()
-			cylinder.top_radius = ROPE
-			cylinder.bottom_radius = ROPE
-			cylinder.height = a.distance_to(b) + ROPE * 2.0
-			cylinder.radial_segments = 6
-			cylinder.rings = 1
-			seg.mesh = cylinder
-			seg.material_override = material
-			var up := (b - a).normalized()
-			var side := up.cross(Vector3.FORWARD).normalized()
-			seg.transform = Transform3D(Basis(side, up, side.cross(up)), (a + b) * 0.5)
-			root.add_child(seg)
 	return root

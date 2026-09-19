@@ -487,6 +487,22 @@ func _starter_loop() -> void:
 	_check(not raft.oars_fitted and pack.count_of("oar") == 1, "took the oars out of the raft (the key)")
 	raft.set_row_input(1.0, 1.0, false)
 	_check(raft.rowers.is_empty(), "no oars, no rowing")
+	# You have to be able to SEE the oarlocks to put them back: standing on the
+	# deck, looking at either edge must find the lock and not the hull.
+	var eye := raft.global_transform * Vector3(0.0, raft.deck_top + 1.55, -0.4)
+	var locks_seen := 0
+	for part_name: String in ["oars", "oars_r"]:
+		var lock: Node3D = raft.parts.get(part_name)
+		if lock == null:
+			continue
+		var query := PhysicsRayQueryParameters3D.create(eye, lock.global_position,
+				Layers.WORLD | Layers.INTERACT | Layers.BOATS)
+		var seen := raft.get_world_3d().direct_space_state.intersect_ray(query)
+		if seen.get("collider") == lock:
+			locks_seen += 1
+	_check(locks_seen == 2, "both oarlocks can be looked at from the deck (%d of 2)" % locks_seen)
+	camp.interact_boat_part(s, raft, "oars_r", 0)
+	_check(raft.oars_fitted and pack.count_of("oar") == 0, "and the oars ship again from either side")
 
 	var john: Boat = world.find_boat("JohnBoat")
 	_check(john != null and john.is_tied(), "the john boat waits tied up at the fishing shack's dock")

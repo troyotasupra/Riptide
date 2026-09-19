@@ -1265,8 +1265,10 @@ func _check_sleep() -> void:
 		_send_sleep_status(-1.0, sleeping.size(), needed)
 		return
 	if _skip_at <= 0.0:
-		_skip_at = Ocean.time + (1.5 if crew == 1 else SleepVote.COUNTDOWN)
-	var left: float = _skip_at - Ocean.time
+		_skip_at = maxf(Ocean.time, 0.001)
+	# Measured from when the vote carried, so the wait shortens the moment the
+	# last crew member turns in rather than only when the vote starts.
+	var left: float = _skip_at + SleepVote.countdown(sleeping.size(), crew) - Ocean.time
 	_send_sleep_status(maxf(0.0, left), sleeping.size(), needed)
 	if left > 0.0:
 		return
