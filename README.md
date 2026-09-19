@@ -18,7 +18,9 @@ generated in code or come from CC0 packs (see Credits).
 
 - **From source (Windows):** `C:\Tools\Godot\Godot_v4.7.2-stable_win64.exe --path C:\src\riptide`
 - **From source (macOS):** `/Applications/Godot_v4.7.2.app/Contents/MacOS/Godot --path ~/dev/riptide`
-- **Standalone build:** `powershell -File tools\build.ps1` makes `build\Riptide.exe`.
+- **Standalone build:** `powershell -ExecutionPolicy Bypass -File tools\build.ps1` makes
+  `build\Riptide.exe`. (Windows blocks `.ps1` files by default — that flag applies to
+  this one command only and changes nothing on the machine.)
   That single file is the whole game — send it to friends.
 
 On the menu, set your name, open **Character** to make your crew member (and pick
