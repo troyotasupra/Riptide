@@ -30,6 +30,8 @@ var start_time := -1.0  ## 0..1 time of day for a fresh world; -1 uses the defau
 ## Save a screenshot of the world this many seconds in, then quit.
 var screenshot_path := ""
 var screenshot_delay := 10.0
+## Where --scenario=tour saves its pictures (--shot-dir=).
+var shot_dir := ""
 
 
 func find_boat(boat_name: String) -> Boat:

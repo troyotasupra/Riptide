@@ -23,6 +23,9 @@ var developer_mode := false
 var show_debug := false
 ## Not saved: silences everything (--mute, and test windows started with --no-focus).
 var muted := false
+## Not saved: a --no-focus test window. It shares Troy's settings file, so it must
+## never write to it, and it stays windowed and silent whatever that file says.
+var test_window := false
 
 
 func _ready() -> void:
@@ -33,6 +36,12 @@ func _ready() -> void:
 			AudioServer.set_bus_name(index, bus)
 			AudioServer.set_bus_send(index, "Master")
 	load_settings()
+	# Decided before the first apply, so a test window never makes a sound or goes fullscreen.
+	var args := OS.get_cmdline_user_args()
+	test_window = args.has("--no-focus")
+	if test_window:
+		fullscreen = false
+	muted = test_window or args.has("--mute")
 	apply()
 
 
@@ -53,6 +62,8 @@ func apply() -> void:
 
 
 func save_settings() -> void:
+	if test_window:
+		return
 	var config := ConfigFile.new()
 	for key: String in _keys():
 		config.set_value("settings", key, get(key))

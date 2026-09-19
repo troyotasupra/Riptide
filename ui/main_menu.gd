@@ -166,6 +166,10 @@ func _apply_command_line() -> void:
 			args[parts[0]] = parts[1] if parts.size() > 1 else ""
 	if args.has("no-focus") and DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_NO_FOCUS, true)
+		# Clicks pass straight through to whatever is underneath, and pads are ignored:
+		# a test window takes no input from the person at the computer at all.
+		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_MOUSE_PASSTHROUGH, true)
+		Controls.ignore_gamepads()
 	if args.has("window") and DisplayServer.get_name() != "headless":
 		var v: PackedStringArray = String(args["window"]).split(",")
 		if v.size() == 4:
@@ -188,6 +192,7 @@ func _apply_command_line() -> void:
 	if String(args.get("time", "")).is_valid_float():
 		GameState.start_time = clampf(float(args["time"]), 0.0, 1.0)
 	GameState.screenshot_path = args.get("shot", "")
+	GameState.shot_dir = args.get("shot-dir", "")
 	if String(args.get("shot-delay", "")).is_valid_float():
 		GameState.screenshot_delay = float(args["shot-delay"])
 	if args.has("name"):

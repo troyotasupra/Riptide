@@ -47,6 +47,10 @@ func _run() -> void:
 		"look":
 			await _look()
 			return  # stays up for a --shot screenshot
+		"tour":
+			var tour := ScenarioTour.new()
+			add_child(tour)
+			await tour.run()
 		_:
 			_check(false, "unknown scenario '%s'" % GameState.scenario)
 	print("[scenario] done: %d failure(s)" % _failures)
@@ -409,7 +413,11 @@ func _starter_loop() -> void:
 	var slot := pack.hotbar.find(null)
 	_to_hotbar(pack, "raft_kit", slot)
 	camp.request_place(slot, Vector3(site.x, site.y + 40.0, site.z), 0.0)
-	_check(camp.structures.is_empty(), "can't build a raft frame in mid-air")
+	# The castaway's tent is always there, so look for a raft site rather than for nothing.
+	var floating := false
+	for id: String in camp.structures:
+		floating = floating or camp.structures[id].type == "raft_site"
+	_check(not floating, "can't build a raft frame in mid-air")
 	camp.request_place(slot, site, 0.0)
 	var site_id := ""
 	for id: String in camp.structures:

@@ -94,6 +94,9 @@ const PAD_LABELS := {
 }
 
 var using_gamepad := false
+## Test windows (--no-focus) never take input meant for Troy's own game: a
+## background window still hears every controller, so they drop gamepads entirely.
+var gamepads_ignored := false
 
 
 func _enter_tree() -> void:
@@ -140,7 +143,19 @@ func tag(action: String) -> String:
 	return "[%s]" % labels.get(action, action)
 
 
+## Unbinds every controller button and stick from every action, built-in ui_* too.
+func ignore_gamepads() -> void:
+	gamepads_ignored = true
+	for action: StringName in InputMap.get_actions():
+		for event: InputEvent in InputMap.action_get_events(action):
+			if event is InputEventJoypadButton or event is InputEventJoypadMotion:
+				InputMap.action_erase_event(action, event)
+
+
 func _input(event: InputEvent) -> void:
+	if gamepads_ignored and (event is InputEventJoypadButton or event is InputEventJoypadMotion):
+		get_viewport().set_input_as_handled()
+		return
 	var gamepad := using_gamepad
 	if event is InputEventJoypadButton and event.pressed:
 		gamepad = true
