@@ -76,6 +76,23 @@ This is for a fresh Claude session picking up Riptide. Read it first, then:
   - **Not yet checked visually.** The muzzle direction (`1.0` in the table), the grip fractions and the hold pose in `view_model.gd` (tuned for the old models: rotation `(PI-0.3,-0.16,0.06)`) all need checking with `--face=guns` and `--face=gun`. Flip the muzzle sign if the guns point backwards.
   - The files are single meshes: no separate slide or magazine, so animate by moving the whole gun and the hands.
 
+## Progress on 2026-09-18 (later session)
+- **Step 0 done:** `--scenario=tour --shot-dir=<abs dir> [--face=<stop prefix>]` (world/scenario_tour.gd), 77 stops.
+  Launch test windows with `--audio-driver Dummy` before `--`: Troy asked for no sound at all.
+  No-focus windows now ignore gamepads, let clicks through, and never save settings.
+- **Step 1 done:** guns in two hands (view_model.gd rig + two-bone arms), ADS on the sights, muzzle-anchored
+  flash and tracer, Intervention has a built-in 10x scope; palms, trees and berry bushes from the packs;
+  burnt trees stand charred (ResourceField.burnt, saved as `resources_burnt`).
+- **Audit findings still open (from the tour), by plan step:**
+  - Guns (step 2): no view-model render layer yet (clips into walls); no separate slide/bolt/mag motion; attachments not shown; brass; sounds.
+  - Tools in hand: the hand is still one blob under the handle (knife, hatchet); give tools the gun hands' grip.
+  - Torch: its flame is a flat orange card; use the fire chips and a light.
+  - Fire (step 3): paper-petal flames; a campfire in daylight tints the ground orange far too strongly; the wildfire spreads over a whole hillside in under a minute (check the tuning with Troy).
+  - Tent (step 4): no dismantle/sleep prompt appeared standing at the door facing it (tent_prompt); front guy line runs across the doorway; blue groundsheet reads as water.
+  - World (step 5): razor-straight sand/grass edges; spring and plunge pools are opaque light-blue sheets; waterfall mist is square blocks; castaway camp is hazy by day.
+  - Pickups: the machete pokes straight through its stump; the dropped bag is two lumps with a black slab through them.
+  - Shack: the lantern is a plain beige box; the pillow is a box.
+
 ## Next steps (the approved plan, in order)
 0. **Build `--scenario=tour`.** It visits many stops in one run and saves each to `--shot-dir`. Stops:
    - each gun in hand: hip, aimed, reloading
