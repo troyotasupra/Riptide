@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bwk5ddcl3yrfm"
 path.s3tc="res://.godot/imported/rough.jpg-0bb6f6b591962dfd7981f0818b621ee9.s3tc.ctex"
+path.etc2="res://.godot/imported/rough.jpg-0bb6f6b591962dfd7981f0818b621ee9.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/coast_sand_01/rough.jpg"
-dest_files=["res://.godot/imported/rough.jpg-0bb6f6b591962dfd7981f0818b621ee9.s3tc.ctex"]
+dest_files=["res://.godot/imported/rough.jpg-0bb6f6b591962dfd7981f0818b621ee9.s3tc.ctex", "res://.godot/imported/rough.jpg-0bb6f6b591962dfd7981f0818b621ee9.etc2.ctex"]
 
 [params]
 

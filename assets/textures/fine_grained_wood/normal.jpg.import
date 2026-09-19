@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://q8cdq6qbcen4"
 path.s3tc="res://.godot/imported/normal.jpg-38f80b9760e3a226a3a97129c3dc3fb5.s3tc.ctex"
+path.etc2="res://.godot/imported/normal.jpg-38f80b9760e3a226a3a97129c3dc3fb5.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/fine_grained_wood/normal.jpg"
-dest_files=["res://.godot/imported/normal.jpg-38f80b9760e3a226a3a97129c3dc3fb5.s3tc.ctex"]
+dest_files=["res://.godot/imported/normal.jpg-38f80b9760e3a226a3a97129c3dc3fb5.s3tc.ctex", "res://.godot/imported/normal.jpg-38f80b9760e3a226a3a97129c3dc3fb5.etc2.ctex"]
 
 [params]
 

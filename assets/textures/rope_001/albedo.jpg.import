@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://surgi1pt352a"
 path.s3tc="res://.godot/imported/albedo.jpg-f0e06f1d3ff423e668fb594a12d30056.s3tc.ctex"
+path.etc2="res://.godot/imported/albedo.jpg-f0e06f1d3ff423e668fb594a12d30056.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/rope_001/albedo.jpg"
-dest_files=["res://.godot/imported/albedo.jpg-f0e06f1d3ff423e668fb594a12d30056.s3tc.ctex"]
+dest_files=["res://.godot/imported/albedo.jpg-f0e06f1d3ff423e668fb594a12d30056.s3tc.ctex", "res://.godot/imported/albedo.jpg-f0e06f1d3ff423e668fb594a12d30056.etc2.ctex"]
 
 [params]
 

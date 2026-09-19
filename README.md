@@ -20,6 +20,9 @@ generated in code or come from CC0 packs (see Credits).
 - **From source (macOS):** `/Applications/Godot_v4.7.2.app/Contents/MacOS/Godot --path ~/dev/riptide`
 - **Standalone build:** `powershell -File tools\build.ps1` makes `build\Riptide.exe`.
   That single file is the whole game — send it to friends.
+- **Standalone build (macOS):** `tools/dev.sh build` makes `build/Riptide.app`, a
+  universal bundle that runs on Apple Silicon and Intel. Double-click it, or
+  `open build/Riptide.app`.
 
 On the menu, set your name, open **Character** to make your crew member (and pick
 the crew colour and emblem you fly when you host), then **Host new world** or

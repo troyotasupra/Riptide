@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://pmrhik47rage"
 path.s3tc="res://.godot/imported/rough.jpg-945252552f33bb05283d2788ea09646f.s3tc.ctex"
+path.etc2="res://.godot/imported/rough.jpg-945252552f33bb05283d2788ea09646f.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/brown_mud_leaves_01/rough.jpg"
-dest_files=["res://.godot/imported/rough.jpg-945252552f33bb05283d2788ea09646f.s3tc.ctex"]
+dest_files=["res://.godot/imported/rough.jpg-945252552f33bb05283d2788ea09646f.s3tc.ctex", "res://.godot/imported/rough.jpg-945252552f33bb05283d2788ea09646f.etc2.ctex"]
 
 [params]
 

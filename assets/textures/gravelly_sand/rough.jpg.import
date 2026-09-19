@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://jh1kxgv6flf0"
 path.s3tc="res://.godot/imported/rough.jpg-044ecad0b484d4846d31c7a8a4afbf1f.s3tc.ctex"
+path.etc2="res://.godot/imported/rough.jpg-044ecad0b484d4846d31c7a8a4afbf1f.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/gravelly_sand/rough.jpg"
-dest_files=["res://.godot/imported/rough.jpg-044ecad0b484d4846d31c7a8a4afbf1f.s3tc.ctex"]
+dest_files=["res://.godot/imported/rough.jpg-044ecad0b484d4846d31c7a8a4afbf1f.s3tc.ctex", "res://.godot/imported/rough.jpg-044ecad0b484d4846d31c7a8a4afbf1f.etc2.ctex"]
 
 [params]
 

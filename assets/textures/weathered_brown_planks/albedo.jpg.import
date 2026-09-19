@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dtcfvjiq36mqp"
 path.s3tc="res://.godot/imported/albedo.jpg-030d353eb76538638d98ab6c60a9b38f.s3tc.ctex"
+path.etc2="res://.godot/imported/albedo.jpg-030d353eb76538638d98ab6c60a9b38f.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/weathered_brown_planks/albedo.jpg"
-dest_files=["res://.godot/imported/albedo.jpg-030d353eb76538638d98ab6c60a9b38f.s3tc.ctex"]
+dest_files=["res://.godot/imported/albedo.jpg-030d353eb76538638d98ab6c60a9b38f.s3tc.ctex", "res://.godot/imported/albedo.jpg-030d353eb76538638d98ab6c60a9b38f.etc2.ctex"]
 
 [params]
 
