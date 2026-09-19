@@ -4,7 +4,7 @@ extends RefCounted
 ##   category: food | drink | material | tool | weapon | medical | page | book | note | chart | key | placeable | wearable
 ##   weight (kg), stack · food / water restored when eaten or drunk
 ##   spoil: seconds until it rots (0 = never) · sickness: seconds of illness, sick_chance 0..1
-##   cooks_to / boils_to (fire or stove) · dries_to (drying rack)
+##   cooks_to / boils_to (fire or stove) · dries_to (drying rack) · composts_to (compost bin)
 ##   tool: tool type (knife, machete, hatchet, lighter, torch...) · uses: charges on a fresh one
 ##   teaches: recipe ids learned when read · places: structure placed from a kit
 ##   empties_to: what's left after drinking · note: id in NoteTable · heal: health restored
@@ -46,7 +46,7 @@ const ITEMS := {
 	"fish_steak": {"name": "Fish steak", "category": "food", "weight": 0.7, "stack": 5, "food": 40.0, "water": 3.0, "spoil": 1800.0},
 	"raw_shark_meat": {"name": "Raw shark meat", "category": "food", "weight": 0.9, "stack": 5, "food": 12.0, "spoil": 900.0, "sickness": 90.0, "sick_chance": 0.4, "cooks_to": "cooked_shark", "dries_to": "dried_meat"},
 	"cooked_shark": {"name": "Shark steak", "category": "food", "weight": 0.8, "stack": 5, "food": 32.0, "water": 2.0, "spoil": 1800.0},
-	"spoiled_food": {"name": "Spoiled food", "category": "food", "weight": 0.5, "stack": 20, "food": 2.0, "sickness": 90.0, "sick_chance": 1.0},
+	"spoiled_food": {"name": "Spoiled food", "category": "food", "weight": 0.5, "stack": 20, "food": 2.0, "sickness": 90.0, "sick_chance": 1.0, "composts_to": "soil"},
 
 	# --- drink ---
 	"canteen_clean": {"name": "Canteen (clean water)", "category": "drink", "weight": 1.0, "stack": 1, "water": 25.0, "sips": 4, "empties_to": "canteen"},
@@ -59,6 +59,8 @@ const ITEMS := {
 	"driftwood": {"name": "Driftwood", "category": "material", "weight": 1.2, "stack": 10, "fuel": 90.0, "hint": "Wood for crafting (B), or hold it and press F on a fire to burn it."},
 	"log": {"name": "Log", "category": "material", "weight": 2.5, "stack": 5, "fuel": 200.0, "hint": "Wood for crafting (B), or hold it and press F on a fire to burn it."},
 	"rope": {"name": "Rope", "category": "material", "weight": 0.1, "stack": 20, "hint": "Crafting material for tents, racks and tools (B)."},
+	"soil": {"name": "Soil", "category": "material", "weight": 1.0, "stack": 10, "hint": "Rich black soil from the compost bin — for growing things."},
+	"compost_bin_kit": {"name": "Compost bin (place)", "category": "placeable", "weight": 3.0, "stack": 1, "places": "compost_bin"},
 	"loot_bag": {"name": "Bag of gear", "category": "bag", "weight": 0.8, "stack": 1, "hint": "A whole bag, picked up as it was: everything in it comes with you, and so does its weight. Use it (or drop it) to set it down and go through it."},
 	"tarp": {"name": "Tarp", "category": "material", "weight": 1.2, "stack": 2, "hint": "Crafting material — a lean-to or a tent (B)."},
 	"paracord": {"name": "Paracord", "category": "material", "weight": 0.3, "stack": 5, "hint": "Crafting material — lash together a lean-to (B)."},
@@ -158,6 +160,7 @@ const ITEMS := {
 ## Grid footprint [width, height] in inventory cells. Anything missing is 1×1.
 const SIZES := {
 	"loot_bag": [3, 3],
+	"compost_bin_kit": [2, 3],
 	"raw_fish": [2, 1], "cooked_fish": [2, 1], "raw_mullet": [2, 1], "raw_snapper": [2, 1], "raw_grouper": [3, 2], "raw_barracuda": [3, 1],
 	"raw_mahi_mahi": [3, 2], "raw_tuna": [2, 4], "fish_steak": [2, 1], "raw_shark_meat": [2, 1], "cooked_shark": [2, 1], "peg_leg": [1, 3], "hook_hand": [1, 2], "canteen_clean": [1, 2], "canteen_dirty": [1, 2], "canteen": [1, 2],
 	"driftwood": [2, 1], "log": [3, 1], "tarp": [2, 2],

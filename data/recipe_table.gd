@@ -7,7 +7,7 @@ extends RefCounted
 ## `tool`: a tool type that must be carried (not used up).
 
 const KNOWN_AT_START := ["rope", "stone_hatchet", "oar", "raft_kit"]
-const STARTING := ["campfire_kit", "lean_to_kit", "spear", "bandage", "torch", "cut_bait", "jig"]
+const STARTING := ["campfire_kit", "lean_to_kit", "spear", "bandage", "torch", "cut_bait", "jig", "compost_bin_kit"]
 
 const RECIPES := {
 	"rope": {"name": "Rope", "needs": {"fiber": 5}, "makes": "rope", "count": 1},
@@ -20,6 +20,7 @@ const RECIPES := {
 	"bandage": {"name": "Bandage", "needs": {"fiber": 4}, "makes": "bandage", "count": 1},
 	"torch": {"name": "Torch", "needs": {"wood": 1, "fiber": 2}, "makes": "torch", "count": 1},
 	"tent_kit": {"name": "Tent frame", "needs": {"wood": 4, "rope": 1}, "makes": "tent_kit", "count": 1, "tool": "hatchet"},
+	"compost_bin_kit": {"name": "Compost bin", "needs": {"wood": 4, "rope": 1}, "makes": "compost_bin_kit", "count": 1},
 	"drying_rack_kit": {"name": "Drying rack", "needs": {"wood": 6, "rope": 3}, "makes": "drying_rack_kit", "count": 1},
 	"cut_bait": {"name": "Cut bait", "needs": {"baitfish": 1}, "makes": "cut_bait", "count": 4, "tool": "knife"},
 	"jig": {"name": "Hand-tied jig", "needs": {"wood": 1, "fiber": 2, "flint": 1}, "makes": "jig", "count": 1, "tool": "knife"},

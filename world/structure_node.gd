@@ -31,6 +31,8 @@ func setup(id: String, p_type: String, pos: Vector3, yaw: float) -> void:
 			_tent()
 		"drying_rack":
 			_drying_rack()
+		"compost_bin":
+			_compost_bin()
 		"storage_crate":
 			_crate()
 		"raft_site":
@@ -308,6 +310,28 @@ func _tent_progress(progress: Dictionary) -> void:
 		var line: Array = lines[i]
 		_part_cord(line[0], line[1] + Vector3.UP * 0.1)
 		_part_pole(line[1] - Vector3(0.0, 0.08, 0.0), line[1] + Vector3(0.0, 0.14, 0.0), 0.018, 98, wood)
+
+
+## A slatted wooden bin with a heap of dark compost showing over the top.
+func _compost_bin() -> void:
+	var wood := Materials.wood(Color(0.5, 0.39, 0.27))
+	for side: float in [-1.0, 1.0]:
+		for i in 4:
+			_mesh(_box_mesh(Vector3(0.9, 0.12, 0.04)), wood, Vector3(0.0, 0.1 + i * 0.16, side * 0.45))
+			_mesh(_box_mesh(Vector3(0.04, 0.12, 0.9)), wood, Vector3(side * 0.45, 0.1 + i * 0.16, 0.0))
+	for x: float in [-0.45, 0.45]:
+		for z: float in [-0.45, 0.45]:
+			_pole(Vector3(x, -0.05, z), Vector3(x, 0.72, z), 0.035, 130 + int(x * 10 + z * 5), wood)
+	_mesh(MeshKit.rock(131, 0.25, 0.8), Materials.stone(Color(0.16, 0.12, 0.09)), Vector3(0.0, 0.5, 0.0), Vector3.ZERO, Vector3(0.82, 0.35, 0.82))
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(0.95, 0.7, 0.95)
+	_collider(shape, Vector3(0.0, 0.35, 0.0))
+
+
+static func _box_mesh(size: Vector3) -> BoxMesh:
+	var box := BoxMesh.new()
+	box.size = size
+	return box
 
 
 func _drying_rack() -> void:

@@ -1,12 +1,14 @@
 class_name CookStation
 extends RefCounted
 ## Pure rules for anything that transforms food over time: campfires and the
-## galley stove ("cook" — needs fuel and a lit fire) and drying racks ("dry").
+## galley stove ("cook" — needs fuel and a lit fire), drying racks ("dry") and
+## compost bins ("compost": spoiled food rots down to soil).
 ## Slots hold {"id": input, "result": output, "done_at": ocean clock time}.
 
 const SLOTS := 3
 const COOK_SECONDS := 25.0
 const DRY_SECONDS := 240.0
+const COMPOST_SECONDS := 600.0
 const MAX_FUEL := 600.0
 
 var mode := "cook"
@@ -29,6 +31,8 @@ func result_for(id: String) -> String:
 	var item := ItemTable.get_item(id)
 	if mode == "dry":
 		return item.get("dries_to", "")
+	if mode == "compost":
+		return item.get("composts_to", "")
 	return item.get("cooks_to", item.get("boils_to", ""))
 
 
@@ -58,7 +62,7 @@ func start(id: String, now: float) -> bool:
 	var index := slots.find(null)
 	if index == -1:
 		return false
-	var duration := COOK_SECONDS if mode == "cook" else DRY_SECONDS
+	var duration := COOK_SECONDS if mode == "cook" else (COMPOST_SECONDS if mode == "compost" else DRY_SECONDS)
 	slots[index] = {"id": id, "result": result, "done_at": now + duration}
 	return true
 

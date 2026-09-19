@@ -135,6 +135,11 @@ func setup_new_world() -> void:
 	_make_container("boat:JohnBoat:drybox", DRYBOX_SIZE, "Dry box")
 	for id: String in RecipeTable.KNOWN_AT_START:
 		known_recipes[id] = true
+	# A crew that has read the survival book knows everything it teaches, including
+	# recipes added to it since the save was made (the compost bin).
+	if known_recipes.has("campfire_kit"):
+		for id: String in RecipeTable.STARTING:
+			known_recipes[id] = true
 
 
 func _stock_shack() -> void:
@@ -665,7 +670,7 @@ func station_prompt(id: String, title: String, player: Node) -> String:
 	if not station.result_for(held).is_empty():
 		if station.needs_fire() and not station.lit:
 			return "%s — light it before cooking" % title
-		var verb := "Dry" if station.mode == "dry" else ("Boil" if item.has("boils_to") else "Cook")
+		var verb := "Dry" if station.mode == "dry" else ("Compost" if station.mode == "compost" else ("Boil" if item.has("boils_to") else "Cook"))
 		return "%s — %s %s" % [title, verb.to_lower(), String(item.name).to_lower()]
 	if station.needs_fire() and not station.lit:
 		return "%s — %s" % [title, "light it" if station.fuel > 0.0 else "hold wood and press to fuel it"]
@@ -1048,7 +1053,7 @@ func _use_station(survivor: Survivor, id: String, slot: int, at: Vector3) -> voi
 			survivor.notify("Light the fire first.")
 		elif station.start(held_id, now):
 			pack.take(int(held.uid), 1)
-			survivor.notify("%s the %s..." % ["Drying" if station.mode == "dry" else "Heating", String(item.name).to_lower()])
+			survivor.notify("%s the %s..." % [{"dry": "Drying", "compost": "Composting"}.get(station.mode, "Heating"), String(item.name).to_lower()])
 			world.sfx_at("pot", at)
 			survivor.push_inventory()
 			_broadcast_station(id)
