@@ -1,6 +1,9 @@
 # Builds a standalone Windows copy of the game to build\Riptide.exe.
 # Friends only need that one .exe (it has the game packed inside) — no Godot install.
-#   powershell -File tools\build.ps1
+# Windows refuses to run .ps1 files out of the box ("running scripts is disabled
+# on this system"). -ExecutionPolicy Bypass applies to this one command only and
+# changes nothing on the machine.
+#   powershell -ExecutionPolicy Bypass -File tools\build.ps1
 param(
     [string]$Godot = $(if ($env:GODOT) { $env:GODOT } else { "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" })
 )

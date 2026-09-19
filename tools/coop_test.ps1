@@ -1,6 +1,8 @@
 # Launches a host and N client windows side by side on this machine for co-op testing.
-#   powershell -File tools\coop_test.ps1            # host + 1 client
-#   powershell -File tools\coop_test.ps1 -Clients 2 -Seed 1234
+# Windows refuses to run .ps1 files out of the box ("running scripts is disabled
+# on this system"); -ExecutionPolicy Bypass covers this one command only.
+#   powershell -ExecutionPolicy Bypass -File tools\coop_test.ps1                      # host + 1 client
+#   powershell -ExecutionPolicy Bypass -File tools\coop_test.ps1 -Clients 2 -Seed 1234
 param(
     [int]$Clients = 1,
     [int]$Seed = 1234,
