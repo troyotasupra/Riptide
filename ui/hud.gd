@@ -22,6 +22,7 @@ var _hotbar: HBoxContainer
 var _hotbar_views: Array[SlotView] = []
 var _inventory: InventoryScreen
 var _book: BookPanel
+var _map: MapPanel
 var _note: NotePanel
 var _pause: PauseMenu
 var _settings: SettingsPanel
@@ -128,6 +129,7 @@ func _ready() -> void:
 	_inventory.visible = false
 	add_child(_inventory)
 	_book = _panel(BookPanel.new())
+	_map = _panel(MapPanel.new())
 	_note = _panel(NotePanel.new())
 	_pause = _panel(PauseMenu.new())
 	_settings = _panel(SettingsPanel.new())
@@ -291,6 +293,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			_close_all()
 		else:
 			handled = false
+	elif _map.visible:
+		if cancel or event.is_action_pressed("map"):
+			_close_all()
+		else:
+			handled = false
 	elif _book.visible:
 		if cancel or event.is_action_pressed("book"):
 			_close_all()
@@ -304,6 +311,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("book"):
 		Sound.play("book_open", -6.0)
 		_show_only(_book)
+	elif event.is_action_pressed("map"):
+		Sound.play("book_open", -8.0)
+		_show_only(_map)
 	elif event.is_action_pressed("dev_menu") and GameState.dev_mode:
 		Sound.play("open", -8.0)
 		_show_only(_dev)
@@ -317,7 +327,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _show_only(panel: Control) -> void:
-	for other: Control in [_inventory, _book, _note, _pause, _settings, _dev, _cooking]:
+	for other: Control in [_inventory, _book, _map, _note, _pause, _settings, _dev, _cooking]:
 		other.visible = other == panel
 	_hotbar.visible = panel == null
 
@@ -328,7 +338,7 @@ func _close_all() -> void:
 
 
 func _sync_ui_state() -> void:
-	var open := _inventory.visible or _book.visible or _note.visible or _pause.visible or _settings.visible or _dev.visible or _cooking.visible
+	var open := _inventory.visible or _book.visible or _map.visible or _note.visible or _pause.visible or _settings.visible or _dev.visible or _cooking.visible
 	_hotbar.visible = not open
 	# Full-screen panels get a clean backdrop: no compass, objectives or bars behind them.
 	for overlay: Control in [_info, _clock, _markers, _prompt, _status, _fishing_label]:

@@ -53,6 +53,7 @@ func run() -> void:
 	await _trees()
 	await _shack()
 	await _pickups()
+	await _chart()
 	await _wildfire()
 	print("[tour] saved %d picture(s) to %s" % [saved, dir])
 
@@ -168,6 +169,33 @@ func _cave() -> void:
 		await _shot(view[0])
 	player.survivor.inventory.hotbar[0] = null
 	player.held_id = ""
+
+
+## The chart, after a walk round the shack (only that much is filled in), and in
+## dev mode (all of it).
+func _chart() -> void:
+	if not _wants("chart"):
+		return
+	_first_person()
+	var hud: Hud = null
+	for child in world.get_children():
+		if child is Hud:
+			hud = child
+	var dev := GameState.dev_mode
+	GameState.dev_mode = false
+	await _wait(1.0)
+	hud._show_only(hud._map)
+	await _wait(3.0)
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(dir.path_join("chart_seen.png"))
+	GameState.dev_mode = true
+	hud._map._dirty = true
+	await _wait(1.0)
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(dir.path_join("chart_dev.png"))
+	saved += 2
+	GameState.dev_mode = dev
+	hud._close_all()
 
 
 ## The hand-held models, each on its own side-on, filling the frame.

@@ -26,6 +26,7 @@ const KEYS := {
 	"row_right": [KEY_E],
 	"inventory": [KEY_TAB],
 	"book": [KEY_B],
+	"map": [KEY_M],
 	"rotate": [KEY_R],
 	"fire_mode": [KEY_X],
 	"dismantle": [KEY_Z],
@@ -96,7 +97,7 @@ const PAD_AXES := {
 const KEY_LABELS := {
 	"interact": "F", "primary": "LMB", "lean_left": "Q", "lean_right": "E", "zoom_in": "X", "zoom_out": "Z", "secondary": "RMB", "jump": "Space", "paddle": "F", "sprint": "Shift",
 	"row_left": "Q", "row_right": "E", "move_back": "S",
-	"crouch": "C", "rotate": "R", "fire_mode": "X", "dismantle": "Z", "inventory": "Tab", "book": "B", "drop": "Q", "give": "G", "pause": "Esc",
+	"crouch": "C", "rotate": "R", "fire_mode": "X", "dismantle": "Z", "inventory": "Tab", "book": "B", "map": "M", "drop": "Q", "give": "G", "pause": "Esc",
 	"hotbar": "1–8",
 }
 const PAD_LABELS := {
