@@ -50,14 +50,17 @@ static func build(id: String) -> Node3D:
 	root.name = "Item_" + id
 	match id:
 		"knife":
-			_capsule(root, 0.018, 0.1, Vector3(0.0, 0.0, 0.0), Materials.leather(LEATHER))
-			_box(root, Vector3(0.05, 0.012, 0.03), Vector3(0.0, 0.058, 0.0), Materials.metal(DARK_STEEL))
-			_blade(root, 0.012, 0.13, 0.03, Vector3(0.0, 0.065, 0.0))
+			_knife(root)
 		"machete":
-			_capsule(root, 0.02, 0.13, Vector3.ZERO, Materials.wood(Color(0.30, 0.20, 0.12)))
-			for y: float in [-0.03, 0.03]:
-				_cylinder(root, 0.006, 0.045, Vector3(0.0, y, 0.0), Materials.metal(BRASS, 0.4), Vector3(0.0, 0.0, PI / 2.0))
-			_blade(root, 0.012, 0.46, 0.06, Vector3(0.0, 0.07, 0.006))
+			_machete(root)
+		"dagger":
+			_dagger(root)
+		"bow":
+			_bow(root)
+		"arrow":
+			_arrow(root, Vector3.ZERO)
+		"outboard_motor":
+			_outboard(root)
 		"stone_hatchet":
 			_cylinder(root, 0.018, 0.5, Vector3(0.0, 0.12, 0.0), Materials.wood(WOOD), Vector3.ZERO, 0.022)
 			_rock(root, 3, Vector3(0.07, 0.1, 0.19), Vector3(0.0, 0.34, -0.05), Materials.stone(Color(0.28, 0.28, 0.31)))
@@ -97,11 +100,7 @@ static func build(id: String) -> Node3D:
 			# Its flame: held, it's lit.
 			_flame(root, Vector3(0.0, 0.05, 0.0), 0.014)
 		"fishing_rod":
-			_cylinder(root, 0.007, 1.3, Vector3(0.0, 0.62, 0.0), Materials.plain(Color(0.14, 0.14, 0.16), 0.3), Vector3.ZERO, 0.015)
-			_cylinder(root, 0.016, 0.22, Vector3(0.0, 0.05, 0.0), Materials.stone(Color(0.72, 0.58, 0.40)))
-			_cylinder(root, 0.035, 0.03, Vector3(0.0, 0.18, 0.035), Materials.metal(STEEL), Vector3(0.0, 0.0, PI / 2.0))
-			for y: float in [0.45, 0.75, 1.05]:
-				_torus(root, 0.012, 0.002, Vector3(0.0, y, 0.012), Materials.metal(STEEL), Vector3(PI / 2.0, 0.0, 0.0))
+			_fishing_rod(root)
 		"oar":
 			var shaft := MeshInstance3D.new()
 			shaft.mesh = MeshKit.tube(PackedVector3Array([Vector3(0.0, -0.05, 0.0), Vector3(0.0, 0.7, 0.0), Vector3(0.0, 1.3, 0.0)]), PackedFloat32Array([0.024, 0.022, 0.02]), 8, "oar_shaft")
@@ -939,6 +938,177 @@ static func _rock(parent: Node3D, variant: int, size: Vector3, pos: Vector3, mat
 	var instance := _add(parent, MeshKit.rock(variant, roughness, squash), pos, material)
 	instance.scale = size
 	return instance
+
+
+# --- blades, bow, motor, rod --------------------------------------------------------
+# Blades are drawn as side profiles (y along the blade, z across it) and extruded
+# to their thickness, so handle, guard and blade are each one solid piece and meet.
+
+## A belt knife: a shaped wooden handle with brass rivets, a steel bolster, and a
+## drop-point blade with a grind line.
+static func _knife(root: Node3D) -> void:
+	var steel := Materials.metal(Color(0.6, 0.6, 0.59), 0.42)
+	var edge := Materials.metal(Color(0.8, 0.8, 0.78), 0.3)
+	var handle := [Vector2(-0.065, -0.008), Vector2(-0.07, 0.0), Vector2(-0.066, 0.011), Vector2(-0.02, 0.013), Vector2(0.03, 0.012),
+		Vector2(0.055, 0.013), Vector2(0.055, -0.012), Vector2(0.03, -0.013), Vector2(0.0, -0.01), Vector2(-0.03, -0.014)]
+	_profile(root, handle, 0.02, Materials.wood(Color(0.36, 0.22, 0.12)), "knife_handle")
+	_profile(root, [Vector2(0.052, -0.016), Vector2(0.052, 0.016), Vector2(0.064, 0.015), Vector2(0.064, -0.015)], 0.024, Materials.metal(DARK_STEEL, 0.4), "knife_bolster")
+	var blade := [Vector2(0.062, -0.013), Vector2(0.062, 0.012), Vector2(0.15, 0.012), Vector2(0.19, 0.002), Vector2(0.2, -0.001),
+		Vector2(0.18, -0.009), Vector2(0.12, -0.014)]
+	_profile(root, blade, 0.004, steel, "knife_blade")
+	# The ground edge: a lighter strip along the cutting side.
+	_profile(root, [Vector2(0.066, -0.013), Vector2(0.12, -0.0135), Vector2(0.18, -0.0085), Vector2(0.196, -0.001), Vector2(0.18, -0.004), Vector2(0.12, -0.008), Vector2(0.066, -0.008)], 0.0046, edge, "knife_edge")
+	for y: float in [-0.04, 0.0, 0.035]:
+		_cylinder(root, 0.0035, 0.024, Vector3(0.0, y, 0.0), Materials.metal(BRASS, 0.35), Vector3(0.0, 0.0, PI / 2.0))
+
+
+## A machete: a long blade, widening toward the tip, on a two-slab wooden handle.
+static func _machete(root: Node3D) -> void:
+	var steel := Materials.metal(Color(0.5, 0.5, 0.49), 0.55)
+	var edge := Materials.metal(Color(0.76, 0.76, 0.74), 0.35)
+	var handle := [Vector2(-0.085, -0.012), Vector2(-0.092, 0.004), Vector2(-0.085, 0.017), Vector2(0.0, 0.015), Vector2(0.06, 0.016),
+		Vector2(0.06, -0.016), Vector2(0.0, -0.014), Vector2(-0.04, -0.017)]
+	_profile(root, handle, 0.026, Materials.wood(Color(0.30, 0.19, 0.11)), "machete_handle")
+	var blade := [Vector2(0.05, -0.016), Vector2(0.05, 0.016), Vector2(0.36, 0.016), Vector2(0.49, 0.012), Vector2(0.52, 0.0),
+		Vector2(0.5, -0.03), Vector2(0.42, -0.04), Vector2(0.25, -0.03), Vector2(0.1, -0.02)]
+	_profile(root, blade, 0.0035, steel, "machete_blade")
+	_profile(root, [Vector2(0.1, -0.02), Vector2(0.25, -0.03), Vector2(0.42, -0.04), Vector2(0.5, -0.03), Vector2(0.49, -0.022), Vector2(0.42, -0.031), Vector2(0.25, -0.022), Vector2(0.1, -0.013)],
+		0.004, edge, "machete_edge")
+	for y: float in [-0.055, -0.01, 0.035]:
+		_cylinder(root, 0.004, 0.03, Vector3(0.0, y, 0.0), Materials.metal(BRASS, 0.35), Vector3(0.0, 0.0, PI / 2.0))
+
+
+## The thief's dagger: a leather-wrapped grip, a wide crossguard and a
+## double-edged, ridged blade.
+static func _dagger(root: Node3D) -> void:
+	var steel := Materials.metal(Color(0.62, 0.62, 0.62), 0.38)
+	_profile(root, [Vector2(-0.07, -0.014), Vector2(-0.075, 0.0), Vector2(-0.07, 0.014), Vector2(-0.06, 0.016), Vector2(-0.06, -0.016)], 0.03, Materials.metal(DARK_STEEL, 0.4), "dagger_pommel")
+	_profile(root, [Vector2(-0.062, -0.011), Vector2(-0.062, 0.011), Vector2(0.05, 0.012), Vector2(0.05, -0.012)], 0.02, Materials.leather(Color(0.2, 0.13, 0.08)), "dagger_grip")
+	for i in 6:
+		_torus(root, 0.0125, 0.0022, Vector3(0.0, -0.05 + i * 0.019, 0.0), Materials.leather(Color(0.14, 0.09, 0.05)), Vector3.ZERO, Vector3(0.85, 1.0, 1.0))
+	_profile(root, [Vector2(0.048, -0.038), Vector2(0.044, -0.03), Vector2(0.044, 0.03), Vector2(0.048, 0.038), Vector2(0.062, 0.034), Vector2(0.062, -0.034)], 0.022, Materials.metal(BRASS, 0.4), "dagger_guard")
+	_profile(root, [Vector2(0.06, -0.016), Vector2(0.06, 0.016), Vector2(0.2, 0.01), Vector2(0.27, 0.0), Vector2(0.2, -0.01)], 0.004, steel, "dagger_blade")
+	_profile(root, [Vector2(0.06, -0.0025), Vector2(0.06, 0.0025), Vector2(0.25, 0.0005), Vector2(0.25, -0.0005)], 0.0065, Materials.metal(Color(0.78, 0.78, 0.77), 0.3), "dagger_ridge")
+
+
+## A recurve bow: laminated limbs curving back from the riser and flicking forward
+## at the tips, a leather grip, and the string. Arrow flies +Y; limbs run ±Z.
+static func _bow(root: Node3D) -> void:
+	var wood := Materials.wood(Color(0.42, 0.26, 0.14))
+	var tips: Array[Vector3] = []
+	for side: float in [-1.0, 1.0]:
+		var points := PackedVector3Array()
+		var radii := PackedFloat32Array()
+		for i in 13:
+			var t := float(i) / 12.0
+			# Back from the riser, then the recurve flicks the tip forward again.
+			var back := -0.14 * sin(t * PI * 0.8) + 0.07 * smoothstep(0.75, 1.0, t)
+			points.append(Vector3(0.0, back, side * (0.1 + t * 0.62)))
+			radii.append(lerpf(0.016, 0.006, t))
+		var limb := MeshInstance3D.new()
+		limb.mesh = MeshKit.tube(points, radii, 6, "bow_limb_%d" % int(side))
+		limb.material_override = wood
+		limb.scale = Vector3(1.6, 0.7, 1.0)  # limbs are flat and wide, not round
+		root.add_child(limb)
+		tips.append(points[points.size() - 1] * Vector3(1.6, 0.7, 1.0))
+	_profile(root, [Vector2(-0.03, -0.12), Vector2(0.012, -0.11), Vector2(0.03, -0.04), Vector2(0.02, 0.04), Vector2(0.012, 0.11), Vector2(-0.03, 0.12), Vector2(-0.018, 0.0)],
+		0.03, wood, "bow_riser")
+	_cylinder(root, 0.021, 0.1, Vector3(-0.004, 0.0, 0.0), Materials.leather(LEATHER), Vector3(PI / 2.0, 0.0, 0.0))
+	# The string, tip to tip.
+	var string := MeshInstance3D.new()
+	string.mesh = MeshKit.tube(PackedVector3Array([tips[0], (tips[0] + tips[1]) * 0.5, tips[1]]), PackedFloat32Array([0.0015, 0.0015, 0.0015]), 4, "bow_string")
+	string.material_override = Materials.plain(Color(0.85, 0.82, 0.72))
+	root.add_child(string)
+
+
+## One arrow along +Y from `base`: shaft, broadhead and three fletches.
+static func _arrow(root: Node3D, base: Vector3) -> void:
+	_cylinder(root, 0.004, 0.72, base + Vector3(0.0, 0.36, 0.0), Materials.wood(Color(0.7, 0.58, 0.4)))
+	var head := CylinderMesh.new()
+	head.top_radius = 0.0
+	head.bottom_radius = 0.011
+	head.height = 0.05
+	head.radial_segments = 4
+	_add(root, head, base + Vector3(0.0, 0.745, 0.0), Materials.metal(DARK_STEEL, 0.45))
+	for i in 3:
+		var a := i * TAU / 3.0
+		_box(root, Vector3(0.0015, 0.09, 0.016), base + Vector3(cos(a) * 0.009, 0.06, sin(a) * 0.009), Materials.plain(Color(0.75, 0.15, 0.1) if i == 0 else Color(0.9, 0.88, 0.8)), Vector3(0.0, -a, 0.0))
+
+
+## An outboard motor, standing as it would on a transom: the cowling on top, the
+## shaft down to the lower unit, the propeller, the clamp bracket and the tiller.
+static func _outboard(root: Node3D) -> void:
+	var cowl := Materials.plain(Color(0.16, 0.18, 0.2), 0.35)
+	var grey := Materials.metal(Color(0.45, 0.46, 0.47), 0.5)
+	var dark := Materials.metal(Color(0.12, 0.12, 0.13), 0.5)
+	var cover := MeshInstance3D.new()
+	cover.mesh = _unit_sphere()
+	cover.material_override = cowl
+	cover.scale = Vector3(0.34, 0.36, 0.46)
+	cover.position = Vector3(0.0, 0.86, 0.0)
+	root.add_child(cover)
+	_box(root, Vector3(0.3, 0.16, 0.4), Vector3(0.0, 0.72, 0.0), cowl)
+	_box(root, Vector3(0.31, 0.02, 0.41), Vector3(0.0, 0.8, 0.0), Materials.plain(Color(0.85, 0.35, 0.1), 0.4))
+	_box(root, Vector3(0.12, 0.46, 0.16), Vector3(0.0, 0.42, 0.02), grey)
+	var foot := MeshInstance3D.new()
+	foot.mesh = _unit_sphere()
+	foot.material_override = grey
+	foot.scale = Vector3(0.1, 0.1, 0.32)
+	foot.position = Vector3(0.0, 0.12, 0.02)
+	root.add_child(foot)
+	_box(root, Vector3(0.03, 0.14, 0.08), Vector3(0.0, 0.2, 0.08), grey)
+	for i in 3:
+		_box(root, Vector3(0.02, 0.13, 0.05), Vector3(0.0, 0.12, 0.2), dark, Vector3(0.0, 0.0, i * TAU / 3.0))
+	_cylinder(root, 0.025, 0.05, Vector3(0.0, 0.12, 0.19), dark, Vector3(PI / 2.0, 0.0, 0.0))
+	_box(root, Vector3(0.18, 0.2, 0.06), Vector3(0.0, 0.6, -0.12), dark)
+	for x: float in [-0.06, 0.06]:
+		_cylinder(root, 0.012, 0.1, Vector3(x, 0.55, -0.18), dark, Vector3(PI / 2.0, 0.0, 0.0))
+	_cylinder(root, 0.018, 0.42, Vector3(0.0, 0.72, 0.38), dark, Vector3(PI / 2.0 - 0.15, 0.0, 0.0), 0.022)
+	_capsule(root, 0.026, 0.12, Vector3(0.0, 0.75, 0.6), Materials.plain(Color(0.08, 0.08, 0.08), 0.8)).rotation.x = PI / 2.0 - 0.15
+
+
+## A spinning rod: a tapered two-piece blank, cork grip and reel seat, a spinning
+## reel hung under it, line guides getting smaller toward the tip, and the line.
+## The tip is at (0, 1.27, 0) (Angler casts from there).
+static func _fishing_rod(root: Node3D) -> void:
+	var blank := Materials.plain(Color(0.1, 0.13, 0.2), 0.25)
+	var cork := Materials.wood(Color(0.74, 0.6, 0.42))
+	var metal := Materials.metal(Color(0.7, 0.71, 0.73), 0.35)
+	var dark := Materials.plain(Color(0.08, 0.08, 0.09), 0.4)
+	var rod := MeshInstance3D.new()
+	rod.mesh = MeshKit.tube(PackedVector3Array([Vector3(0.0, -0.08, 0.0), Vector3(0.0, 0.4, 0.0), Vector3(0.0, 0.9, 0.0), Vector3(0.0, 1.27, 0.0)]),
+		PackedFloat32Array([0.012, 0.009, 0.006, 0.0025]), 8, "rod_blank")
+	rod.material_override = blank
+	root.add_child(rod)
+	_cylinder(root, 0.017, 0.2, Vector3(0.0, 0.0, 0.0), cork, Vector3.ZERO, 0.015)
+	_cylinder(root, 0.014, 0.08, Vector3(0.0, 0.14, 0.0), dark)
+	_cylinder(root, 0.016, 0.05, Vector3(0.0, 0.21, 0.0), cork, Vector3.ZERO, 0.013)
+	_cylinder(root, 0.013, 0.012, Vector3(0.0, 0.47, 0.0), metal)  # the ferrule where the pieces join
+	# The reel: foot to the seat, body, spool, bail and handle.
+	_box(root, Vector3(0.008, 0.05, 0.03), Vector3(0.0, 0.14, -0.025), metal)
+	_box(root, Vector3(0.03, 0.05, 0.04), Vector3(0.0, 0.13, -0.06), dark)
+	_cylinder(root, 0.024, 0.03, Vector3(0.0, 0.17, -0.065), metal)
+	_cylinder(root, 0.02, 0.012, Vector3(0.0, 0.19, -0.065), Materials.plain(Color(0.9, 0.9, 0.85)))
+	_torus(root, 0.026, 0.0015, Vector3(0.0, 0.195, -0.065), metal, Vector3(PI / 2.0, 0.0, 0.0))
+	_cylinder(root, 0.003, 0.05, Vector3(0.025, 0.13, -0.06), metal, Vector3(0.0, 0.0, PI / 2.0))
+	_capsule(root, 0.006, 0.025, Vector3(0.05, 0.13, -0.06), dark)
+	# Guides, stepping down in size, all on the same side as the reel.
+	var guides := [[0.36, 0.014], [0.58, 0.011], [0.78, 0.009], [0.96, 0.007], [1.12, 0.006], [1.26, 0.005]]
+	for guide: Array in guides:
+		var y: float = guide[0]
+		var r: float = guide[1]
+		_box(root, Vector3(0.002, 0.02, r * 1.4), Vector3(0.0, y, -r * 0.7), metal)
+		_torus(root, r, 0.0012, Vector3(0.0, y, -r * 1.5), metal, Vector3(PI / 2.0, 0.0, 0.0))
+	# The line from the spool up through the guides.
+	var line := PackedVector3Array([Vector3(0.0, 0.19, -0.065)])
+	var widths := PackedFloat32Array([0.0006])
+	for guide: Array in guides:
+		line.append(Vector3(0.0, float(guide[0]), -float(guide[1]) * 1.5))
+		widths.append(0.0006)
+	var thread := MeshInstance3D.new()
+	thread.mesh = MeshKit.tube(line, widths, 3, "rod_line")
+	thread.material_override = Materials.plain(Color(0.9, 0.9, 0.85))
+	root.add_child(thread)
 
 
 ## A knife-style blade: a flat slab with a pointed tip, pointing +Y from `base`.

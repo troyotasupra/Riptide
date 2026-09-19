@@ -401,7 +401,7 @@ func _reload_started(seconds: float, clearing: bool) -> void:
 
 
 static func _mode_name(mode: String) -> String:
-	return {"auto": "automatic", "semi": "semi-automatic", "bolt": "bolt action", "pump": "pump action"}.get(mode, mode)
+	return {"auto": "automatic", "semi": "semi-automatic", "bolt": "bolt action", "pump": "pump action", "single": "one arrow"}.get(mode, mode)
 
 
 func _tell(peer: int, method: String, args: Array) -> void:

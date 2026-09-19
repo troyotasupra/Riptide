@@ -53,6 +53,14 @@ const PICKUPS := {
 	"page_shelter": {"item": "book_page_shelter", "count": 1, "label": "Take the torn book page"},
 	"page_prosthetics": {"item": "book_page_prosthetics", "count": 1, "label": "Take the torn book page"},
 }
+## In the cave behind the waterfall: what the two dead pirates fought over, and
+## what they fought with. Offsets from the chamber's middle (CaveBuild.room_point).
+const CAVE_PICKUPS := {
+	"outboard_motor": {"item": "outboard_motor", "count": 1, "label": "Take the outboard motor (18 kg)", "at": Vector3(0.4, 0.05, 1.6)},
+	"dagger": {"item": "dagger", "count": 1, "label": "Take the pirate's dagger", "at": Vector3(-1.9, 0.03, 0.2)},
+	"bow": {"item": "bow", "count": 1, "label": "Take the hunter's bow", "at": Vector3(2.1, 0.05, -2.3)},
+	"arrows": {"item": "arrow", "count": 9, "label": "Take the arrows (9)", "at": Vector3(3.6, 0.03, -0.3)},
+}
 ## Offsets from the castaway camp (camp space: -Z faces the island centre).
 const PICKUP_SPOTS := {
 	"machete": Vector3(2.1, 0.35, 2.0),
@@ -186,6 +194,15 @@ func create_pickups(shape: CampIsland) -> void:
 		p.y = shape.height_at(p.x, p.z) + offset.y
 		var node := PickupNode.new()
 		node.setup(id, PICKUPS[id].label, PICKUPS[id].item, p, yaw + offset.x)
+		add_child(node)
+		pickup_nodes[id] = node
+		if picked.has(id):
+			_apply_picked(id)
+	var cave_yaw := CaveBuild.facing_in(shape)
+	for id: String in CAVE_PICKUPS:
+		var entry: Dictionary = CAVE_PICKUPS[id]
+		var node := PickupNode.new()
+		node.setup(id, entry.label, entry.item, CaveBuild.room_point(shape, entry.at), cave_yaw + float(entry.at.x))
 		add_child(node)
 		pickup_nodes[id] = node
 		if picked.has(id):
@@ -771,9 +788,9 @@ func interact_structure(survivor: Survivor, id: String, slot: int) -> void:
 
 
 func pickup(survivor: Survivor, id: String) -> void:
-	if picked.has(id) or not PICKUPS.has(id):
+	if picked.has(id) or not (PICKUPS.has(id) or CAVE_PICKUPS.has(id)):
 		return
-	var entry: Dictionary = PICKUPS[id]
+	var entry: Dictionary = PICKUPS.get(id, CAVE_PICKUPS.get(id, {}))
 	if survivor.inventory.add(entry.item, entry.count, Ocean.time) > 0:
 		survivor.notify("You have no room for that.")
 		return

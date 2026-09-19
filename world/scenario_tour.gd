@@ -41,12 +41,14 @@ func run() -> void:
 	world.weather.set_state("clear", true)
 	world.weather.set_wind(0.8, 3.0)
 	await _model_rack()
+	await _item_rack()
 	await _guns_in_hand()
 	await _guns_on_ground()
 	await _tools_in_hand()
 	await _tents()
 	await _campfires()
 	await _castaway()
+	await _cave()
 	await _terrain()
 	await _trees()
 	await _shack()
@@ -139,6 +141,61 @@ func _model_rack() -> void:
 	await _wait(0.8)
 	await _shot("rack_bushes")
 	holder.queue_free()
+
+## The cave behind the waterfall: its doorway from the pool, the hill over it
+## (no sign of the cut), and inside by torchlight: the tunnel and the chamber.
+func _cave() -> void:
+	if not _wants("cave_"):
+		return
+	var out := -island.cave_dir
+	var right := island.cave_dir.orthogonal()
+	var mouth := CaveBuild.point(island, 0.0, 0.0)
+	var eye := mouth + Vector3(out.x, 0.0, out.y) * 7.0 + Vector3(right.x, 0.0, right.y) * 3.0
+	eye.y = maxf(island.height_at(eye.x, eye.z), mouth.y) + 1.7
+	_look(eye, mouth + Vector3.UP * 1.6)
+	await _wait(0.8)
+	await _shot("cave_doorway")
+	_look(mouth + Vector3(out.x, 0.0, out.y) * 22.0 + Vector3.UP * 16.0, CaveBuild.room_point(island, Vector3.ZERO) + Vector3.UP * 8.0)
+	await _wait(0.5)
+	await _shot("cave_hill_over")
+	_hold("torch")
+	for view: Array in [["cave_tunnel", CaveBuild.point(island, 2.0, 0.0, 0.1), CaveBuild.point(island, 9.0, 0.0, 1.2)],
+			["cave_chamber", CaveBuild.room_point(island, Vector3(0.0, 0.1, -4.5)), CaveBuild.room_point(island, Vector3(0.0, 0.8, 1.0))],
+			["cave_bodies", CaveBuild.room_point(island, Vector3(-2.5, 0.1, -2.0)), CaveBuild.room_point(island, Vector3(1.0, 0.3, 0.5))]]:
+		_stand(view[1], view[2], -0.25)
+		_first_person()
+		await _wait(1.2)
+		await _shot(view[0])
+	player.survivor.inventory.hotbar[0] = null
+	player.held_id = ""
+
+
+## The hand-held models, each on its own side-on, filling the frame.
+func _item_rack() -> void:
+	if not _wants("item_"):
+		return
+	var stand := player.world_transform().origin + Vector3(0.0, 60.0, 0.0)
+	var lamp := DirectionalLight3D.new()
+	world.add_child(lamp)
+	lamp.global_rotation = Vector3(-0.7, 0.9, 0.0)
+	for id: String in ["knife", "machete", "dagger", "bow", "arrow", "outboard_motor", "fishing_rod", "torch", "lighter"]:
+		var model := ItemModels.build(id)
+		world.add_child(model)
+		# Laid along the view, top up: its own +Y to the right, +Z up.
+		model.global_transform = Transform3D(Basis(Vector3(0.0, 0.0, 1.0), Vector3(1.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0)), stand)
+		var box := AABB()
+		var first := true
+		for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+			var b := mesh.global_transform * mesh.get_aabb()
+			box = b if first else box.merge(b)
+			first = false
+		var size := maxf(box.size.x, maxf(box.size.y, 0.05))
+		_look(box.get_center() + Vector3(0.0, 0.0, size * 1.25), box.get_center())
+		await _wait(0.4)
+		await _shot("item_" + id)
+		model.queue_free()
+	lamp.queue_free()
+
 
 func _dock_out() -> Array:
 	var dock_end: Vector3 = camp.shack.dock_end

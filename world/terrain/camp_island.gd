@@ -43,7 +43,20 @@ var spring := Vector2.ZERO
 ## Surface level of the spring pond.
 var spring_height := 0.0
 var stream_mouth := Vector2.ZERO
+## The cave: its mouth at the foot of the waterfall's cliff, beside the fall; a
+## tunnel running back into the hill, and a round chamber at the end (`cave` is
+## the chamber's middle). The terrain is cut down to the cave floor there;
+## CaveBuild roofs it over.
 var cave := Vector2.ZERO
+var cave_mouth := Vector2.ZERO
+var cave_dir := Vector2.ZERO
+var cave_floor := 0.0
+var _cave_ready := false
+const CAVE_HALF := 2.4
+const CAVE_TUNNEL := 14.0
+const CAVE_ROOM := 6.5
+## The cut's walls take this far to rise from the floor to the hillside.
+const CAVE_WALL := 2.0
 var camp := Vector2.ZERO
 ## Top of the beach in the sheltered cove where the sailboat lies.
 var cove := Vector2.ZERO
@@ -81,7 +94,6 @@ func _init(p_seed: int) -> void:
 	_cove_angle = toward_start + side * rng.randf_range(0.5, 0.9)
 	cove_bearing = _cove_angle
 	camp = center + Vector2.from_angle(hill_angle - side * PI * 0.62) * RADIUS * 0.38
-	cave = hill + (center - hill).normalized() * 40.0
 	# The pool sits high on the hill's flank, on the flattest bench we can find so
 	# it has somewhere to sit, and far enough up that its stream can fall a long way.
 	spring = _flattest_bench(hill, hill_angle + side * PI * 0.5)
@@ -108,6 +120,7 @@ func _init(p_seed: int) -> void:
 	stream_mouth += away * 6.0
 	_build_bed()
 	_stream_ready = true
+	_place_cave()
 
 	# The cove beach: walk in from the sea along its bearing until we reach sand.
 	var dir := Vector2.from_angle(_cove_angle)
@@ -130,6 +143,54 @@ static func _setup_noise(noise: FastNoiseLite, noise_seed: int, frequency: float
 
 ## Terrain height at world (x, z). Positive is above sea level.
 func height_at(x: float, z: float) -> float:
+	var h := height_over_cave(x, z)
+	if _cave_ready:
+		h = _cave_cut(Vector2(x, z), h)
+	return h
+
+
+## Behind the waterfall's cliff, beside the fall: the mouth sits at the cliff foot
+## (full drop is 5 m past the brink) and the cave runs back under the brink's shelf.
+func _place_cave() -> void:
+	var brink := stream_point(FALL_T)
+	var side := _outflow.orthogonal()
+	cave_dir = -_outflow
+	cave_mouth = brink + _outflow * 5.5 + side * 7.5
+	cave_floor = height_at(cave_mouth.x, cave_mouth.y) + 0.05
+	cave = cave_mouth + cave_dir * (CAVE_TUNNEL + CAVE_ROOM * 0.7)
+	_cave_ready = true
+
+
+## How far `p` is outside the cave's floor (negative inside, 0 at the wall's foot).
+func cave_edge(p: Vector2) -> float:
+	if not _cave_ready:
+		return INF
+	var rel := p - cave_mouth
+	var along := rel.dot(cave_dir)
+	var edge := INF
+	if along > -2.5 and along < CAVE_TUNNEL + 2.0:
+		# The tunnel wanders a little from side to side as it goes in.
+		var wander := sin(along * 0.45) * 0.6
+		edge = absf(rel.dot(cave_dir.orthogonal()) - wander) - CAVE_HALF
+	return minf(edge, p.distance_to(cave) - CAVE_ROOM)
+
+
+## Inside the cave, or its walls (props keep out of it).
+func in_cave(p: Vector2, margin: float = 0.0) -> bool:
+	return cave_edge(p) < CAVE_WALL + margin
+
+
+func _cave_cut(p: Vector2, h: float) -> float:
+	var edge := cave_edge(p)
+	if edge >= CAVE_WALL:
+		return h
+	# A floor that isn't billiard-table flat.
+	var floor_h := cave_floor + sin(p.x * 0.9) * sin(p.y * 1.1) * 0.08
+	return minf(h, lerpf(floor_h, h, smoothstep(0.0, CAVE_WALL, edge)))
+
+
+## The hillside as it would be without the cave cut into it (the cave's roof).
+func height_over_cave(x: float, z: float) -> float:
 	var h := _base_height(x, z)
 	if not _stream_ready:
 		return h

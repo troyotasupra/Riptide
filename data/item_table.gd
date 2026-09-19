@@ -72,6 +72,7 @@ const ITEMS := {
 
 	# --- tools & weapons ---
 	"knife": {"name": "Knife", "category": "tool", "tool": "knife", "weight": 0.3, "stack": 1, "hint": "Swing at plants and bushes (left click) to cut them faster. Carrying it speeds up E too."},
+	"dagger": {"name": "Pirate's dagger", "category": "tool", "tool": "knife", "weight": 0.35, "stack": 1, "melee": 30.0, "hint": "A long, keen fighting blade — the thief's. Cuts plants and bushes as a knife does, and hits hard (left click)."},
 	"machete": {"name": "Machete", "category": "tool", "tool": "machete", "weight": 0.8, "stack": 1, "hint": "Hack through plants and bushes (left click) — much faster than by hand."},
 	"stone_hatchet": {"name": "Stone hatchet", "category": "tool", "tool": "hatchet", "weight": 1.2, "stack": 1, "hint": "Look at a tree and hold left click to chop it down for logs."},
 	"oar": {"name": "Oar", "category": "tool", "tool": "oar", "weight": 1.4, "stack": 1, "hint": "Carry it aboard a raft or boat and press F to row: Q strokes the left oar, E the right, both to go straight. Hold S to back-row, Shift to pull hard."},
@@ -92,6 +93,9 @@ const ITEMS := {
 		"hint": "Select a gun, then use this to clean it. A fouled gun jams."},
 
 	# --- ammunition (calibres never interchange) ---
+	"bow": {"name": "Recurve bow", "category": "weapon", "weapon": "bow", "weight": 0.9, "stack": 1, "hint": "The hunter's bow. Right click to draw and aim, left click to loose; R nocks the next arrow. Silent. Q and E lean."},
+	"arrow": {"name": "Arrow", "category": "material", "weight": 0.03, "stack": 20, "hint": "Arrows for the bow."},
+	"outboard_motor": {"name": "Outboard motor", "category": "part", "weight": 18.0, "stack": 1, "hint": "The john boat's missing outboard. Carry it down to the boat and fit it on the stern (F). It'll need fuel to run."},
 	"ammo_45": {"name": ".45 ACP", "category": "material", "weight": 0.015, "stack": 50, "hint": AMMO_HINT},
 	"ammo_9mm": {"name": "9mm", "category": "material", "weight": 0.012, "stack": 60, "hint": AMMO_HINT},
 	"ammo_556": {"name": "5.56", "category": "material", "weight": 0.013, "stack": 60, "hint": AMMO_HINT},
@@ -159,6 +163,7 @@ const ITEMS := {
 
 ## Grid footprint [width, height] in inventory cells. Anything missing is 1×1.
 const SIZES := {
+	"dagger": [1, 2], "bow": [1, 4], "arrow": [1, 3], "outboard_motor": [2, 4],
 	"loot_bag": [3, 3],
 	"compost_bin_kit": [2, 3],
 	"raw_fish": [2, 1], "cooked_fish": [2, 1], "raw_mullet": [2, 1], "raw_snapper": [2, 1], "raw_grouper": [3, 2], "raw_barracuda": [3, 1],

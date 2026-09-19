@@ -150,6 +150,12 @@ func _build_gun(id: String) -> void:
 	var scoped := float(WeaponTable.WEAPONS.get(weapon, {}).get("zoom", 1.0)) > 1.0
 	var sight_height := rail.z - (SCOPE_DROP if scoped else SIGHT_DROP)
 	_aimed = Vector3(0.0, -sight_height, AIM_DEPTH_PISTOL if _pistol else AIM_DEPTH_LONG)
+	if WeaponTable.WEAPONS.get(weapon, {}).get("kind", "") == "bow":
+		# A bow: the left hand holds the grip, the right draws the string back to the cheek.
+		_left_hand = _hand_mesh(_gun, Vector3(-0.012, 0.0, 0.0), Vector3(PI / 2.0, 0.0, 0.0))
+		_right_hand = _hand_mesh(_gun, Vector3(0.01, -0.13, 0.0), Vector3(PI / 2.0, 0.0, 0.4))
+		_draw = 1.0
+		return
 	# The right hand wraps the grip: back of the hand to the right, thumb over the top.
 	_right_hand = _hand_mesh(_gun, Vector3(0.012, -0.005, -0.012), Vector3(0.0, 0.0, 0.25))
 	if _pistol:

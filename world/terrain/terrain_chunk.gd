@@ -41,6 +41,10 @@ static func build_data(shape: CampIsland, origin: Vector2) -> Dictionary:
 			var layer := CampIsland.layer_for(biome, h, normal.y)
 			var jitter := fposmod(sin(wx * 12.9898 + wz * 78.233) * 43758.5453, 1.0)
 			var wanted := CampIsland.color_for(biome, h, normal.y).darkened(jitter * 0.07)
+			# Nothing grows in the cave: bare, dark rock underfoot and up its walls.
+			if shape.in_cave(Vector2(wx, wz)):
+				layer = TerrainLayers.ROCK
+				wanted = CampIsland.ROCK.darkened(0.45 + jitter * 0.1)
 			var layer_uvs := TerrainLayers.uvs(layer)
 			vertices.append(Vector3(ix * CELL, h, iz * CELL))
 			normals.append(normal)

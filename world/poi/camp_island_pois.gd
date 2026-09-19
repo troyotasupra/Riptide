@@ -11,7 +11,7 @@ static func build(shape: CampIsland) -> Node3D:
 	root.add_child(_stream(shape))
 	root.add_child(_waterfall(shape))
 	root.add_child(_castaway_camp(shape))
-	root.add_child(_cave(shape))
+	root.add_child(CaveBuild.build(shape))
 	root.add_child(FishingShack.build(shape))
 	root.add_child(_shipwreck(shape))
 	return root
@@ -477,25 +477,6 @@ static func _soft_puff_texture() -> Texture2D:
 	texture.width = 64
 	texture.height = 64
 	return texture
-
-
-static func _cave(shape: CampIsland) -> Node3D:
-	var node := Node3D.new()
-	node.name = "CaveMouth"
-	node.position = _ground(shape, shape.cave)
-	node.rotation.y = yaw_toward(shape.cave, shape.center)
-	_mesh(node, _box(Vector3(3.2, 3.0, 1.0)), "cave_dark", Color(0.03, 0.03, 0.03), Vector3(0.0, 1.5, 0.2))
-	var boulder := SphereMesh.new()
-	boulder.radius = 1.6
-	boulder.height = 3.2
-	boulder.radial_segments = 6
-	boulder.rings = 3
-	for spot: Vector3 in [Vector3(-2.6, 1.2, 0.6), Vector3(2.6, 1.2, 0.6), Vector3(-1.4, 3.6, 0.8), Vector3(1.4, 3.6, 0.8), Vector3(0.0, 4.2, 0.9)]:
-		_mesh(node, boulder, "boulder", Color(0.47, 0.45, 0.43), spot, Vector3(0.4, spot.x, 0.0))
-		var rock := SphereShape3D.new()
-		rock.radius = 1.5
-		_solid(node, rock, spot)
-	return node
 
 
 static func _shipwreck(shape: CampIsland) -> Node3D:

@@ -50,7 +50,7 @@ static func stats(weapon_id: String, attachments: Dictionary = {}) -> Dictionary
 		"aim_spread": float(weapon.spread[1]),
 		"zoom": float(weapon.get("zoom", 1.0)),
 		"zoom_min": float(weapon.get("zoom_min", weapon.get("zoom", 1.0))),
-		"quiet": 0.0,
+		"quiet": float(weapon.get("quiet", 0.0)),
 		"wear": WeaponTable.WEAR_PER_SHOT,
 		"weight": 0.0,
 		"attachments": {},

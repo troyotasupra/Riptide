@@ -17,6 +17,7 @@ extends RefCounted
 
 const CALIBERS := {
 	"45acp": {"name": ".45 ACP", "item": "ammo_45"},
+	"arrow": {"name": "Arrow", "item": "arrow"},
 	"9mm": {"name": "9mm", "item": "ammo_9mm"},
 	"556": {"name": "5.56", "item": "ammo_556"},
 	"12ga": {"name": "12 gauge", "item": "ammo_12ga"},
@@ -24,6 +25,13 @@ const CALIBERS := {
 }
 
 const WEAPONS := {
+	# One arrow at a time, drawn and loosed: slow, heavy, silent, and it drops a lot.
+	"bow": {
+		"name": "Recurve bow", "caliber": "arrow", "damage": 55.0, "velocity": 62.0, "rpm": 50.0,
+		"modes": ["single"], "mag": 1, "reload": 0.9, "reload_empty": 0.9, "chamber": false,
+		"recoil": [0.4, 0.2, 9.0], "sway": 1.3, "ads": 0.5, "spread": [0.06, 0.004],
+		"quiet": 0.95, "kind": "bow", "slots": [],
+	},
 	"m1911": {
 		"name": "M1911", "caliber": "45acp", "damage": 36.0, "velocity": 253.0, "rpm": 400.0,
 		"modes": ["semi"], "mag": 7, "reload": 2.1, "reload_empty": 2.8, "chamber": true,

@@ -40,7 +40,7 @@ static func generate(shape: CampIsland) -> Array[Dictionary]:
 				if h < 0.3:
 					continue
 				var kind := pick(shape.biome_at(x, z, h), shape.normal_y_at(x, z), roll)
-				if kind.is_empty() or _crowds_landmark(shape, landmarks, Vector2(x, z)):
+				if kind.is_empty() or _crowds_landmark(shape, landmarks, Vector2(x, z)) or shape.in_cave(Vector2(x, z), 2.5):
 					continue
 				spots.append({"id": "%d_%d_%d" % [ix, iz, i], "kind": kind, "pos": Vector3(x, h, z), "yaw": yaw, "scale": size})
 	return spots

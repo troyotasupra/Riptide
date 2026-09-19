@@ -13,7 +13,7 @@ func test_every_gun_is_whole() -> void:
 		check(gun.mag > 0 and gun.damage > 0.0 and gun.velocity > 0.0, "%s shoots something" % id)
 		check(not Array(gun.modes).is_empty(), "%s has a fire mode" % id)
 		# Every gun can be sighted: an optic slot, or a scope built in.
-		check(Array(gun.slots).has("optic") or float(gun.get("zoom", 1.0)) > 1.0, "%s can take or has an optic" % id)
+		check(gun.get("kind", "") == "bow" or Array(gun.slots).has("optic") or float(gun.get("zoom", 1.0)) > 1.0, "%s can take or has an optic" % id)
 	check(Weapons.ammo_item("m4") == "ammo_556" and Weapons.ammo_item("m1911") == "ammo_45", "each gun eats its own rounds")
 	check(Weapons.manual_action("intervention") and Weapons.manual_action("mossberg"), "the bolt gun and the pump are worked by hand")
 	check(not Weapons.manual_action("uzi"), "the Uzi works its own action")
