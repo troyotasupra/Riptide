@@ -6,7 +6,7 @@ extends RefCounted
 ##   shelter: °C added while under it (lean-to, tent) · sleep: can sleep here
 ##   container: storage slots · footprint: clearance radius when placing
 ##   stages: a build site — materials added in order, [{"item", "count"}, ...]
-##   launches: what the finished build site becomes (hold E to launch it)
+##   launches: what the finished build site becomes (hold F to launch it)
 ##   shore: must be placed on the beach, near open water
 ##   hp: how much punishment it takes before it collapses (weapons, fire)
 ##

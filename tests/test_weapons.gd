@@ -85,6 +85,17 @@ func test_recoil_climbs_and_settles() -> void:
 	check(Math.recoil_kick(braced, 3, 0.5).y < Math.recoil_kick(Math.stats("m4"), 3, 0.5).y, "a bipod holds it down")
 
 
+func test_variable_scopes_click_within_their_range() -> void:
+	var scoped := Math.stats("intervention")
+	check(float(scoped.zoom) == 12.0 and float(scoped.zoom_min) == 4.0, "the Intervention's scope turns from 4x to 12x")
+	check(Math.step_zoom(8.0, 1, 4.0, 12.0) == 10.0 and Math.step_zoom(8.0, -1, 4.0, 12.0) == 6.0, "Z / X click one power down or up")
+	check(Math.step_zoom(12.0, 1, 4.0, 12.0) == 12.0 and Math.step_zoom(4.0, -1, 4.0, 12.0) == 4.0, "and stop at the ends")
+	var lpvo := Math.stats("m4", {"optic": "lpvo_6x"})
+	check(float(lpvo.zoom_min) == 1.0 and float(lpvo.zoom) == 6.0, "an LPVO turns from 1x to 6x")
+	var prism := Math.stats("m4", {"optic": "prism_3x"})
+	check(float(prism.zoom_min) == float(prism.zoom), "a fixed prism doesn't turn")
+
+
 func test_sights_wander_less_when_you_hold_your_breath() -> void:
 	var gun := Math.stats("intervention")
 	var loose := 0.0

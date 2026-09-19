@@ -1,7 +1,8 @@
 class_name Gun
 extends Node
 ## The local crew member's shooting. Left click fires, right click brings the
-## sights up, R reloads (or clears a jam), X switches fire mode. The gun kicks
+## sights up, R reloads (or clears a jam), X switches fire mode. Sighted in
+## through a variable optic, Z and X turn the power down and up instead. The gun kicks
 ## your aim up and you ride it back down; sighted in, the sights wander until you
 ## hold your breath. The host decides what the bullets actually hit.
 
@@ -31,6 +32,11 @@ var _holding_breath := false
 var _trigger_held := false
 var _time := 0.0
 var _base_fov := 0.0
+## Each gun's scope power as its owner last set it: uid -> power.
+var _powers := {}
+
+## Sights this far up count as looking through them (the lens picture shows).
+const SIGHTED := 0.9
 
 
 func holding_gun() -> bool:
@@ -59,6 +65,17 @@ func handle_input(event: InputEvent) -> bool:
 		return true
 	if event.is_action_pressed("secondary"):
 		return true  # aiming is held, handled in _process
+	# Through a variable optic, Z / X turn the power (they don't dismantle or switch mode).
+	if aim >= SIGHTED and variable_optic() and (event.is_action_pressed("zoom_in") or event.is_action_pressed("zoom_out")):
+		var fitted := gun()
+		var now := magnification()
+		var next := WeaponMath.step_zoom(now, 1 if event.is_action_pressed("zoom_in") else -1, float(fitted.zoom_min), float(fitted.zoom))
+		_powers[int(stack().get("uid", 0))] = next
+		if next != now:
+			Sound.play("click", -16.0)
+		return true
+	if aim >= SIGHTED and variable_optic() and (event.is_action("zoom_in") or event.is_action("zoom_out")):
+		return true
 	if event.is_action_pressed("rotate"):
 		_request_reload()
 		return true
@@ -106,8 +123,34 @@ func _update_sights(fitted: Dictionary, _delta: float) -> void:
 	player.aim_offset = Vector2(deg_to_rad(wander.x), deg_to_rad(wander.y))
 	if _base_fov <= 0.0:
 		_base_fov = Settings.fov
-	var zoom: float = fitted.get("zoom", 1.0)
-	player.aim_fov = Settings.fov / lerpf(1.0, maxf(1.0, zoom * 0.8), aim) if zoom > 1.0 else lerpf(Settings.fov, Settings.fov * 0.82, aim)
+	# Bringing the sights up narrows the view only a touch, as your eye focuses
+	# down the gun; a scope's magnification is in the lens picture (ScopeView),
+	# at the power it's set to, never zoomed in as you raise it.
+	player.aim_fov = lerpf(Settings.fov, Settings.fov * 0.88, aim)
+
+
+## The optic's power right now (1 without a magnifying optic).
+func magnification() -> float:
+	var fitted := gun()
+	var high := float(fitted.get("zoom", 1.0))
+	if high <= 1.0:
+		return 1.0
+	var low := float(fitted.get("zoom_min", high))
+	var uid := int(stack().get("uid", 0))
+	if not _powers.has(uid):
+		# A fresh scope starts in the middle of its range.
+		_powers[uid] = WeaponMath.step_zoom((low + high) * 0.5, 0, low, high)
+	return clampf(float(_powers[uid]), low, high)
+
+
+func variable_optic() -> bool:
+	var fitted := gun()
+	return float(fitted.get("zoom", 1.0)) > float(fitted.get("zoom_min", fitted.get("zoom", 1.0))) + 0.01
+
+
+## The power the lens picture shows now: the set power once sighted in, else none.
+func sight_picture() -> float:
+	return magnification() if holding_gun() and aim >= SIGHTED else 1.0
 
 
 func _try_shot() -> void:
@@ -197,6 +240,10 @@ func hud_text() -> String:
 	if bool(state.jammed):
 		return "%s   JAMMED — %s to clear" % [state.name, Controls.tag("rotate")]
 	var line := "%s   %d / %d   %s" % [state.name, int(state.ammo), int(state.mag), CombatService._mode_name(String(state.mode))]
+	if magnification() > 1.0:
+		line += "   ·   %s×" % String.num(magnification(), 1).trim_suffix(".0")
+		if aim >= SIGHTED and variable_optic():
+			line += " (%s / %s)" % [Controls.tag("zoom_out"), Controls.tag("zoom_in")]
 	if float(state.condition) < WeaponTable.CONDITION_NEGLECTED:
 		line += "   ·   fouled, clean it"
 	if _holding_breath:

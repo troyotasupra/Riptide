@@ -92,7 +92,8 @@ func request_shot(direction: Vector3, aim: float) -> void:
 		s.push_inventory()
 		return
 
-	var eye := player.world_transform().origin + Vector3.UP * Player.EYE_HEIGHT
+	# From where the crew member is actually looking: a lean moves the eye sideways.
+	var eye := player.world_transform().origin + Vector3.UP * Player.EYE_HEIGHT + player.lean_offset()
 	var look := direction.normalized()
 	if look.length() < 0.5:
 		look = Vector3.FORWARD

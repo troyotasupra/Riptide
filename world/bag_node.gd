@@ -1,7 +1,7 @@
 class_name BagNode
 extends Interactable
 ## A bag of items left in the world — something a crew member dropped, or the
-## pack they lost when they blacked out. Search it with E; it disappears once empty.
+## pack they lost when they blacked out. Search it with interact (F); it disappears once empty.
 
 var bag_id := ""
 

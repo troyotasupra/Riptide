@@ -53,7 +53,7 @@ const WEAPONS := {
 		"modes": ["bolt"], "mag": 5, "reload": 3.4, "reload_empty": 4.0, "chamber": false,
 		"recoil": [5.5, 1.0, 5.0], "sway": 1.5, "ads": 0.45, "spread": [0.09, 0.0008],
 		# Its scope is part of the gun (and the model): no optic slot to fit another.
-		"zoom": 10.0, "sway_scoped": 1.25,
+		"zoom": 12.0, "zoom_min": 4.0, "sway_scoped": 1.25,
 		"slots": ["muzzle", "underbarrel", "magazine", "stock"],
 	},
 }

@@ -13,8 +13,15 @@ const KEYS := {
 	"jump": [KEY_SPACE],
 	"sprint": [KEY_SHIFT],
 	"crouch": [KEY_C, KEY_CTRL],
-	"interact": [KEY_E],
+	# F uses things. With a gun or bow in hand Q and E lean; without, Q drops.
+	# Aboard, F on nothing in particular takes up (or lets go of) the oars.
+	"interact": [KEY_F],
 	"paddle": [KEY_F],
+	"lean_left": [KEY_Q],
+	"lean_right": [KEY_E],
+	# Looking through a variable scope: Z zooms out, X zooms in.
+	"zoom_out": [KEY_Z],
+	"zoom_in": [KEY_X],
 	"row_left": [KEY_Q],
 	"row_right": [KEY_E],
 	"inventory": [KEY_TAB],
@@ -62,6 +69,12 @@ const PAD_BUTTONS := {
 	"pause": [JOY_BUTTON_START],
 	"hotbar_next": [JOY_BUTTON_RIGHT_SHOULDER],
 	"hotbar_prev": [JOY_BUTTON_LEFT_SHOULDER],
+	# On a controller, lean and zoom only while sighted in (LT held): shoulders
+	# lean, D-pad up/down zooms. Otherwise these buttons keep their usual jobs.
+	"lean_left": [JOY_BUTTON_LEFT_SHOULDER],
+	"lean_right": [JOY_BUTTON_RIGHT_SHOULDER],
+	"zoom_in": [JOY_BUTTON_DPAD_UP],
+	"zoom_out": [JOY_BUTTON_DPAD_DOWN],
 }
 
 ## action -> [axis, direction]
@@ -81,13 +94,13 @@ const PAD_AXES := {
 }
 
 const KEY_LABELS := {
-	"interact": "E", "primary": "LMB", "secondary": "RMB", "jump": "Space", "paddle": "F", "sprint": "Shift",
+	"interact": "F", "primary": "LMB", "lean_left": "Q", "lean_right": "E", "zoom_in": "X", "zoom_out": "Z", "secondary": "RMB", "jump": "Space", "paddle": "F", "sprint": "Shift",
 	"row_left": "Q", "row_right": "E", "move_back": "S",
 	"crouch": "C", "rotate": "R", "fire_mode": "X", "dismantle": "Z", "inventory": "Tab", "book": "B", "drop": "Q", "give": "G", "pause": "Esc",
 	"hotbar": "1–8",
 }
 const PAD_LABELS := {
-	"interact": "X", "primary": "RT", "secondary": "LT", "jump": "A", "paddle": "Y", "sprint": "L3",
+	"interact": "X", "primary": "RT", "lean_left": "LB", "lean_right": "RB", "zoom_in": "D-pad ↑", "zoom_out": "D-pad ↓", "secondary": "LT", "jump": "A", "paddle": "Y", "sprint": "L3",
 	"row_left": "LT", "row_right": "RT", "move_back": "Stick ↓",
 	"crouch": "B", "rotate": "D-pad →", "fire_mode": "R3", "dismantle": "Y", "inventory": "View", "book": "D-pad ←", "drop": "D-pad ↓",
 	"give": "D-pad ↑", "pause": "Menu", "hotbar": "LB/RB",

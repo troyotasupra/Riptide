@@ -41,7 +41,7 @@ func _ready() -> void:
 		var take := UiKit.button(row, "Take", func() -> void: _take(index), 70.0)
 		_rows.append({"icon": icon, "label": label, "bar": bar, "take": take})
 	_take_all = UiKit.button(box, "Take everything that's ready", func() -> void: _take(-1))
-	UiKit.label(box, "Hold food, water or firewood and press E on it to put something on.", true)
+	UiKit.label(box, "Hold food, water or firewood and press F on it to put something on.", true)
 	visibility_changed.connect(func() -> void:
 		if visible:
 			_recenter())

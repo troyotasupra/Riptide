@@ -49,6 +49,7 @@ static func stats(weapon_id: String, attachments: Dictionary = {}) -> Dictionary
 		"hip_spread": float(weapon.spread[0]),
 		"aim_spread": float(weapon.spread[1]),
 		"zoom": float(weapon.get("zoom", 1.0)),
+		"zoom_min": float(weapon.get("zoom_min", weapon.get("zoom", 1.0))),
 		"quiet": 0.0,
 		"wear": WeaponTable.WEAR_PER_SHOT,
 		"weight": 0.0,
@@ -60,7 +61,9 @@ static func stats(weapon_id: String, attachments: Dictionary = {}) -> Dictionary
 			continue
 		var fitted := AttachmentTable.get_attachment(id)
 		out.attachments[slot] = id
-		out.zoom = maxf(out.zoom, float(fitted.get("zoom", 1.0)))
+		if float(fitted.get("zoom", 1.0)) > out.zoom:
+			out.zoom = float(fitted.get("zoom", 1.0))
+			out.zoom_min = float(fitted.get("zoom_min", out.zoom))
 		out.recoil_up *= float(fitted.get("recoil", 1.0))
 		out.recoil_side *= float(fitted.get("recoil", 1.0))
 		out.sway *= float(fitted.get("sway", 1.0))
@@ -114,6 +117,25 @@ static func settle(offset: Vector2, gun: Dictionary, dt: float) -> Vector2:
 ## Seconds to bring the sights up (or put them down).
 static func ads_seconds(gun: Dictionary, carried_kg: float) -> float:
 	return float(gun.ads) * (1.0 + clampf(carried_kg / 60.0, 0.0, 0.5))
+
+
+## The powers a variable optic clicks through, low to high.
+const ZOOM_STEPS: Array[float] = [1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0]
+
+
+## The next power up (`dir` 1) or down (-1) from `now`, kept within the optic's range.
+static func step_zoom(now: float, dir: int, low: float, high: float) -> float:
+	var steps: Array[float] = []
+	for power in ZOOM_STEPS:
+		if power >= low - 0.01 and power <= high + 0.01:
+			steps.append(power)
+	if steps.is_empty():
+		return high
+	var index := 0
+	for i in steps.size():
+		if absf(steps[i] - now) < absf(steps[index] - now):
+			index = i
+	return steps[clampi(index + dir, 0, steps.size() - 1)]
 
 
 static func reload_seconds(gun: Dictionary, empty: bool) -> float:

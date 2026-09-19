@@ -73,6 +73,11 @@ var swimming := false
 ## The local crew member's eyes are under the surface.
 var underwater := false
 var crouching := false
+## -1 leaning fully left .. 1 fully right (with a gun or bow in hand, Q / E).
+var lean := 0.0
+## How far a full lean moves the eye sideways, and how far it tilts the view.
+const LEAN_DISTANCE := 0.36
+const LEAN_ROLL := 0.2
 var paddling := false
 ## 0 resting .. 1 sprinting or swimming hard; drives hunger and thirst on the host.
 var exertion := 0.0
@@ -361,6 +366,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if gun != null and gun.handle_input(event):
 		get_viewport().set_input_as_handled()
 		return
+	# With a gun or bow in hand Q and E lean (read every frame in _update_lean).
+	if leans_now() and event is InputEventKey and (event.is_action("lean_left") or event.is_action("lean_right")):
+		get_viewport().set_input_as_handled()
+		return
 	# Aboard with an oar, Q or E just takes up the oars — it never drops the oar overboard.
 	if not paddling and platform != null and platform.can_paddle and focus_id.is_empty() \
 			and (event.is_action_pressed("row_left") or event.is_action_pressed("row_right")) \
@@ -368,7 +377,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		paddling = true
 		get_viewport().set_input_as_handled()
 		return
-	if event.is_action_pressed("paddle") and platform != null and platform.can_paddle:
+	# F aboard: on something, it uses that; on nothing, it takes up or lets go of the oars.
+	if event.is_action_pressed("paddle") and platform != null and platform.can_paddle and (paddling or focus_id.is_empty()):
 		if paddling:
 			paddling = false
 		elif survivor.inventory.tool_types().has("oar"):
@@ -395,7 +405,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_press_primary()
 	elif event.is_action_pressed("rotate") and is_placing():
 		_ghost_yaw += PI / 8.0
-	elif event.is_action_pressed("drop"):
+	elif event.is_action_pressed("drop") and not _armed():
 		var held = survivor.inventory.hotbar[survivor.selected_slot]
 		if held != null:
 			Sound.play("drop", -4.0)
@@ -411,6 +421,40 @@ func _unhandled_input(event: InputEvent) -> void:
 			if event.is_action_pressed("hotbar_%d" % (i + 1)):
 				survivor.select_slot(i)
 				break
+
+
+## A gun (or later a bow) in hand: Q and E lean instead of dropping and rowing.
+func _armed() -> bool:
+	return ItemTable.get_item(held_id).has("weapon")
+
+
+func leans_now() -> bool:
+	return _armed() and not paddling and not swimming and not downed
+
+
+## Where a lean puts the eye, in the body's own space (right is +X).
+func lean_offset() -> Vector3:
+	var side := Basis(Vector3.UP, yaw) * Vector3.RIGHT
+	return side * lean * LEAN_DISTANCE + Vector3.DOWN * absf(lean) * 0.05
+
+
+func _update_lean(delta: float, base: Transform3D, feet: Vector3) -> void:
+	var want := 0.0
+	if leans_now() and _controls_active():
+		var pad_aiming := Controls.using_gamepad and Input.is_action_pressed("secondary")
+		if not Controls.using_gamepad or pad_aiming:
+			want = Input.get_action_strength("lean_right") - Input.get_action_strength("lean_left")
+	# Never lean through a wall: stop a hand's width short of whatever is there.
+	if want != 0.0:
+		var eye := feet + base.basis * Vector3(0.0, _eye_height, 0.0)
+		var side := base.basis * (Basis(Vector3.UP, yaw) * Vector3.RIGHT) * signf(want)
+		var query := PhysicsRayQueryParameters3D.create(eye, eye + side * (LEAN_DISTANCE + 0.15), Layers.WORLD)
+		query.exclude = [get_rid()]
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if not hit.is_empty():
+			var room := maxf(0.0, eye.distance_to(hit.position) - 0.15) / LEAN_DISTANCE
+			want = signf(want) * minf(absf(want), room)
+	lean = move_toward(lean, want, delta * 5.0)
 
 
 func _physics_process(delta: float) -> void:
@@ -439,10 +483,11 @@ func _process(delta: float) -> void:
 			var speed := STICK_LOOK_SPEED * Settings.stick_sensitivity * delta
 			yaw -= stick.x * speed
 			pitch = clampf(pitch - stick.y * speed * (-1.0 if Settings.invert_y else 1.0), -1.5, 1.5)
+		_update_lean(delta, base, world.origin)
 		# Use the live yaw/pitch rather than the physics-tick body rotation so
 		# looking around responds every frame.
-		var view := Basis(Vector3.UP, yaw + aim_offset.x) * Basis(Vector3.RIGHT, clampf(pitch + aim_offset.y, -1.55, 1.55))
-		camera.global_transform = Transform3D(base.basis * view, world.origin + base.basis * Vector3(0.0, _eye_height, 0.0))
+		var view := Basis(Vector3.UP, yaw + aim_offset.x) * Basis(Vector3.RIGHT, clampf(pitch + aim_offset.y, -1.55, 1.55)) * Basis(Vector3.FORWARD, -lean * LEAN_ROLL)
+		camera.global_transform = Transform3D(base.basis * view, world.origin + base.basis * (Vector3(0.0, _eye_height, 0.0) + lean_offset()))
 		# Sighted in, the gun narrows the view (a scope does its own zoom in ScopeView).
 		camera.fov = aim_fov if aim_fov > 0.0 else Settings.fov
 		_torch_light.visible = ItemTable.get_item(held_id).get("tool", "") == "torch"
@@ -458,6 +503,7 @@ func _process(delta: float) -> void:
 		model.global_transform = Transform3D(world.basis, world.origin)
 		if downed:
 			model.global_transform *= Transform3D(Basis(Vector3.RIGHT, -1.35), Vector3(0.0, 0.28, 0.25))
+		model.lean = lean
 		model.animate(delta, _remote_speed, swimming, crouching, pitch)
 		_label.global_position = world.origin + Vector3.UP * 2.2
 
@@ -1051,7 +1097,7 @@ func _send_state() -> void:
 	if platform != null:
 		boat_name = String(platform.name)
 		pos -= platform.proxy_xf.origin
-	Net.send_to_ready(self, "_net_state", [boat_name, pos, yaw, pitch, crouching, swimming, exertion, held_id])
+	Net.send_to_ready(self, "_net_state", [boat_name, pos, yaw, pitch, crouching, swimming, exertion, held_id, lean])
 
 
 # --- sound -------------------------------------------------------------------
@@ -1134,7 +1180,7 @@ func _autopilot_input(delta: float) -> Vector2:
 	return Vector2.ZERO
 
 
-## "gather": walk to the nearest harvestable prop, look at it, hold E; eat now and then.
+## "gather": walk to the nearest harvestable prop, look at it, hold interact; eat now and then.
 func _gather_input(delta: float) -> Vector2:
 	_auto_timer += delta
 	_auto_heading += delta
@@ -1208,7 +1254,7 @@ func _track_stress(delta: float) -> void:
 # --- remote copy -----------------------------------------------------------
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func _net_state(boat_name: String, pos: Vector3, p_yaw: float, p_pitch: float, p_crouching: bool, p_swimming: bool, p_exertion: float, p_held: String) -> void:
+func _net_state(boat_name: String, pos: Vector3, p_yaw: float, p_pitch: float, p_crouching: bool, p_swimming: bool, p_exertion: float, p_held: String, p_lean: float = 0.0) -> void:
 	var boat: Boat = GameState.find_boat(boat_name)
 	var target := pos if boat == null else boat.proxy_xf.origin + pos
 	if boat != platform or not _has_target:
@@ -1221,6 +1267,7 @@ func _net_state(boat_name: String, pos: Vector3, p_yaw: float, p_pitch: float, p
 	_target_yaw = p_yaw
 	pitch = p_pitch
 	crouching = p_crouching
+	lean = clampf(p_lean, -1.0, 1.0)
 	if p_swimming and not swimming:
 		Sound.play_at("splash", world_transform().origin, -2.0)
 	swimming = p_swimming

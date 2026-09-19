@@ -54,8 +54,8 @@ const ITEMS := {
 	"fiber": {"name": "Plant fiber", "category": "material", "weight": 0.05, "stack": 50, "hint": "Crafting material — twist it into rope in the survival book (B)."},
 	"stone": {"name": "Stone", "category": "material", "weight": 0.6, "stack": 20, "hint": "Crafting material — a ring of stones makes a campfire (B)."},
 	"flint": {"name": "Flint", "category": "material", "weight": 0.3, "stack": 20, "hint": "Crafting material — for spear tips and a stone hatchet (B)."},
-	"driftwood": {"name": "Driftwood", "category": "material", "weight": 1.2, "stack": 10, "fuel": 90.0, "hint": "Wood for crafting (B), or hold it and press E on a fire to burn it."},
-	"log": {"name": "Log", "category": "material", "weight": 2.5, "stack": 5, "fuel": 200.0, "hint": "Wood for crafting (B), or hold it and press E on a fire to burn it."},
+	"driftwood": {"name": "Driftwood", "category": "material", "weight": 1.2, "stack": 10, "fuel": 90.0, "hint": "Wood for crafting (B), or hold it and press F on a fire to burn it."},
+	"log": {"name": "Log", "category": "material", "weight": 2.5, "stack": 5, "fuel": 200.0, "hint": "Wood for crafting (B), or hold it and press F on a fire to burn it."},
 	"rope": {"name": "Rope", "category": "material", "weight": 0.1, "stack": 20, "hint": "Crafting material for tents, racks and tools (B)."},
 	"tarp": {"name": "Tarp", "category": "material", "weight": 1.2, "stack": 2, "hint": "Crafting material — a lean-to or a tent (B)."},
 	"paracord": {"name": "Paracord", "category": "material", "weight": 0.3, "stack": 5, "hint": "Crafting material — lash together a lean-to (B)."},
@@ -72,7 +72,7 @@ const ITEMS := {
 	"oar": {"name": "Oar", "category": "tool", "tool": "oar", "weight": 1.4, "stack": 1, "hint": "Carry it aboard a raft or boat and press F to row: Q strokes the left oar, E the right, both to go straight. Hold S to back-row, Shift to pull hard."},
 	"lighter": {"name": "Lighter", "category": "tool", "tool": "lighter", "weight": 0.05, "stack": 1, "uses": 20, "hint": "Press E on a campfire or stove that has wood in it to light it."},
 	"torch": {"name": "Torch", "category": "tool", "tool": "torch", "weight": 0.5, "stack": 3, "hint": "Lights your way while it's in your hand. Left click on dry grass or brush to set it alight — fire spreads with the wind."},
-	"canteen": {"name": "Canteen (empty)", "category": "tool", "tool": "canteen", "weight": 0.3, "stack": 1, "hint": "Hold it and press E at the spring (clean) or the stream (boil it first)."},
+	"canteen": {"name": "Canteen (empty)", "category": "tool", "tool": "canteen", "weight": 0.3, "stack": 1, "hint": "Hold it and press F at the spring (clean) or the stream (boil it first)."},
 	"fishing_rod": {"name": "Fishing rod", "category": "tool", "tool": "fishing_rod", "weight": 1.0, "stack": 1, "hint": "Hold left click to wind up a cast and let go to throw. When the bobber dips, left click to strike, then hold to reel and ease off before the line snaps. Right click picks your bait."},
 	"spear": {"name": "Spear", "category": "weapon", "tool": "spear", "weight": 1.5, "stack": 1, "hint": "Look at a shark and left click to strike — the best reach and damage you've got."},
 	"flare_gun": {"name": "Flare gun", "category": "weapon", "weight": 0.6, "stack": 1, "hint": COMING_SOON},
@@ -124,7 +124,7 @@ const ITEMS := {
 	"logbook": {"name": "Captain's logbook", "category": "note", "weight": 0.3, "stack": 1, "note": "logbook"},
 	"journal": {"name": "Castaway's journal", "category": "note", "weight": 0.2, "stack": 1, "note": "journal"},
 	"sea_chart": {"name": "Sea chart", "category": "chart", "weight": 0.1, "stack": 1},
-	"compartment_key": {"name": "Small brass key", "category": "key", "weight": 0.02, "stack": 1, "hint": "Opens the locked footlocker in the fishing shack — press E on it."},
+	"compartment_key": {"name": "Small brass key", "category": "key", "weight": 0.02, "stack": 1, "hint": "Opens the locked footlocker in the fishing shack — press F on it."},
 
 	# --- structure kits ---
 	"campfire_kit": {"name": "Campfire ring (place)", "category": "placeable", "weight": 1.5, "stack": 1, "places": "campfire"},

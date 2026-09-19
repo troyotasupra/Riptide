@@ -45,6 +45,8 @@ var worn := {}
 var crew_color_index := 4
 var emblem_index := 1
 var held_id := ""
+## -1..1: leaning round a corner (the whole upper body tips from the hips).
+var lean := 0.0
 ## Limbs lost to sharks ("leg_l", "arm_r", ...) and those with a peg leg or hook fitted.
 var missing_limbs: Array = []
 var prosthetics: Array = []
@@ -705,6 +707,7 @@ func animate(delta: float, speed: float, swimming: bool, crouching: bool, head_p
 	_pelvis.position.y = lerpf(_pelvis.position.y, pelvis_y, t)
 	_pelvis.rotation.x = lerp_angle(_pelvis.rotation.x, body_pitch, t)
 	_spine.rotation.x = sin(_breath) * 0.01
+	_spine.rotation.z = lerp_angle(_spine.rotation.z, -lean * 0.32, t)
 	for i in 2:
 		var key := "l" if i == 0 else "r"
 		_legs[key].hip.rotation.x = lerp_angle(_legs[key].hip.rotation.x, legs[i], t)

@@ -88,6 +88,8 @@ func _ready() -> void:
 
 	_scope = ScopeView.new()
 	add_child(_scope)
+	# Under everything else, so the ammo count and the scope's power still read over it.
+	move_child(_scope, 0)
 	_build_underwater()
 	_build_bars()
 	_build_hotbar()
@@ -436,7 +438,7 @@ func _process(delta: float) -> void:
 		_underwater.color = Color(0.05, 0.22, 0.32, 0.2)
 	_downed_overlay.visible = player.downed
 	if player.downed:
-		_downed_label.text = "YOU'RE DOWN\nBleeding out in %ds — a crewmate can revive you (hold E on you)" % ceili(player.bleed_left)
+		_downed_label.text = "YOU'RE DOWN\nBleeding out in %ds — a crewmate can revive you (hold %s on you)" % [ceili(player.bleed_left), Controls.tag("interact")]
 	var temperature := "Body %.1f°C · feels %.0f°C" % [survival.body_temp, _bound.air_temp]
 	if _bound.warmth > 0.0:
 		temperature += " · sheltered"
@@ -464,7 +466,7 @@ func _process(delta: float) -> void:
 	# Looking down a magnified optic draws the world again through the lens.
 	var magnified := 1.0
 	if player.gun != null and player.gun.holding_gun() and not GameState.ui_open:
-		magnified = lerpf(1.0, float(player.gun.gun().get("zoom", 1.0)), player.gun.aim)
+		magnified = player.gun.sight_picture()
 	_scope.look_through(magnified)
 	if player.view_model != null:
 		player.view_model.visible = not _scope.visible and not player.held_id.is_empty()

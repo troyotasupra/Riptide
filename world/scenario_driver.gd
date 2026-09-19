@@ -491,7 +491,13 @@ func _shark_loop() -> void:
 	var pack := s.inventory
 	_check(field.sharks.size() >= 3, "sharks patrol the crossing and the reef (%d)" % field.sharks.size())
 
+	# Somewhere properly deep between the islands (the worlds are random, so look).
 	var sea: Vector2 = world.camp_island.center * 0.45
+	for k in 40:
+		var probe: Vector2 = world.camp_island.center * (0.3 + 0.01 * k) + Vector2.from_angle(k * 0.7) * 20.0
+		if world.ground_height(probe.x, probe.y) < -6.0:
+			sea = probe
+			break
 	player.teleport(Vector3(sea.x, -2.6, sea.y))
 	await _wait(2.0)
 	_check(player.swimming, "swimming in open water, far from land")
@@ -796,7 +802,11 @@ func _gun_loop() -> void:
 	# A neglected gun jams, and the same key clears it.
 	rifle["condition"] = 0.02
 	var jammed := false
-	for i in 30:
+	# About a 1-in-18 chance a round: seed the dice and allow plenty of rounds,
+	# so this check never fails on luck.
+	seed(1911)
+	for i in 120:
+		rifle["ammo"] = 30
 		world.combat.request_shot(ahead, 1.0)
 		await _wait(0.12)
 		if bool(rifle.get("jammed", false)):

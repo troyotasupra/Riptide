@@ -1,6 +1,6 @@
 class_name Interactable
 extends StaticBody3D
-## Anything the crosshair can target with E. The host acts on `interact_id`;
+## Anything the crosshair can target with interact (F). The host acts on `interact_id`;
 ## players see `interact_text()` as the prompt.
 
 var interact_id := ""

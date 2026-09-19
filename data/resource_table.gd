@@ -2,7 +2,7 @@ class_name ResourceTable
 extends RefCounted
 ## What each harvestable prop gives, how long it takes, and when it comes back.
 ##   yields: [[item_id, min, max], ...]   respawn: seconds on the ocean clock
-##   seconds: how long to hold E (or swing a tool) by hand (0 = instant)
+##   seconds: how long to hold interact (or swing a tool) by hand (0 = instant)
 ##   tool_speed: {tool type: speed multiplier} — the best tool you carry counts
 ##   requires: a tool type you must carry at all (the tree needs a hatchet)
 ## Kinds not listed here (like "rock") are scenery.

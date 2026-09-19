@@ -6,6 +6,7 @@ extends RefCounted
 ##   slot: optic | muzzle | underbarrel | magazine | stock | laser
 ##   fits: weapon ids, or empty for anything with that slot
 ##   zoom: magnification for optics (1 = none, and only optics above 1 get a real lens)
+##   zoom_min: a variable optic's lowest power; Z / X step between it and `zoom`
 ##   recoil / sway / spread / ads / reload: multipliers on the gun's own numbers
 ##   mag: extra rounds · quiet: how much of the noise it swallows (1 = silent)
 ##   wear: extra fouling per shot (a suppressor runs dirty)
@@ -16,8 +17,8 @@ const ATTACHMENTS := {
 	"red_dot": {"name": "Red dot", "slot": "optic", "zoom": 1.0, "ads": 0.95, "spread": 0.85, "weight": 0.12},
 	"holo_sight": {"name": "Holographic sight", "slot": "optic", "zoom": 1.0, "ads": 1.0, "spread": 0.8, "weight": 0.18},
 	"prism_3x": {"name": "3× prism", "slot": "optic", "zoom": 3.0, "ads": 1.15, "spread": 0.75, "sway": 1.1, "weight": 0.3},
-	"lpvo_6x": {"name": "1–6× LPVO", "slot": "optic", "zoom": 6.0, "ads": 1.25, "spread": 0.7, "sway": 1.15, "weight": 0.42},
-	"sniper_scope": {"name": "Sniper scope", "slot": "optic", "zoom": 10.0, "ads": 1.4, "spread": 0.6, "sway": 1.25,
+	"lpvo_6x": {"name": "1–6× LPVO", "slot": "optic", "zoom": 6.0, "zoom_min": 1.0, "ads": 1.25, "spread": 0.7, "sway": 1.15, "weight": 0.42},
+	"sniper_scope": {"name": "Sniper scope", "slot": "optic", "zoom": 10.0, "zoom_min": 4.0, "ads": 1.4, "spread": 0.6, "sway": 1.25,
 		"fits": ["m4"], "weight": 0.6},
 	# --- muzzle ---
 	"compensator": {"name": "Compensator", "slot": "muzzle", "recoil": 0.78, "weight": 0.1},

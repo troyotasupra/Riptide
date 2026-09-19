@@ -157,7 +157,7 @@ func _down(player: Player) -> void:
 		s.notify("You're down! Hang on — a crewmate can revive you.")
 		for other: Player in players_root.get_children():
 			if other != player:
-				other.survivor.notify("%s is down! Get to them and hold E to revive them." % player.display_name)
+				other.survivor.notify("%s is down! Get to them and hold %s to revive them." % [player.display_name, Controls.tag("interact")])
 
 
 func _set_downed_state(player: Player, value: bool) -> void:
