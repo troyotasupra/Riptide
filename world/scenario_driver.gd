@@ -959,6 +959,29 @@ func _gear_loop() -> void:
 	var set_down: String = camp.bags.keys()[camp.bags.size() - 1]
 	_check(camp.bags.size() == count + 1 and pack.count_of("loot_bag") == 0, "set it down again")
 	_check((camp.containers["bag:" + set_down] as ItemGrid).count_of("stone") == 10, "with everything still in it")
+	await _bow_check()
+
+
+## The hunter's bow: one arrow on the string, loosed, and the next nocked from the quiver.
+func _bow_check() -> void:
+	var world := GameState.world
+	var player := GameState.local_player as Player
+	var pack := player.survivor.inventory
+	world.dev.request("give", ["bow", 1])
+	world.dev.request("give", ["arrow", 5])
+	pack.hotbar[1] = null
+	_to_hotbar(pack, "bow", 1)
+	player.survivor.select_slot(1)
+	player.held_id = "bow"
+	await _wait(0.3)
+	var bow: Dictionary = CombatService.held_gun(player)
+	bow["ammo"] = 1
+	var arrows := pack.count_of("arrow")
+	world.combat.request_shot(-player.camera.global_basis.z, 1.0)
+	_check(int(bow.get("ammo", 0)) == 0, "loosed the arrow on the string")
+	world.combat.request_reload()
+	await _wait(1.5)
+	_check(int(bow.get("ammo", 0)) == 1 and pack.count_of("arrow") == arrows - 1, "and nocked the next from the quiver")
 
 
 ## Getting about on foot: in through the shack door, over a low ledge, and stopped

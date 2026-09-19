@@ -1004,7 +1004,9 @@ static func _bow(root: Node3D) -> void:
 		for i in 13:
 			var t := float(i) / 12.0
 			# Back from the riser, then the recurve flicks the tip forward again.
-			var back := -0.14 * sin(t * PI * 0.8) + 0.07 * smoothstep(0.75, 1.0, t)
+			# Back toward the archer, then the recurve flicks the tip forward again:
+			# the string sits a hand's width behind the grip (the brace height).
+			var back := -0.26 * sin(t * PI * 0.5) + 0.06 * smoothstep(0.7, 1.0, t)
 			points.append(Vector3(0.0, back, side * (0.1 + t * 0.62)))
 			radii.append(lerpf(0.016, 0.006, t))
 		var limb := MeshInstance3D.new()
@@ -1018,6 +1020,8 @@ static func _bow(root: Node3D) -> void:
 	_cylinder(root, 0.021, 0.1, Vector3(-0.004, 0.0, 0.0), Materials.leather(LEATHER), Vector3(PI / 2.0, 0.0, 0.0))
 	# The string, tip to tip.
 	var string := MeshInstance3D.new()
+	string.name = "String"
+	root.set_meta("tips", tips)
 	string.mesh = MeshKit.tube(PackedVector3Array([tips[0], (tips[0] + tips[1]) * 0.5, tips[1]]), PackedFloat32Array([0.0015, 0.0015, 0.0015]), 4, "bow_string")
 	string.material_override = Materials.plain(Color(0.85, 0.82, 0.72))
 	root.add_child(string)

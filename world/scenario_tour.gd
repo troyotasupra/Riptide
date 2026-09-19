@@ -7,7 +7,7 @@ extends Node
 ## (it spreads, so nothing after it would look normal).
 ## --face=<prefix> runs only the stops whose names start with it.
 
-const GUNS := ["m1911", "uzi", "m4", "mossberg", "intervention"]
+const GUNS := ["m1911", "uzi", "m4", "mossberg", "intervention", "bow"]
 const TOOLS := ["stone_hatchet", "knife", "machete", "fishing_rod", "torch"]
 
 var world: Node3D

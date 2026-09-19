@@ -516,6 +516,7 @@ func _process(delta: float) -> void:
 		view_model.refresh("oar" if paddling else held_id, worn.get("torso", ""), skin, GameState.crew_color)
 		view_model.rowing = rowing if paddling else 0.0
 		view_model.aim = gun.aim if gun != null else 0.0
+		view_model.loaded = gun == null or int(gun.stack().get("ammo", 0)) > 0
 		view_model.reload = gun.reload_progress() if gun != null else -1.0
 		view_model.clearing = gun != null and gun.clearing_jam()
 		view_model.animate(delta, Vector2(velocity.x, velocity.z).length())

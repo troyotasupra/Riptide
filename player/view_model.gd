@@ -47,6 +47,8 @@ var reload := -1.0
 var clearing := false
 ## 0..1 while rowing: the arm pulls the oar through its stroke.
 var rowing := 0.0
+## A round (an arrow, for the bow) is ready: the bow shows it nocked.
+var loaded := true
 
 var _arm: Node3D
 var _hand: Node3D
@@ -74,6 +76,14 @@ var _right_arm: MeshInstance3D
 var _left_arm: MeshInstance3D
 var _right_upper: MeshInstance3D
 var _left_upper: MeshInstance3D
+# The bow: its string drawn as two lengths meeting at the nock, and the nocked arrow.
+var _bow := false
+var _bow_tips: Array = []
+var _bow_string: Array[MeshInstance3D] = []
+var _bow_arrow: Node3D
+## Brace height and full draw, along the bow's own +Y (arrow direction).
+const BOW_BRACED := -0.14
+const BOW_DRAWN := -0.66
 
 
 func _ready() -> void:
@@ -152,11 +162,9 @@ func _build_gun(id: String) -> void:
 	var scoped := float(WeaponTable.WEAPONS.get(weapon, {}).get("zoom", 1.0)) > 1.0
 	var sight_height := rail.z - (SCOPE_DROP if scoped else SIGHT_DROP)
 	_aimed = Vector3(0.0, -sight_height, AIM_DEPTH_PISTOL if _pistol else AIM_DEPTH_LONG)
-	if WeaponTable.WEAPONS.get(weapon, {}).get("kind", "") == "bow":
-		# A bow: the left hand holds the grip, the right draws the string back to the cheek.
-		_left_hand = _hand_mesh(_gun, Vector3(-0.012, 0.0, 0.0), Vector3(PI / 2.0, 0.0, 0.0))
-		_right_hand = _hand_mesh(_gun, Vector3(0.01, -0.13, 0.0), Vector3(PI / 2.0, 0.0, 0.4))
-		_draw = 1.0
+	_bow = WeaponTable.WEAPONS.get(weapon, {}).get("kind", "") == "bow"
+	if _bow:
+		_build_bow()
 		return
 	# The right hand wraps the grip: back of the hand to the right, thumb over the top.
 	_right_hand = _hand_mesh(_gun, Vector3(0.012, -0.005, -0.012), Vector3(0.0, 0.0, 0.25))
@@ -266,12 +274,71 @@ func animate(delta: float, speed: float) -> void:
 		_arm.rotation.x += 0.35 * pull * rowing
 
 
+## The bow in the rig: held upright in the left hand; the right hand on the string
+## at the nock. The rig's hip pose holds it low and forward; aiming draws it to
+## the cheek with the arrow on the crosshair.
+func _build_bow() -> void:
+	_bow_tips = _gun.get_meta("tips", [])
+	var model_string := _gun.find_child("String", true, false)
+	if model_string != null:
+		model_string.visible = false
+	_bow_string.clear()
+	var cord := Materials.plain(Color(0.85, 0.82, 0.72))
+	for i in 2:
+		var length := MeshInstance3D.new()
+		var cylinder := CylinderMesh.new()
+		cylinder.top_radius = 1.0
+		cylinder.bottom_radius = 1.0
+		cylinder.height = 1.0
+		cylinder.radial_segments = 4
+		cylinder.rings = 1
+		length.mesh = cylinder
+		length.material_override = cord
+		length.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_gun.add_child(length)
+		_bow_string.append(length)
+	_bow_arrow = ItemModels.build("arrow")
+	_gun.add_child(_bow_arrow)
+	_left_hand = _hand_mesh(_gun, Vector3(-0.02, 0.0, 0.0), Vector3(0.0, 0.0, -PI / 2.0))
+	_right_hand = _hand_mesh(_gun, Vector3(0.0, BOW_BRACED, 0.0), Vector3(PI / 2.0, 0.0, 0.3))
+	_pistol = false
+	# Carried low across the body, canted well over.
+	_hip = Vector3(0.04, -0.3, -0.62)
+	# Drawn, the nock is at the jaw (below and just in front of the eye, where you
+	# don't see your own hand) and you look along the arrow over the bow hand.
+	_aimed = Vector3(0.0, -0.085, BOW_DRAWN - 0.1)
+	_draw = 1.0
+
+
+## String and arrow for how far the bow is drawn (0 braced .. 1 full draw).
+func _update_bow(draw: float) -> void:
+	if _bow_tips.size() < 2:
+		return
+	var nock := Vector3(0.0, lerpf(BOW_BRACED, BOW_DRAWN, draw), 0.0)
+	for i in 2:
+		var a: Vector3 = _bow_tips[i]
+		var along := nock - a
+		var up := along.normalized()
+		var side := up.cross(Vector3.RIGHT).normalized()
+		_bow_string[i].transform = Transform3D(Basis(side * 0.0016, up * along.length(), side.cross(up) * 0.0016), a + along * 0.5)
+	_bow_arrow.visible = loaded
+	_bow_arrow.position = nock
+	_right_hand.position = nock + Vector3(0.012, -0.015, 0.0)
+
+
 func _animate_gun(delta: float, moving: float) -> void:
 	_draw = maxf(0.0, _draw - delta * 3.0)
 	var t := smoothstep(0.0, 1.0, aim)
 	var loose := 1.0 - t * 0.85
 	var pos := _hip.lerp(_aimed, t)
 	var turn := HIP_TURN * (1.0 - t)
+	if _bow:
+		# Only a nocked arrow can be drawn; the bow cants a little, as archers hold it.
+		var drawn := t if loaded else 0.0
+		_update_bow(drawn)
+		turn = Vector3(0.0, 0.0, -0.95 * (1.0 - t) - 0.1)
+		# At full draw the string hand is at your jaw, out of sight.
+		_right_hand.visible = drawn < 0.6
 	# Walking bob, much smaller on the sights.
 	pos += Vector3(cos(_phase) * 0.008, absf(sin(_phase)) * 0.012, 0.0) * moving * loose
 	# Coming up from below when drawn.
@@ -312,7 +379,7 @@ func _reload_pose(p: float) -> Array:
 ## Places an arm from `shoulder` to the wrist just behind `hand` (camera space):
 ## two segments that bend at an elbow toward `pole`, lengths fixed, as a real arm.
 func _place_arm(upper: MeshInstance3D, fore: MeshInstance3D, hand: Node3D, shoulder: Vector3, pole: Vector3) -> void:
-	if hand == null or not is_instance_valid(hand) or not hand.is_inside_tree():
+	if hand == null or not is_instance_valid(hand) or not hand.is_inside_tree() or not hand.visible:
 		upper.visible = false
 		fore.visible = false
 		return

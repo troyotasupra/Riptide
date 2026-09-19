@@ -360,6 +360,11 @@ func _report_shot(muzzle: Vector3, direction: Vector3, weapon_id: String, quiet:
 	var shown := _visible_muzzle(shooter)
 	if shown != Vector3.INF:
 		muzzle = shown
+	if WeaponTable.WEAPONS.get(weapon_id, {}).get("kind", "") == "bow":
+		# A bow: the thrum of the string and an arrow you can watch fly. No flash.
+		Sound.play_at("cloth", muzzle, -10.0, 0.15)
+		ArrowFlight.launch(muzzle, direction.normalized() * float(WeaponTable.WEAPONS[weapon_id].velocity))
+		return
 	var loud := -4.0 - 16.0 * clampf(quiet, 0.0, 1.0)
 	Sound.play_at("tree_fall", muzzle, loud, 0.08)
 	if quiet > 0.4:

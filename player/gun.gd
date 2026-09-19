@@ -129,6 +129,10 @@ func _update_sights(fitted: Dictionary, _delta: float) -> void:
 	player.aim_fov = lerpf(Settings.fov, Settings.fov * 0.88, aim)
 
 
+func is_bow() -> bool:
+	return String(gun().get("kind", "")) == "bow"
+
+
 ## The optic's power right now (1 without a magnifying optic).
 func magnification() -> float:
 	var fitted := gun()
@@ -162,6 +166,9 @@ func _try_shot() -> void:
 		return
 	if _since_shot < float(fitted.interval):
 		return
+	# A bow looses only once it's drawn.
+	if is_bow() and aim < 0.75:
+		return
 	if bool(held.get("jammed", false)):
 		Sound.play("click", -6.0)
 		_since_shot = 0.0
@@ -178,6 +185,9 @@ func _try_shot() -> void:
 	_shots += 1
 	_kick(kick * lerpf(1.0, 0.75, aim))
 	player.view_model.recoil(0.4 + 0.5 * clampf(float(fitted.recoil_up) / 4.0, 0.0, 1.0))
+	# Reach for the next arrow straight away.
+	if is_bow():
+		get_tree().create_timer(0.35).timeout.connect(_request_reload)
 
 
 func _kick(amount: Vector2) -> void:
