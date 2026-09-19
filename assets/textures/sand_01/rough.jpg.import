@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://c5y57x07u12sk"
 path.s3tc="res://.godot/imported/rough.jpg-e802d5ec6102fb496afdf0bad8f53f03.s3tc.ctex"
+path.etc2="res://.godot/imported/rough.jpg-e802d5ec6102fb496afdf0bad8f53f03.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/sand_01/rough.jpg"
-dest_files=["res://.godot/imported/rough.jpg-e802d5ec6102fb496afdf0bad8f53f03.s3tc.ctex"]
+dest_files=["res://.godot/imported/rough.jpg-e802d5ec6102fb496afdf0bad8f53f03.s3tc.ctex", "res://.godot/imported/rough.jpg-e802d5ec6102fb496afdf0bad8f53f03.etc2.ctex"]
 
 [params]
 

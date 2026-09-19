@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://cvckb2o5c0ltn"
 path.s3tc="res://.godot/imported/albedo.jpg-0b782293afbd1022c81ebb5bba00c275.s3tc.ctex"
+path.etc2="res://.godot/imported/albedo.jpg-0b782293afbd1022c81ebb5bba00c275.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/gravelly_sand/albedo.jpg"
-dest_files=["res://.godot/imported/albedo.jpg-0b782293afbd1022c81ebb5bba00c275.s3tc.ctex"]
+dest_files=["res://.godot/imported/albedo.jpg-0b782293afbd1022c81ebb5bba00c275.s3tc.ctex", "res://.godot/imported/albedo.jpg-0b782293afbd1022c81ebb5bba00c275.etc2.ctex"]
 
 [params]
 

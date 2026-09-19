@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dro72tu2k8q53"
 path.s3tc="res://.godot/imported/albedo.jpg-8661f6b0caecd4f1239373136a416ab5.s3tc.ctex"
+path.etc2="res://.godot/imported/albedo.jpg-8661f6b0caecd4f1239373136a416ab5.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/palm_tree_bark/albedo.jpg"
-dest_files=["res://.godot/imported/albedo.jpg-8661f6b0caecd4f1239373136a416ab5.s3tc.ctex"]
+dest_files=["res://.godot/imported/albedo.jpg-8661f6b0caecd4f1239373136a416ab5.s3tc.ctex", "res://.godot/imported/albedo.jpg-8661f6b0caecd4f1239373136a416ab5.etc2.ctex"]
 
 [params]
 

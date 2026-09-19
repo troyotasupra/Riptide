@@ -9,6 +9,7 @@
 #   tools/dev.sh scenario guns --seed=1  ... with extra arguments passed through
 #   tools/dev.sh look shore shot.png     a screenshot of one view
 #   tools/dev.sh coop                    a host and a joining crew member, two processes
+#   tools/dev.sh build                   a standalone build/Riptide.app
 #   tools/dev.sh check                   import, then tests, then the starter scenario
 #
 # Set GODOT to use a specific build.
@@ -112,6 +113,14 @@ coop)
 	sleep 4
 	"$godot" --path "$project" --no-focus --audio-driver Dummy -- \
 		--join=127.0.0.1 "--port=$port" --profile=testcrew --scenario=client --dev --seed=4242 "$@"
+	;;
+build)
+	# The macOS counterpart to build.ps1. Godot ships one macOS template binary
+	# and it's universal, which is why the project imports ETC2 ASTC textures.
+	"$godot" --headless --path "$project" --import
+	rm -rf "$project/build/Riptide.app"
+	"$godot" --headless --path "$project" --export-release "macOS" "$project/build/Riptide.app"
+	echo "built $project/build/Riptide.app"
 	;;
 run)
 	"$godot" --path "$project" -- --dev "$@"

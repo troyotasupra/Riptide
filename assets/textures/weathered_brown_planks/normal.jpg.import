@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://iru5kls0yh8f"
 path.s3tc="res://.godot/imported/normal.jpg-c56216307633c77a617d97a1e8ff8b31.s3tc.ctex"
+path.etc2="res://.godot/imported/normal.jpg-c56216307633c77a617d97a1e8ff8b31.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/weathered_brown_planks/normal.jpg"
-dest_files=["res://.godot/imported/normal.jpg-c56216307633c77a617d97a1e8ff8b31.s3tc.ctex"]
+dest_files=["res://.godot/imported/normal.jpg-c56216307633c77a617d97a1e8ff8b31.s3tc.ctex", "res://.godot/imported/normal.jpg-c56216307633c77a617d97a1e8ff8b31.etc2.ctex"]
 
 [params]
 

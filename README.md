@@ -22,6 +22,9 @@ generated in code or come from CC0 packs (see Credits).
   `build\Riptide.exe`. (Windows blocks `.ps1` files by default — that flag applies to
   this one command only and changes nothing on the machine.)
   That single file is the whole game — send it to friends.
+- **Standalone build (macOS):** `tools/dev.sh build` makes `build/Riptide.app`, a
+  universal bundle that runs on Apple Silicon and Intel. Double-click it, or
+  `open build/Riptide.app`.
 
 On the menu, set your name, open **Character** to make your crew member (and pick
 the crew colour and emblem you fly when you host), then **Host new world** or

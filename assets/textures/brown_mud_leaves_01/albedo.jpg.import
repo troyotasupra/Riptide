@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dylpk50qkweau"
 path.s3tc="res://.godot/imported/albedo.jpg-0f2e30d1914196a81401092aa358238d.s3tc.ctex"
+path.etc2="res://.godot/imported/albedo.jpg-0f2e30d1914196a81401092aa358238d.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/brown_mud_leaves_01/albedo.jpg"
-dest_files=["res://.godot/imported/albedo.jpg-0f2e30d1914196a81401092aa358238d.s3tc.ctex"]
+dest_files=["res://.godot/imported/albedo.jpg-0f2e30d1914196a81401092aa358238d.s3tc.ctex", "res://.godot/imported/albedo.jpg-0f2e30d1914196a81401092aa358238d.etc2.ctex"]
 
 [params]
 

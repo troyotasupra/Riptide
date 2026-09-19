@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://xr4kf3xgt5in"
 path.s3tc="res://.godot/imported/normal.jpg-a1f74dbdbd7f2640dd76048e561750d2.s3tc.ctex"
+path.etc2="res://.godot/imported/normal.jpg-a1f74dbdbd7f2640dd76048e561750d2.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/rough_wood/normal.jpg"
-dest_files=["res://.godot/imported/normal.jpg-a1f74dbdbd7f2640dd76048e561750d2.s3tc.ctex"]
+dest_files=["res://.godot/imported/normal.jpg-a1f74dbdbd7f2640dd76048e561750d2.s3tc.ctex", "res://.godot/imported/normal.jpg-a1f74dbdbd7f2640dd76048e561750d2.etc2.ctex"]
 
 [params]
 

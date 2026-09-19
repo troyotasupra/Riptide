@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://wlx0ip1qd571"
 path.s3tc="res://.godot/imported/rough.jpg-451c7eda3dd76f780f3f0857717d6d23.s3tc.ctex"
+path.etc2="res://.godot/imported/rough.jpg-451c7eda3dd76f780f3f0857717d6d23.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/bark_brown_02/rough.jpg"
-dest_files=["res://.godot/imported/rough.jpg-451c7eda3dd76f780f3f0857717d6d23.s3tc.ctex"]
+dest_files=["res://.godot/imported/rough.jpg-451c7eda3dd76f780f3f0857717d6d23.s3tc.ctex", "res://.godot/imported/rough.jpg-451c7eda3dd76f780f3f0857717d6d23.etc2.ctex"]
 
 [params]
 

@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://b6wruwieokm04"
 path.s3tc="res://.godot/imported/normal.jpg-0c455705aaa9e30bc95d40c6c81f75ae.s3tc.ctex"
+path.etc2="res://.godot/imported/normal.jpg-0c455705aaa9e30bc95d40c6c81f75ae.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/rough_linen/normal.jpg"
-dest_files=["res://.godot/imported/normal.jpg-0c455705aaa9e30bc95d40c6c81f75ae.s3tc.ctex"]
+dest_files=["res://.godot/imported/normal.jpg-0c455705aaa9e30bc95d40c6c81f75ae.s3tc.ctex", "res://.godot/imported/normal.jpg-0c455705aaa9e30bc95d40c6c81f75ae.etc2.ctex"]
 
 [params]
 

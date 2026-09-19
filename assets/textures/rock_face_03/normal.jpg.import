@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://6yg4jotpjsna"
 path.s3tc="res://.godot/imported/normal.jpg-0977fa3610b51c0a28fd88584cc6308e.s3tc.ctex"
+path.etc2="res://.godot/imported/normal.jpg-0977fa3610b51c0a28fd88584cc6308e.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/rock_face_03/normal.jpg"
-dest_files=["res://.godot/imported/normal.jpg-0977fa3610b51c0a28fd88584cc6308e.s3tc.ctex"]
+dest_files=["res://.godot/imported/normal.jpg-0977fa3610b51c0a28fd88584cc6308e.s3tc.ctex", "res://.godot/imported/normal.jpg-0977fa3610b51c0a28fd88584cc6308e.etc2.ctex"]
 
 [params]
 
