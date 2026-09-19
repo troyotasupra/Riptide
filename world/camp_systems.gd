@@ -59,10 +59,10 @@ const PICKUPS := {
 ## Offsets from the castaway camp (camp space: -Z faces the island centre).
 const PICKUP_SPOTS := {
 	"machete": Vector3(2.1, 0.35, 2.0),
-	"compartment_key": Vector3(-0.5, 0.05, 0.3),
-	"journal": Vector3(0.3, 0.05, 0.2),
+	"compartment_key": Vector3(-0.5, 0.05, 0.3 - CampIslandPois.TENT_BACK),
+	"journal": Vector3(0.3, 0.05, 0.2 - CampIslandPois.TENT_BACK),
 	"page_shelter": Vector3(-1.6, 0.05, 1.3),
-	"page_camp": Vector3(0.9, 0.05, -0.5),
+	"page_camp": Vector3(0.6, 0.05, -0.5 - CampIslandPois.TENT_BACK),
 	"page_prosthetics": Vector3(-1.3, 0.05, -0.7),
 }
 
@@ -330,7 +330,10 @@ func _full_sync(data: Dictionary) -> void:
 ## Structures the world starts with (the castaway's old tent). Each is placed once;
 ## after that it's the crew's to keep or take apart.
 func _seed_structures() -> void:
-	if world == null or world.camp_island == null or seeded.has(CASTAWAY_TENT):
+	if world == null or world.camp_island == null:
+		return
+	if seeded.has(CASTAWAY_TENT):
+		_move_old_castaway_tent()
 		return
 	seeded[CASTAWAY_TENT] = true
 	var shape: CampIsland = world.camp_island
@@ -343,6 +346,24 @@ func _seed_structures() -> void:
 	_apply_progress(CASTAWAY_TENT, whole)
 	Net.send_to_ready(self, "_spawn_structure", [CASTAWAY_TENT, "tent", at, yaw])
 	Net.send_to_ready(self, "_structure_progress", [CASTAWAY_TENT, whole])
+
+
+## Worlds saved before the tent was moved back from the fire pit had it pitched
+## right over the camp's middle; move it to where it stands now.
+func _move_old_castaway_tent() -> void:
+	var entry: Dictionary = structures.get(CASTAWAY_TENT, {})
+	if entry.is_empty():
+		return
+	var shape: CampIsland = world.camp_island
+	var old := Vector3(shape.camp.x, 0.0, shape.camp.y)
+	var pos: Vector3 = entry.pos
+	if Vector2(pos.x - old.x, pos.z - old.z).length() > 0.5:
+		return
+	var at: Vector3 = CampIslandPois.castaway_tent_spot(shape)
+	entry.pos = at
+	var node: StructureNode = structure_nodes.get(CASTAWAY_TENT)
+	if node != null:
+		node.position = at
 
 
 ## A crew member starts holding the dismantle key on a structure.

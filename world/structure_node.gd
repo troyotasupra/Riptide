@@ -41,7 +41,27 @@ func setup(id: String, p_type: String, pos: Vector3, yaw: float) -> void:
 		if GameState.world == null or GameState.world.camp == null:
 			return ""
 		return GameState.world.camp.structure_prompt(structure_id, player)
+	if type == "tent":
+		_tent_inside()
 	set_lit(false)
+
+
+## The inside of the tent, for the crosshair only: look in through the open door
+## and it's the tent you're looking at (to sleep in it), though you walk straight in.
+func _tent_inside() -> void:
+	var inside := Interactable.new()
+	inside.name = "Inside"
+	inside.interact_id = interact_id
+	inside.text_provider = text_provider
+	inside.collision_layer = Layers.INTERACT
+	inside.collision_mask = 0
+	var box := BoxShape3D.new()
+	box.size = Vector3(TENT_HALF_WIDTH * 1.4, TENT_RIDGE * 0.8, TENT_HALF_LENGTH * 2.0)
+	var shape := CollisionShape3D.new()
+	shape.shape = box
+	shape.position = Vector3(0.0, TENT_RIDGE * 0.4, 0.0)
+	inside.add_child(shape)
+	add_child(inside)
 
 
 ## Flames over the whole thing while it burns down.

@@ -453,9 +453,14 @@ static func _castaway_camp(shape: CampIsland) -> Node3D:
 	return node
 
 
+## Back from the fire pit, so its door stands a safe few metres off the flames.
+const TENT_BACK := 2.0
+
+
 ## Where the castaway's tent stands (world space), facing its fire pit.
 static func castaway_tent_spot(shape: CampIsland) -> Vector3:
-	return _ground(shape, shape.camp)
+	var back := Basis(Vector3.UP, yaw_toward(shape.camp, shape.center)) * Vector3(0.0, 0.0, -TENT_BACK)
+	return _ground(shape, shape.camp + Vector2(back.x, back.z))
 
 
 static func _smoke() -> GPUParticles3D:
