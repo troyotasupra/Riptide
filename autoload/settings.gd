@@ -13,7 +13,10 @@ var fov := 80.0
 var deadzone := 0.2
 var master_volume := 0.9
 var sfx_volume := 1.0
-var ambience_volume := 0.7
+## The sea at full slider is still only a murmur behind everything else; the
+## slider people see runs 0..1 over this much actual gain.
+const OCEAN_GAIN := 0.0625
+var ambience_volume := 0.8
 var fullscreen := false
 ## 0 low · 1 medium · 2 high: ambient occlusion, glow, shadow range, antialiasing.
 var graphics := 2
@@ -49,7 +52,7 @@ func apply() -> void:
 	AudioServer.set_bus_volume_db(0, linear_to_db(clampf(master_volume, 0.0001, 1.0)))
 	AudioServer.set_bus_mute(0, muted)
 	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("SFX"), linear_to_db(clampf(sfx_volume, 0.0001, 1.0)))
-	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Ambience"), linear_to_db(clampf(ambience_volume, 0.0001, 1.0)))
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Ambience"), linear_to_db(clampf(ambience_volume, 0.0001, 1.0) * OCEAN_GAIN))
 	if DisplayServer.get_name() != "headless":
 		var mode := DisplayServer.window_get_mode()
 		var is_full := mode == DisplayServer.WINDOW_MODE_FULLSCREEN or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN

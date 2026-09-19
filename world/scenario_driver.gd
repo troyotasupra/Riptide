@@ -1184,7 +1184,7 @@ func _look() -> void:
 			# Straight down into the shallows: how much of the bottom shows.
 			var island2: CampIsland = world.camp_island
 			var out3 := Vector2.from_angle(island2.cove_bearing)
-			for metres: float in [0.0, 4.0, 8.0, 15.0, 25.0, 40.0, 70.0]:
+			for metres: float in [-24.0, -16.0, -8.0, -4.0, 0.0, 4.0, 8.0, 12.0, 16.0, 22.0, 30.0, 45.0, 70.0, 110.0]:
 				var spot := island2.cove + out3 * metres
 				print("[seabed] %4.0f m out: bottom %.2f m" % [metres, world.ground_height(spot.x, spot.y)])
 			var look_at := island2.cove + out3 * 14.0

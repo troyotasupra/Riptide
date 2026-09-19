@@ -9,6 +9,7 @@ extends CanvasLayer
 const MESSAGE_SECONDS := 5.0
 const CARDINALS := ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 
+var _crosshair: ColorRect
 var _info: Label
 var _clock: Label
 var _markers: Label
@@ -44,12 +45,12 @@ var _objectives: PackedStringArray = []
 
 
 func _ready() -> void:
-	var crosshair := ColorRect.new()
-	crosshair.color = Color(1.0, 1.0, 1.0, 0.85)
-	crosshair.custom_minimum_size = Vector2(4.0, 4.0)
-	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(crosshair)
-	crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_crosshair = ColorRect.new()
+	_crosshair.color = Color(1.0, 1.0, 1.0, 0.85)
+	_crosshair.custom_minimum_size = Vector2(4.0, 4.0)
+	_crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_crosshair)
+	_crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 
 	_info = _label(14)
 	_info.position = Vector2(16.0, 10.0)
@@ -420,6 +421,11 @@ func _process(delta: float) -> void:
 	var player := GameState.local_player as Player
 	if player != null and player.survivor != _bound:
 		_bind(player.survivor)
+
+	# The dot gets out of the way once you're looking down the sights.
+	if _crosshair != null:
+		var gun: Gun = player.gun if player != null else null
+		_crosshair.visible = gun == null or gun.aim < Gun.SIGHTED
 
 	var now := Time.get_ticks_msec() / 1000.0
 	_message_log = _message_log.filter(func(m: Dictionary) -> bool: return m.until > now)

@@ -16,7 +16,7 @@ uniform vec4 foam_color : source_color = vec4(0.88, 0.95, 0.97, 1.0);
 // completely. Shallow sand shows through; it fades out as the bottom drops away.
 uniform float clarity = 6.0;
 // How much of the surface still shows over clear sand (never fully invisible).
-uniform float min_opacity = 0.5;
+uniform float min_opacity = 0.55;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 
 const float GRAVITY = 9.8;
@@ -119,7 +119,9 @@ void fragment() {
 	float raw = texture(depth_tex, SCREEN_UV).r;
 	vec4 below = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, raw, 1.0);
 	float column = max(-below.z / below.w + VERTEX.z, 0.0);
-	float under = column * max(facing, 0.12);
+	// Measured from the still waterline, not the moving surface, so a passing
+	// crest doesn't darken the water under it.
+	float under = max(column * max(facing, 0.12) - v_height, 0.0);
 
 	// Colour by depth: sunlit turquoise over the sand apron, deepening to blue
 	// as the bottom drops away.
@@ -135,6 +137,8 @@ void fragment() {
 	float murk = clamp(under / max(clarity * (1.0 - storm * 0.55), 0.5), 0.0, 1.0);
 	float body = mix(min_opacity, 1.0, pow(murk, 1.4));
 	// Looking across the water it mirrors the sky instead of showing the bottom.
-	float grazing = 0.8 * pow(1.0 - facing, 4.0);
+	// Close to the eye — swimming, or a wave right in front of you — the mirror
+	// takes over less, or the surface turns into a wall of sky.
+	float grazing = 0.45 * pow(1.0 - facing, 3.0);
 	ALPHA = clamp(max(body, grazing) + crest * 0.9, 0.0, 1.0);
 }
