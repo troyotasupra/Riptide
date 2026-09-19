@@ -90,6 +90,9 @@ var _steer_look := 0.0
 var _tow_rope: MeshInstance3D
 var _cargo_look: Node3D
 var _ropes: Array[MeshInstance3D] = []
+## Where a shipped oar lies in its locks, boat space. Empty: this hull shows none.
+var oar_mounts: Array[Transform3D] = []
+var _oar_nodes: Array[Node3D] = []
 var _rower_check := 0.0
 var _snapshots: Array[Dictionary] = []
 var _tick := 0
@@ -174,8 +177,26 @@ static func create_raft(index: int) -> Boat:
 			boat.probes.append(Vector3(size.x * x, 0.0, size.z * z))
 	boat.probes.append(Vector3.ZERO)
 	boat.tow_local = Vector3(0.0, size.y, size.z * 0.5)
-	# Oarlocks on the right-hand edge, cargo lashed on the deck, a tow post aft.
-	boat._add_part("oars", Vector3(0.4, 0.4, 0.8), Vector3(size.x * 0.5, size.y + 0.15, 0.0))
+	# A pair of thole pins on each edge, so you can see where the oars go.
+	var pin_wood := Materials.wood(Color(0.5, 0.38, 0.24))
+	for s: float in [-1.0, 1.0]:
+		for z: float in [-0.14, 0.14]:
+			var pin := MeshInstance3D.new()
+			var pin_mesh := CylinderMesh.new()
+			pin_mesh.top_radius = 0.022
+			pin_mesh.bottom_radius = 0.028
+			pin_mesh.height = 0.2
+			pin_mesh.radial_segments = 7
+			pin.mesh = pin_mesh
+			pin.material_override = pin_wood
+			pin.position = Vector3(s * (size.x * 0.5 - 0.06), size.y + 0.1, z)
+			boat.add_child(pin)
+		# An oar shipped on this side lies fore-and-aft between the pins.
+		boat.oar_mounts.append(Transform3D(Basis.from_euler(Vector3(-PI * 0.5, s * 0.05, 0.0)),
+				Vector3(s * (size.x * 0.5 - 0.09), size.y + 0.07, 0.55)))
+	# Oarlocks on both edges, cargo lashed on the deck, a tow post aft.
+	boat._add_part("oars", Vector3(0.5, 0.6, 1.0), Vector3(-size.x * 0.5 + 0.08, size.y + 0.2, 0.0))
+	boat._add_part("oars_r", Vector3(0.5, 0.6, 1.0), Vector3(size.x * 0.5 - 0.08, size.y + 0.2, 0.0))
 	boat._add_part("cargo", Vector3(1.4, 0.5, 1.4), Vector3(0.0, size.y + 0.25, -0.3))
 	boat._add_part("tow", Vector3(0.4, 0.4, 0.3), boat.tow_local + Vector3(0.0, 0.15, -0.1))
 	return boat
@@ -502,6 +523,23 @@ func _fittings(oars: bool, motor: bool, litres: float) -> void:
 		_motor_node = null
 	if not motor_fitted:
 		_helm.clear()
+	_show_oars(oars_fitted)
+
+
+## The shipped oars, lying in their locks with the blades out over the water.
+func _show_oars(shipped: bool) -> void:
+	if shipped == (not _oar_nodes.is_empty()) or oar_mounts.is_empty():
+		return
+	if not shipped:
+		for node: Node3D in _oar_nodes:
+			node.queue_free()
+		_oar_nodes.clear()
+		return
+	for xf: Transform3D in oar_mounts:
+		var oar := ItemModels.build("oar")
+		oar.transform = xf
+		add_child(oar)
+		_oar_nodes.append(oar)
 
 
 ## Someone at the helm: throttle -1..1 (W/S), steer -1..1 (A/D).

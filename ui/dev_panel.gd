@@ -22,6 +22,7 @@ func _ready() -> void:
 			_player().god = _god
 			_send("god", [_god])],
 		["Heal", func() -> void: _send("heal", [])],
+		["Friendly fire", func() -> void: _send("friendly_fire", [not GameState.friendly_fire])],
 		["Learn all recipes", func() -> void: _send("learn_all", [])],
 		["Empty pack", func() -> void: _send("clear_pack", [])],
 	])

@@ -210,3 +210,47 @@ This is for a fresh Claude session picking up Riptide. Read it first, then:
   - `items/ballistics.gd`, `items/weapon_math.gd`
 - **Dev tools:** `ui/dev_panel.gd` (F1 in `--dev`), dispatched by `world/dev_tools.gd`. Includes gun kit, attachments, and start/put out fire.
 - **Tests:** `tests/*.gd`, registered in `tests/run_tests.gd`. Scenario scripts: `world/scenario_driver.gd`.
+
+## 2026-09-19 (fourth session): Troy's third list
+Pushed to GitHub: https://github.com/troyotasupra/Riptide (public, `origin/main`).
+
+Troy's change list, in his order (tick these off as they land):
+1. Guns sit wrong in the hand, and look wrong to other players (remote pose).
+2. Replace "give item" with a trade request both sides approve: both inventories
+   shown, request an item by highlighting it or putting it in a trade box, accept.
+3. Oars cannot be fitted to the raft (holding one + F does nothing).
+4. Sleep countdown once everyone has turned in: 5 seconds.
+5. Swimming: gets stuck ~10 ft off the island. Full swimming, and build an ocean floor.
+6. Windows: two vertical panes that swing out flat against the outside wall.
+7. Real sand on the beach; consider diggable, particle-like sand.
+8. Bent coconut palms block walking near them.
+9. Stove: move it so the flue misses the rafter; a chimney that smokes while lit.
+10. Torch and lighter light is not seen by other players. Add a small solar flashlight.
+    Light must come from the flame, not from the player's body (body is over-lit).
+11. Tents float above the ground; you can see through to the ground inside.
+12. Gunshots have odd extra booms; other players should hear the shot's direction/travel.
+13. The bodies in the cave should be skeletons.
+14. The shipwreck sits on an underwater hill: remove it. Build a third island instead,
+    the same distance and direction from the second as the second is from the first,
+    on the far side.
+15. Rain vanishes indoors; it should still be seen through the door and windows.
+
+### Troy's fourth list (2026-09-19, later)
+1. DONE: water clear near shore, darkening with depth (sand shows through).
+2. Can't fit attachments: right-click a gun → "Modify", showing what fits it.
+3. Gunshots don't hurt other players; add a friendly-fire toggle.
+4. Proximity voice chat, with push to talk.
+5. Ocean ambience far too loud: today's 5% should be the default and read as 80%.
+6. An update system: on launch, check for a new version and apply if accepted.
+7. The cave needs a lot of work: rocks outside it are scattered, with big gaps.
+8. A dropped item or stack should lie on the ground as itself, not as a bag.
+9. Fish don't land on the dock; landing must work aboard a boat too.
+10. Pushing the raft to the water teleports it: let the player push and pull it.
+11. Waves darken as they pass; floating in the water looks wrong.
+12. The flare still doesn't work or sit in the hand, locally or to other players.
+13. Sharks look silly — make them realistic and frightening.
+14. Fire: an X pattern on the ground, ground visible through it; trees should burn
+    slower, charring with glowing embers (driftwood too); flames should behave
+    like gas, not fluid, with tongues spiking up and breaking away.
+15. Aiming down the sights: hide the white dot, and lower the irons so the front
+    post sits where the dot was.

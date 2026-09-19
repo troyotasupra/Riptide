@@ -129,7 +129,10 @@ func _build() -> void:
 	_add_part("drybox", Vector3(0.9, 0.4, 0.45), Vector3(0.0, FLOOR_Y + 0.2, -1.35))
 	_add_part("cleat", Vector3(0.5, 0.3, 0.4), BOW_CLEAT + Vector3(0.0, 0.05, 0.08))
 	for s: float in [-1.0, 1.0]:
-		_add_part("oars" if s < 0.0 else "oars_r", Vector3(0.3, 0.3, 0.5), Vector3(s * (half_b + 0.02), SIDE_TOP + 0.08, 0.25))
+		_add_part("oars" if s < 0.0 else "oars_r", Vector3(0.35, 0.45, 0.7), Vector3(s * (half_b + 0.02), SIDE_TOP + 0.1, 0.25))
+		# A shipped oar lies inside the gunwale, blade forward over the bow.
+		oar_mounts.append(Transform3D(Basis.from_euler(Vector3(-PI * 0.5, s * 0.04, 0.0)),
+				Vector3(s * (half_b - 0.09), SIDE_TOP - 0.06, 0.55)))
 	_add_part("transom", Vector3(0.7, 0.45, 0.35), Vector3(0.0, SIDE_TOP + 0.1, half_l - 0.05))
 	_add_part("tow", Vector3(0.3, 0.3, 0.3), tow_local + Vector3(0.0, 0.05, 0.0))
 	# The stern cleat the tow line makes fast to.

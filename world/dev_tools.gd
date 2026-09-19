@@ -66,6 +66,10 @@ func request(command: String, args: Array) -> void:
 			var place := _place(String(args[0]))
 			if place != Vector3.INF:
 				player.teleport(place)
+		"friendly_fire":
+			GameState.world.set_friendly_fire(bool(args[0]))
+			for other: Player in GameState.world.players_root.get_children():
+				other.survivor.notify("Friendly fire is %s." % ("ON — watch your muzzle" if GameState.friendly_fire else "off"))
 		"god":
 			s.god = bool(args[0])
 			s.notify("Dev: god mode %s" % ("on" if s.god else "off"))

@@ -182,11 +182,36 @@ func play_shot(weapon: String, at: Vector3, quiet: float) -> void:
 	var stream := GunAudio.shot(weapon, suppressed)
 	var delay := distance / SPEED_OF_SOUND
 	_after(delay, func() -> void: _emit(stream, at, level, bus, reach))
-	# Outdoors a loud shot comes back off the hills, later and darker.
-	if here == "open" and not suppressed and weapon != "bow":
-		for k in 2:
-			var echo := delay + randf_range(0.35, 0.9) * (k + 1)
-			_after(echo, func() -> void: _emit(stream, at, level - 13.0 - k * 5.0, MUFFLED, reach))
+	# Outdoors a distant shot rolls back off the hills once — quiet and dark, so
+	# it reads as the land answering rather than a second gun going off.
+	if here == "open" and not suppressed and weapon != "bow" and distance > 45.0:
+		var echo := delay + randf_range(0.28, 0.55)
+		_after(echo, func() -> void: _emit(stream, at, level - 20.0, MUFFLED, reach))
+
+
+## The bullet's own crack going past the listener, heard before the report when
+## you're downrange of it. `from` is the muzzle, `direction` where it's headed.
+func play_passby(at: Vector3, direction: Vector3, muzzle_velocity: float, quiet: float) -> void:
+	var viewport := get_viewport()
+	var camera := viewport.get_camera_3d() if viewport != null else null
+	if camera == null or muzzle_velocity < SPEED_OF_SOUND * 1.05:
+		return
+	var ear := camera.global_position
+	var line := direction.normalized()
+	var along := (ear - at).dot(line)
+	# Only downrange, and only while the bullet is still supersonic.
+	if along < 4.0 or along > 600.0:
+		return
+	var nearest := at + line * along
+	var miss := ear.distance_to(nearest)
+	if miss > 22.0 or _occluded(ear, nearest):
+		return
+	# It gets there at roughly its muzzle speed, and the crack takes the miss
+	# distance to reach the ear.
+	var when := along / muzzle_velocity + miss / SPEED_OF_SOUND
+	var level := -4.0 - 22.0 * clampf(miss / 22.0, 0.0, 1.0) - 10.0 * clampf(quiet, 0.0, 1.0)
+	var stream := GunAudio.passby()
+	_after(when, func() -> void: _emit(stream, nearest, level, OPEN, 60.0))
 
 
 func _emit(stream: AudioStream, at: Vector3, level: float, bus: String, reach: float) -> void:

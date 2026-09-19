@@ -10,8 +10,14 @@ uniform float storm = 0.0;
 // 0 flattens the surface; used by the coarse far-sea mesh out to the horizon.
 uniform float wave_scale = 1.0;
 uniform vec4 deep_color : source_color = vec4(0.04, 0.26, 0.40, 1.0);
-uniform vec4 shallow_color : source_color = vec4(0.16, 0.58, 0.64, 1.0);
+uniform vec4 shallow_color : source_color = vec4(0.22, 0.72, 0.70, 1.0);
 uniform vec4 foam_color : source_color = vec4(0.88, 0.95, 0.97, 1.0);
+// How far down you can see: the water column (in metres) that hides the bottom
+// completely. Shallow sand shows through; it fades out as the bottom drops away.
+uniform float clarity = 6.0;
+// How much of the surface still shows over clear sand (never fully invisible).
+uniform float min_opacity = 0.55;
+uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 
 const float GRAVITY = 9.8;
 const float CALM_ROUGHNESS = 0.35;
@@ -105,12 +111,34 @@ void fragment() {
 	NORMAL = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
 	float h = clamp(v_height / v_amplitude * 0.5 + 0.5, 0.0, 1.0);
 	float crest = smoothstep(0.72, 0.95, h);
-	vec3 color = mix(deep_color.rgb, shallow_color.rgb, h);
-	// Sheltered shallows read as clear turquoise over sand.
-	color = mix(color, shallow_color.rgb * 1.35, (1.0 - v_shelter) * 0.85);
+
+	// How deep the water is along this line of sight, and straight down: the
+	// surface down to whatever the bottom is. Over bright sand in knee-deep
+	// water you see the bottom; it closes up as the bottom falls away.
+	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
+	float raw = texture(depth_tex, SCREEN_UV).r;
+	vec4 below = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, raw, 1.0);
+	float column = max(-below.z / below.w + VERTEX.z, 0.0);
+	// Measured from the still waterline, not the moving surface, so a passing
+	// crest doesn't darken the water under it.
+	float under = max(column * max(facing, 0.12) - v_height, 0.0);
+
+	// Colour by depth: sunlit turquoise over the sand apron, deepening to blue
+	// as the bottom drops away.
+	vec3 color = mix(shallow_color.rgb * 1.15, deep_color.rgb, smoothstep(0.6, 14.0, under));
+	color = mix(color, color * 1.08, h);
 	// Storms turn the sea grey-green and whip up more foam.
 	color = mix(color, vec3(0.16, 0.24, 0.27), storm * 0.45);
 	ALBEDO = mix(color, foam_color.rgb, clamp(crest * (0.75 + storm * 0.6), 0.0, 1.0));
 	ROUGHNESS = 0.18;
 	SPECULAR = 0.45;
+
+	// Storms and chop stir it up, and foam is never see-through.
+	float murk = clamp(under / max(clarity * (1.0 - storm * 0.55), 0.5), 0.0, 1.0);
+	float body = mix(min_opacity, 1.0, pow(murk, 1.4));
+	// Looking across the water it mirrors the sky instead of showing the bottom.
+	// Close to the eye — swimming, or a wave right in front of you — the mirror
+	// takes over less, or the surface turns into a wall of sky.
+	float grazing = 0.45 * pow(1.0 - facing, 3.0);
+	ALPHA = clamp(max(body, grazing) + crest * 0.9, 0.0, 1.0);
 }

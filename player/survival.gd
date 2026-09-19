@@ -50,6 +50,11 @@ static func equilibrium_temp(env_temp_c: float, insulation: float) -> float:
 	return NORMAL_TEMP - cold + heat
 
 
+## Everything here is worked out in °C; what the player reads is Fahrenheit.
+static func fahrenheit(celsius: float) -> float:
+	return celsius * 9.0 / 5.0 + 32.0
+
+
 ## Advance by `dt` seconds. `env_temp_c` already includes night, biome and
 ## wetness; `exertion` 0..1 is how hard the player is working.
 func tick(dt: float, env_temp_c: float, insulation: float, exertion: float) -> void:

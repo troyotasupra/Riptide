@@ -36,6 +36,7 @@ var _hint: Label
 var _tooltip: PanelContainer
 var _tooltip_text: RichTextLabel
 var _menu: PopupMenu
+var _modify: ModifyPanel
 var _menu_target := {}
 var _drag := {}
 var _drag_preview: ItemTile
@@ -138,6 +139,11 @@ func _ready() -> void:
 	_tooltip.z_index = 20
 	add_child(_tooltip)
 
+	_modify = ModifyPanel.new()
+	_modify.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_KEEP_SIZE)
+	_modify.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	add_child(_modify)
+
 	_menu = PopupMenu.new()
 	_menu.id_pressed.connect(_on_menu)
 	add_child(_menu)
@@ -195,6 +201,8 @@ func _on_visibility_changed() -> void:
 func refresh() -> void:
 	if survivor == null or not is_inside_tree():
 		return
+	if _modify != null and _modify.visible:
+		_modify.refresh()
 	cell = clampf(floorf(get_viewport_rect().size.y / 15.5), 40.0, 58.0)
 	var pack := survivor.inventory
 
@@ -541,6 +549,8 @@ func _open_menu(hit: Dictionary, point: Vector2) -> void:
 			_menu.add_item("Split stack", 2)
 		_menu.add_item("Move to pack" if not _menu_target.source.is_empty() else ("Move to %s" % container_title.to_lower() if not container_id.is_empty() else "Hotbar ⇄ storage"), 3)
 		_menu.add_item("Drop", 4)
+		if ItemTable.get_item(String(item.id)).has("weapon") and not Array(WeaponTable.WEAPONS.get(String(ItemTable.get_item(String(item.id)).weapon), {}).get("slots", [])).is_empty():
+			_menu.add_item("Modify", 6)
 	_menu.position = Vector2i(get_screen_position() + point)
 	_menu.popup()
 	_tooltip.visible = false
@@ -564,6 +574,8 @@ func _on_menu(id: int) -> void:
 			camp.rpc_id(1, "request_drop_item", source, uid)
 		5:
 			survivor.request_take_off(_menu_target.slot)
+		6:
+			_modify.open_for(survivor, uid)
 
 
 func _update_tooltip(hit: Dictionary, point: Vector2) -> void:

@@ -1144,15 +1144,51 @@ func drop_loot(pos: Vector3, stacks: Array, title: String) -> void:
 			if ground_here != -INF and pos.y > 0.2:
 				spot.y = maxf(pos.y - 0.5, ground_here) + 0.05
 		_make_container("bag:" + id, BAG_SIZE, title)
-		_spawn_bag(id, spot, title)
-		Net.send_to_ready(self, "_spawn_bag", [id, spot, title])
 		var before := _total(pending)
 		pending = _fill_bag(id, pending)
+		_spawn_bag(id, spot, title)
+		Net.send_to_ready(self, "_spawn_bag", [id, spot, title])
 		spill += 1
 		if _total(pending) == before:
 			push_warning("An item is too big for any bag: %s" % str(pending))
 			break
 	world.sfx_at("drop", pos)
+
+
+## A container holding exactly one stack, as {"id", "count"} — that's a thing
+## lying on the ground rather than a bag to search. Empty otherwise.
+func lone_item(container_id: String) -> Dictionary:
+	var grid: ItemGrid = containers.get(container_id)
+	if grid == null or grid.items.size() != 1:
+		return {}
+	var only: Dictionary = grid.items[0]
+	return {"id": String(only.id), "count": int(only.count)}
+
+
+## Host: someone picks up a single dropped item. True if this bag was one.
+func take_lone_item(survivor: Survivor, id: String) -> bool:
+	var node: BagNode = bag_nodes.get(id)
+	if node == null or node.lone_id.is_empty():
+		return false
+	var grid: ItemGrid = containers.get("bag:" + id)
+	if grid == null or grid.items.is_empty():
+		return false
+	var stack: Dictionary = grid.items[0]
+	var left := survivor.inventory.add_stack(stack.duplicate())
+	if left == int(stack.count):
+		survivor.notify("No room for the %s." % ItemTable.display_name(String(stack.id)).to_lower())
+		return true
+	if left > 0:
+		stack.count = left
+		survivor.notify("Took what would fit.")
+		_push_container("bag:" + id)
+	else:
+		grid.items.clear()
+		_remove_bag(id)
+		Net.send_to_ready(self, "_remove_bag", [id])
+	world.sfx_at("drop", node.global_position)
+	survivor.push_inventory()
+	return true
 
 
 ## Puts `stacks` into bag `id`; returns what didn't fit.
@@ -1265,8 +1301,10 @@ func _check_sleep() -> void:
 		_send_sleep_status(-1.0, sleeping.size(), needed)
 		return
 	if _skip_at <= 0.0:
-		_skip_at = Ocean.time + (1.5 if crew == 1 else SleepVote.COUNTDOWN)
-	var left: float = _skip_at - Ocean.time
+		_skip_at = maxf(Ocean.time, 0.001)
+	# Measured from when the vote carried, so the wait shortens the moment the
+	# last crew member turns in rather than only when the vote starts.
+	var left: float = _skip_at + SleepVote.countdown(sleeping.size(), crew) - Ocean.time
 	_send_sleep_status(maxf(0.0, left), sleeping.size(), needed)
 	if left > 0.0:
 		return
@@ -1878,7 +1916,8 @@ func _spawn_bag(id: String, pos: Vector3, title: String) -> void:
 		return
 	bags[id] = {"pos": pos, "title": title}
 	var node := BagNode.new()
-	node.setup(id, title, pos)
+	var lone := lone_item("bag:" + id)
+	node.setup(id, title, pos, String(lone.get("id", "")), int(lone.get("count", 0)))
 	add_child(node)
 	bag_nodes[id] = node
 

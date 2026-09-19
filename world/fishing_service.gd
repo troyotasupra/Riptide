@@ -137,23 +137,39 @@ func forget(peer_id: int) -> void:
 func spawn_landed(player: Player, species: String, kg: float) -> void:
 	var at := player.world_transform().origin
 	var forward := Vector3(-sin(player.yaw), 0.0, -cos(player.yaw))
-	var spot := at + forward * 1.3
-	spot.y = _footing(spot, at.y)
+	var side := Vector3(forward.z, 0.0, -forward.x)
+	# It lands wherever there's deck or dock to land on: out in front if there
+	# is, otherwise beside you or at your feet — never over the side.
+	var spot := at
+	var found := false
+	for offset: Vector3 in [forward * 1.2, forward * 0.8, side * 0.7, -side * 0.7, Vector3.ZERO, -forward * 0.7]:
+		var landing := _footing(at + offset)
+		if not landing.is_empty():
+			spot = landing.at
+			found = true
+			break
+	if not found:
+		spot = at + forward * 0.6
+		spot.y = at.y
 	var id := "f%d" % _next_fish
 	_next_fish += 1
 	_add_landed(id, species, kg, spot, player.yaw + PI * 0.5)
 	Net.send_to_ready(self, "_add_landed", [id, species, kg, spot, player.yaw + PI * 0.5])
 
 
-## Whatever the fish comes to rest on: a deck or dock underfoot, else the ground.
-func _footing(spot: Vector3, fallback: float) -> float:
+## Solid footing at `spot` — a deck, a dock or dry-enough ground — as
+## {"at": Vector3}. Empty when there's only water there.
+func _footing(spot: Vector3) -> Dictionary:
 	var space := GameState.world.get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 2.0, spot + Vector3.DOWN * 3.0, Layers.WORLD | Layers.BOATS)
+	var query := PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 1.6, spot + Vector3.DOWN * 1.4, Layers.WORLD | Layers.BOATS)
 	var hit := space.intersect_ray(query)
-	if not hit.is_empty():
-		return float(hit.position.y) + 0.12
+	var sea := Waves.height_at(Vector2(spot.x, spot.z), Ocean.time)
+	if not hit.is_empty() and float(hit.position.y) > sea - 0.1:
+		return {"at": Vector3(spot.x, float(hit.position.y) + 0.12, spot.z)}
 	var ground: float = GameState.world.ground_height(spot.x, spot.z)
-	return (ground + 0.12) if ground != -INF else fallback
+	if ground != -INF and ground > sea - 0.1:
+		return {"at": Vector3(spot.x, ground + 0.12, spot.z)}
+	return {}
 
 
 ## Host: a crew member reaches for a landed fish — the first go kills it, the second takes it.
@@ -217,6 +233,13 @@ func _add_landed(id: String, species: String, kg: float, pos: Vector3, yaw: floa
 	fish.setup(id, species, kg, pos, yaw)
 	GameState.world.add_child(fish)
 	landed[id] = fish
+	# Landed in a boat: it flops about on the deck and travels with her.
+	var space := GameState.world.get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(pos + Vector3.UP * 0.3, pos + Vector3.DOWN * 0.5, Layers.BOATS)
+	var under := space.intersect_ray(query)
+	var boat := under.get("collider") as Boat if not under.is_empty() else null
+	if boat != null:
+		fish.reparent(boat, true)
 
 
 @rpc("authority", "call_remote", "reliable")
