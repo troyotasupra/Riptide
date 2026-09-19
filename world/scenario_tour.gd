@@ -269,6 +269,14 @@ func _tools_in_hand() -> void:
 		_first_person()
 		await _wait(1.0)
 		await _shot("tool_" + id)
+		if id in ["machete", "knife"]:
+			# Mid-swing: at the top of the wind-up, and in the cut.
+			player.view_model.swing()
+			await _wait(0.14)
+			await _shot("tool_%s_windup" % id)
+			await _wait(0.1)
+			await _shot("tool_%s_cut" % id)
+			await _wait(0.6)
 	player.survivor.inventory.hotbar[0] = null
 	player.held_id = ""
 

@@ -57,6 +57,8 @@ var _skin := Color.WHITE
 var _sleeve := Color.WHITE
 var _phase := 0.0
 var _swing_t := 0.0
+## Swings alternate: forehand (down to the left), then backhand (down to the right).
+var _swing_side := 1.0
 var _recoil := 0.0
 var _row_phase := 0.0
 
@@ -187,6 +189,39 @@ func _hand_mesh(parent: Node3D, pos: Vector3, rot: Vector3) -> Node3D:
 
 func swing() -> void:
 	_swing_t = 1.0
+	_swing_side = -_swing_side
+
+
+## Where the arm is `p` of the way through a swing (0..1): a quick wind-up that
+## cocks the blade up and back over the shoulder, a fast diagonal cut across the
+## body with the wrist turning over, a follow-through low on the far side, and an
+## easy recovery. Returns [offset, turn (x pitch, y yaw, z roll)].
+func _swing_pose(p: float) -> Array:
+	var side := _swing_side
+	# Cocked high by the shoulder with the blade still in view, tip back.
+	# The arm rests right of centre, so a backhand winds up across the body to the
+	# left and cuts back out only a little way: both stay on screen.
+	var wind := Vector3(0.1 if side > 0.0 else -0.3, 0.24, 0.1)
+	var wind_turn := Vector3(-0.3, 0.2 * side, 0.45 * side)
+	# Across the middle of the view, low but not out of it, so even a knife is seen.
+	var cut := Vector3(-0.2 if side > 0.0 else 0.02, 0.02, -0.18)
+	var cut_turn := Vector3(0.95, -0.35 * side, -0.95 * side)
+	var pos: Vector3
+	var turn: Vector3
+	if p < 0.28:
+		var k := smoothstep(0.0, 0.28, p)
+		pos = wind * k
+		turn = wind_turn * k
+	elif p < 0.5:
+		# The cut is fast: most of the travel in the first part.
+		var k := pow((p - 0.28) / 0.22, 0.6)
+		pos = wind.lerp(cut, k)
+		turn = wind_turn.lerp(cut_turn, k)
+	else:
+		var k := smoothstep(0.5, 1.0, p)
+		pos = cut.lerp(Vector3.ZERO, k)
+		turn = cut_turn.lerp(Vector3.ZERO, k)
+	return [pos, turn]
 
 
 ## The gun goes off: the hand snaps back and up, then settles.
@@ -212,14 +247,15 @@ func muzzle_point() -> Vector3:
 func animate(delta: float, speed: float) -> void:
 	var moving := clampf(speed / 6.0, 0.0, 1.0)
 	_phase = fmod(_phase + delta * (5.0 + speed), TAU)
-	_swing_t = maxf(0.0, _swing_t - delta * 2.6)
+	_swing_t = maxf(0.0, _swing_t - delta / Player.SWING_SECONDS)
 	_recoil = maxf(0.0, _recoil - delta * 5.0)
 	if _gun != null and is_instance_valid(_gun):
 		_animate_gun(delta, moving)
 		return
-	var arc := sin(_swing_t * PI)
-	_arm.position = REST + Vector3(cos(_phase) * 0.012, absf(sin(_phase)) * 0.018, 0.0) * moving + Vector3(-0.05, 0.08, 0.0) * arc
-	_arm.rotation.x = REST_PITCH + arc * 0.7 - (1.0 - _swing_t) * arc * 1.4
+	var swing := _swing_pose(1.0 - _swing_t) if _swing_t > 0.0 else [Vector3.ZERO, Vector3.ZERO]
+	var bob := Vector3(cos(_phase) * 0.012, absf(sin(_phase)) * 0.018, 0.0) * moving
+	_arm.position = REST + bob + Vector3(swing[0])
+	_arm.rotation = Vector3(REST_PITCH, 0.0, 0.0) + Vector3(swing[1])
 	if _recoil > 0.001:
 		_arm.position += Vector3(0.0, 0.02, 0.06) * _recoil
 		_arm.rotation.x -= 0.16 * _recoil
