@@ -1007,6 +1007,11 @@ func _walk_loop() -> void:
 	_check(camp.shack_door.open, "and opens")
 	await _hold("move_forward", 4.0)
 	_check(camp.in_shack(player.world_transform().origin), "walked up the steps and in through the door without jumping")
+	var ear := player.camera.global_position
+	_check(Sound._where(ear) == "room", "a shot heard in here rings round the room")
+	_check(Sound._occluded(ear, xf * Vector3(0.0, 1.5, 6.0)), "and one from behind the back wall comes through it muffled")
+	_check(not Sound._occluded(ear, xf * Vector3(0.0, 1.5, 1.0)), "but not one fired inside")
+	_check(AudioServer.get_bus_index(Sound.CAVE) != -1 and AudioServer.get_bus_effect_count(AudioServer.get_bus_index(Sound.ROOM)) > 0, "the room, cave and muffled buses are set up")
 	camp.interact_shack_part(s0, "door", 0)
 	camp.interact_shack_part(s0, "door_bolt", 0)
 	_check(not camp.shack_door.open and camp.shack_door.locked, "shut and bolted it from the inside")

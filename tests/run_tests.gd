@@ -5,6 +5,7 @@ extends SceneTree
 
 const SUITES := [
 	"res://tests/test_waves.gd",
+	"res://tests/test_gun_audio.gd",
 	"res://tests/test_survival.gd",
 	"res://tests/test_loadout.gd",
 	"res://tests/test_island.gd",

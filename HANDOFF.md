@@ -147,7 +147,7 @@ This is for a fresh Claude session picking up Riptide. Read it first, then:
   - the bow: hip carry, draw to the jaw, arrow flight that sticks
   - guns: blued steel, polymer, walnut, lens; a muzzle crown, receiver stamps, a brass bead
 - Left:
-  - real CC0 gun sounds (ASK Troy before downloading); directional audio
+  - gun sounds are now synthesised (autoload/gun_audio.gd) with distance delay, occlusion, room/cave reverb and outdoor echoes (Sound.play_shot); if Troy still wants recorded ones, ask before downloading
   - the freighter salvage and the third island (later)
 
 ## Next steps (the approved plan, in order)

@@ -362,13 +362,10 @@ func _report_shot(muzzle: Vector3, direction: Vector3, weapon_id: String, quiet:
 		muzzle = shown
 	if WeaponTable.WEAPONS.get(weapon_id, {}).get("kind", "") == "bow":
 		# A bow: the thrum of the string and an arrow you can watch fly. No flash.
-		Sound.play_at("cloth", muzzle, -10.0, 0.15)
+		Sound.play_shot("bow", muzzle, 0.0)
 		ArrowFlight.launch(muzzle, direction.normalized() * float(WeaponTable.WEAPONS[weapon_id].velocity))
 		return
-	var loud := -4.0 - 16.0 * clampf(quiet, 0.0, 1.0)
-	Sound.play_at("tree_fall", muzzle, loud, 0.08)
-	if quiet > 0.4:
-		Sound.play_at("click", muzzle, -10.0, 0.2)
+	Sound.play_shot(weapon_id, muzzle, quiet)
 	Effects.tracer(muzzle, muzzle + direction.normalized() * TRACER_LENGTH)
 	Effects.muzzle_flash(muzzle, direction.normalized(), 1.0 - clampf(quiet, 0.0, 0.8))
 
