@@ -1,0 +1,41 @@
+# Riptide is developed on Windows and macOS at the same time. Without this file
+# one side's editor can rewrite every line ending in a file and turn a two-line
+# change into a whole-file diff that conflicts with everything.
+
+# Everything text is stored and checked out with LF on both platforms.
+* text=auto eol=lf
+
+# Godot's text formats, stated explicitly so nothing is guessed.
+*.gd        text eol=lf
+*.gdshader  text eol=lf
+*.tscn      text eol=lf
+*.tres      text eol=lf
+*.import    text eol=lf
+*.uid       text eol=lf
+*.cfg       text eol=lf
+*.godot     text eol=lf
+*.md        text eol=lf
+*.sh        text eol=lf
+*.ps1       text eol=lf
+
+# Binary assets: never line-ending converted, never diffed as text.
+*.glb   binary
+*.gltf  binary
+*.blend binary
+*.fbx   binary
+*.obj   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.tga   binary
+*.exr   binary
+*.hdr   binary
+*.ogg   binary
+*.mp3   binary
+*.wav   binary
+*.ttf   binary
+*.otf   binary
+*.pck   binary
+*.exe   binary
+*.zip   binary
