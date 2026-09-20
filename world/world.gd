@@ -32,7 +32,6 @@ var sharks: SharkField
 var weather: Weather
 var fishing: FishingService
 var combat: CombatService
-var fire: FireService
 var dev: DevTools
 var _next_boat_index := FIRST_BUILT_BOAT_INDEX
 var _age := 0.0
@@ -60,9 +59,6 @@ func _ready() -> void:
 	combat = CombatService.new()
 	combat.name = "Combat"
 	add_child(combat)
-	fire = FireService.new()
-	fire.name = "Fire"
-	add_child(fire)
 	dev = DevTools.new()
 	dev.name = "Dev"
 	add_child(dev)
@@ -366,7 +362,6 @@ func save_now() -> void:
 		"next_boat_index": _next_boat_index,
 		"weather": weather.to_save(),
 		"camp": camp.to_save(now),
-		"fire": fire.to_save(now),
 		"players": players,
 	})
 	print("[save] world saved: %s" % ok)
@@ -417,7 +412,6 @@ func _apply_save(data: Dictionary) -> void:
 			if boat != null and towed != null:
 				boat.set_tow(towed)
 	camp.from_save(data.get("camp", {}), now)
-	fire.from_save(data.get("fire", {}), now)
 	if data.has("weather"):
 		weather.from_save(data.weather)
 	saved_players = data.get("players", {})
@@ -659,7 +653,6 @@ func _on_peer_ready(peer_id: int) -> void:
 		sharks.sync_to(peer_id)
 		weather.sync_to(peer_id)
 		fishing.sync_to(peer_id)
-		fire.sync_to(peer_id)
 		dev._set_allowed.rpc_id(peer_id, GameState.dev_mode)
 		_set_friendly_fire.rpc_id(peer_id, GameState.friendly_fire)
 	var player_name: String = Net.roster[peer_id]["name"]

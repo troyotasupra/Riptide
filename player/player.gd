@@ -1026,22 +1026,7 @@ func _press_primary() -> void:
 				GameState.hints_shown[held_id] = true
 				survivor.notified.emit(ItemTable.get_item(held_id).get("hint", ""))
 		return
-	if (tool == "torch" or tool == "lighter") and focus_id.is_empty() and _try_ignite():
-		return
 	survivor.use_selected()
-
-
-## A lit torch or lighter held to the ground in front of you sets it alight.
-func _try_ignite() -> bool:
-	var from := camera.global_position
-	var to := from - camera.global_basis.z * FireService.IGNITE_REACH
-	var query := PhysicsRayQueryParameters3D.create(from, to, Layers.WORLD, [get_rid()])
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	if hit.is_empty() or (hit.normal as Vector3).y < 0.6:
-		return false
-	GameState.world.fire.rpc_id(1, "request_ignite", hit.position)
-	Sound.play("cloth", -6.0)
-	return true
 
 
 func _swing(tool: String) -> void:

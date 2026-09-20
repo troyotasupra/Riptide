@@ -22,14 +22,14 @@ extends Node3D
 
 ## Specks alive at once for a fire of `size` 1. They are tiny — millimetres —
 ## so it takes hundreds of thousands of them to make a body of fire.
-const FLAMES_PER_METRE := 620000
-const SMOKE_PER_METRE := 90000
+const FLAMES_PER_METRE := 90000
+const SMOKE_PER_METRE := 14000
 const FLAME_LIFE := 1.0
 const SMOKE_LIFE := 4.0
 ## Every fire in the world draws from one pot of specks, so a hillside of
 ## wildfire can't ask the card for ten million of them. A campfire takes its
 ## share; what's left is shared out among the rest.
-const WORLD_BUDGET := 1200000
+const WORLD_BUDGET := 220000
 static var _claimed := 0
 ## How big one speck is, in metres, for a fire of `size` 1.
 const SPECK := 0.006
@@ -163,7 +163,7 @@ static func flame_speck(size: float) -> QuadMesh:
 func _build_flames() -> GPUParticles3D:
 	var particles := GPUParticles3D.new()
 	particles.name = "Flames"
-	particles.amount = _claim(int(clampf(FLAMES_PER_METRE * size, 40000, 360000)))
+	particles.amount = _claim(int(clampf(FLAMES_PER_METRE * size, 12000, 70000)))
 	particles.lifetime = FLAME_LIFE * (0.8 + size * 0.4)
 	# Specks live for very different lengths of time, so the flame never pulses.
 	particles.randomness = 0.75
@@ -187,7 +187,7 @@ func _build_flames() -> GPUParticles3D:
 func _build_smoke() -> GPUParticles3D:
 	var particles := GPUParticles3D.new()
 	particles.name = "Smoke"
-	particles.amount = _claim(int(clampf(SMOKE_PER_METRE * size, 8000, 70000)))
+	particles.amount = _claim(int(clampf(SMOKE_PER_METRE * size, 2000, 14000)))
 	particles.lifetime = SMOKE_LIFE
 	particles.randomness = 0.6
 	particles.preprocess = SMOKE_LIFE * 0.5

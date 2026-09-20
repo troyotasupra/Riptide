@@ -315,47 +315,6 @@ func _camp_loop() -> void:
 		_check(pack.count_of("tarp") == 1 and pack.count_of("rope") == 3 and pack.count_of("driftwood") == 3,
 			"and most of it comes back (tarp %d, rope %d, wood %d)" % [pack.count_of("tarp"), pack.count_of("rope"), pack.count_of("driftwood")])
 
-	# Fire: light the grass beside a crate and it spreads, burns the crate down, and hurts.
-	var fire: FireService = world.fire
-	var meadow := Vector2.INF
-	for attempt in 400:
-		var probe: Vector2 = island.center + Vector2.from_angle(attempt * 2.39) * (30.0 + attempt * 0.4)
-		var h := island.height_at(probe.x, probe.y)
-		if island.biome_at(probe.x, probe.y, h) in [CampIsland.Biome.MEADOW, CampIsland.Biome.JUNGLE] and fire.grid.fuel(FireGrid.cell_of(probe)) > 0.6:
-			meadow = probe
-			break
-	_check(meadow != Vector2.INF, "found dry grass to burn")
-	if meadow != Vector2.INF:
-		var crate_at := Vector3(meadow.x + 2.0, island.height_at(meadow.x + 2.0, meadow.y), meadow.y)
-		camp._spawn_structure("s_firetest", "storage_crate", crate_at, 0.0)
-		world.weather.set_state("clear", true)
-		world.weather.set_wind(0.0, 8.0)
-		_check(fire.ignite_at(Vector3(meadow.x, 0.0, meadow.y)), "the grass catches")
-		await _wait(8.0)
-		_check(fire.grid.burning.size() + fire.grid.burnt.size() > 3, "the fire spreads (%d burning, %d burnt)" % [fire.grid.burning.size(), fire.grid.burnt.size()])
-		_check(fire.burning_cells.size() > 0 or fire.burnt_cells.size() > 0, "and everyone is told where it's burning")
-		player.teleport(Vector3(meadow.x, island.height_at(meadow.x, meadow.y) + 0.5, meadow.y))
-		var health_before := s.survival.health
-		# Stand in whichever cell has the longest left to burn.
-		var fires_near := false
-		var hottest := Vector2i.ZERO
-		for cell: Vector2i in fire.grid.burning:
-			if not fires_near or float(fire.grid.burning[cell]) > float(fire.grid.burning[hottest]):
-				hottest = cell
-				fires_near = true
-		if fires_near:
-			var c := FireGrid.center_of(hottest)
-			player.teleport(Vector3(c.x, island.height_at(c.x, c.y) + 0.3, c.y))
-		await _wait(1.0)
-		if fires_near:
-			_check(s.survival.health < health_before, "standing in the fire burns you")
-		await _wait(26.0)
-		_check(not camp.structures.has("s_firetest"), "the crate beside it burned down")
-		world.weather.set_state("storm", true)
-		await _wait(8.0)
-		_check(fire.grid.burning.size() == 0, "the rain puts it out (%d still burning)" % fire.grid.burning.size())
-		world.weather.set_state("clear", true)
-
 	world.save_now()
 	var saved := SaveGame.read()
 	var saved_types: Array = saved.get("camp", {}).get("structures", {}).values().map(func(e: Dictionary) -> String: return e.type)
@@ -1282,20 +1241,6 @@ func _look() -> void:
 			GameState.day_offset = 0.78 - Ocean.time / DayNight.DAY_LENGTH
 			var side := Vector3(cos(0.4), 0.0, -sin(0.4))
 			_fixed_camera(fire_at + side * 3.5 + Vector3(sin(0.4), 0.0, cos(0.4)) * 3.0 + Vector3.UP * 1.8, base.lerp(fire_at, 0.5) + Vector3.UP * 0.6)
-		"wildfire":
-			var island3: CampIsland = world.camp_island
-			var fire: FireService = world.fire
-			var meadow := island3.center
-			for attempt in 400:
-				var probe: Vector2 = island3.center + Vector2.from_angle(attempt * 2.39) * (30.0 + attempt * 0.4)
-				if fire.grid.fuel(FireGrid.cell_of(probe)) > 0.75:
-					meadow = probe
-					break
-			world.weather.set_wind(0.0, 7.0)
-			fire.ignite_at(Vector3(meadow.x, 0.0, meadow.y))
-			await _wait(16.0)
-			var ground_at := Vector3(meadow.x, island3.height_at(meadow.x, meadow.y), meadow.y)
-			_fixed_camera(ground_at + Vector3(-14.0, 7.0, 10.0), ground_at + Vector3(4.0, 0.5, 0.0))
 		"cooking":
 			var stove: CookStation = camp.stations["shack:stove"]
 			stove.add_fuel(400.0)

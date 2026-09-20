@@ -11,7 +11,7 @@ extends GrainField
 ## How far from the eye grains are worth simulating.
 const REACH := 26.0
 ## Grains a second per metre of stream inside that reach.
-const PER_METRE := 260.0
+const PER_METRE := 90.0
 ## Only this far apart along the line do we bother spawning.
 const SPACING := 0.6
 
@@ -20,7 +20,7 @@ var _width := 1.0
 var _owed := 0.0
 
 
-func _init(capacity: int = 3200) -> void:
+func _init(capacity: int = 1100) -> void:
 	super(capacity)
 
 
