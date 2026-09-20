@@ -9,18 +9,23 @@ extends Node3D
 ## its capacity. Everything here is local to the peer looking at it — the host
 ## decides what burns (FireService), this decides what it looks like.
 
-## Colour of a grain by what it is and how much life is left in it.
-const FIRE_HOT := Color(1.0, 0.96, 0.75)
-const FIRE_MID := Color(1.0, 0.55, 0.11)
-const FIRE_COLD := Color(0.72, 0.13, 0.03)
-const SMOKE_COLOUR := Color(0.32, 0.30, 0.29)
+## Fire is coloured by where a grain is in the flame, not by its age: white
+## hot in the middle of the body, yellow around that, orange at the edge, and
+## the specks thrown clear are the darkest.
+const FIRE_CORE := Color(1.0, 0.99, 0.86)
+const FIRE_BODY := Color(1.0, 0.79, 0.28)
+const FIRE_EDGE := Color(0.98, 0.58, 0.13)
+const FIRE_RIM := Color(0.82, 0.36, 0.06)
+## Smoke off a hot fire is pale, not grey.
+const SMOKE_COLOUR := Color(0.90, 0.89, 0.93)
 const WATER_COLOUR := Color(0.62, 0.86, 0.92)
 const FOAM_COLOUR := Color(0.97, 0.99, 1.0)
-const EMBER_COLOUR := Color(1.0, 0.62, 0.18)
-const STEAM_COLOUR := Color(0.92, 0.95, 0.97)
+const EMBER_COLOUR := Color(0.95, 0.51, 0.12)
+const STEAM_COLOUR := Color(0.95, 0.96, 0.98)
 
-## How big one grain is drawn, by kind — a speck, not a brick.
-const SIZE := [0.016, 0.018, 0.075, 0.012, 0.06]
+## How big one grain is drawn, by kind. Fire and its smoke are the same size,
+## so the whole thing reads as one grid of pixels.
+const SIZE := [0.02, 0.055, 0.06, 0.04, 0.05]
 
 var sim: GrainSim
 ## Each source: {"kind", "at": local Vector3, "radius", "rate" per second,
@@ -28,6 +33,10 @@ var sim: GrainSim
 var sources: Array[Dictionary] = []
 ## Grains stop at this height (the sea, a pool); -INF for none.
 var water_level := -INF
+## The middle of the fire and how wide its body is, for colouring the flame
+## from its core outward. Set by whatever owns the field.
+var fire_origin := Vector3.ZERO
+var fire_width := 0.5
 
 var _mesh: MultiMeshInstance3D
 ## The whole instance buffer, refilled each frame (Godot wants it all at once).
@@ -149,6 +158,7 @@ func _draw() -> void:
 	for i in shown:
 		var k := sim.kind[i]
 		var life: float = clampf(sim.heat[i], 0.0, 1.0)
+		var at := Vector3(sim.px[i], sim.py[i], sim.pz[i])
 		var size: float = SIZE[k] * _scale_for(k, life)
 		var b := i * 16
 		# A box, turned a little by where it is so the grains don't line up.
@@ -167,7 +177,7 @@ func _draw() -> void:
 		buffer[b + 9] = 0.0
 		buffer[b + 10] = c
 		buffer[b + 11] = sim.pz[i]
-		var colour := _colour_for(k, life)
+		var colour := _colour_for(k, life) if k != GrainSim.FIRE else _flame_colour(at, life)
 		buffer[b + 12] = colour.r
 		buffer[b + 13] = colour.g
 		buffer[b + 14] = colour.b
@@ -176,35 +186,48 @@ func _draw() -> void:
 	multi.buffer = buffer
 
 
+## Nothing fades — a grain shrinks to nothing instead, so every block stays
+## hard-edged right to the end.
 static func _scale_for(kind: int, life: float) -> float:
 	match kind:
 		GrainSim.SMOKE, GrainSim.STEAM:
-			return lerpf(1.9, 0.6, life)  # puffs swell as they thin out
+			# Smoke swells as it climbs, then goes out like everything else.
+			return lerpf(1.6, 1.0, life) * clampf(life * 4.0, 0.0, 1.0)
 		GrainSim.FIRE:
-			return lerpf(0.55, 1.15, life)
+			return clampf(life * 2.2, 0.0, 1.0)
 		_:
-			return 1.0
+			return clampf(life * 3.0, 0.0, 1.0)
+
+
+## Where a grain sits in the flame decides its colour: the middle of the body is
+## white hot, it goes yellow then orange outward and upward, and a grain thrown
+## clear of the body is the dull orange of a speck flying off.
+func _flame_colour(at: Vector3, life: float) -> Color:
+	var out := Vector2(at.x - fire_origin.x, at.z - fire_origin.z).length() / maxf(fire_width, 0.05)
+	var up := clampf((at.y - fire_origin.y) / maxf(fire_width * 2.4, 0.2), 0.0, 1.4)
+	# Distance from the hot heart of it, counting height as well as spread.
+	var from_core := clampf(out * 0.8 + up * 0.7 + (1.0 - life) * 0.3, 0.0, 1.0)
+	if from_core < 0.18:
+		return FIRE_CORE
+	if from_core < 0.42:
+		return FIRE_CORE.lerp(FIRE_BODY, (from_core - 0.18) / 0.24)
+	if from_core < 0.7:
+		return FIRE_BODY.lerp(FIRE_EDGE, (from_core - 0.42) / 0.28)
+	return FIRE_EDGE.lerp(FIRE_RIM, (from_core - 0.7) / 0.3)
 
 
 static func _colour_for(kind: int, life: float) -> Color:
 	match kind:
-		GrainSim.FIRE:
-			var hot: Color = FIRE_MID.lerp(FIRE_HOT, clampf((life - 0.55) / 0.45, 0.0, 1.0))
-			var cool: Color = FIRE_COLD.lerp(FIRE_MID, clampf(life / 0.55, 0.0, 1.0))
-			var colour: Color = cool if life < 0.55 else hot
-			colour.a = clampf(life * 2.2, 0.0, 1.0)
-			return colour
 		GrainSim.SMOKE:
-			return Color(SMOKE_COLOUR.r, SMOKE_COLOUR.g, SMOKE_COLOUR.b, life * 0.5)
+			# Pale and solid, darkening a little as it cools and spreads.
+			return SMOKE_COLOUR.lerp(Color(0.72, 0.71, 0.75), 1.0 - life)
 		GrainSim.WATER:
 			# Fast water is white with air, slow water is clear blue.
-			var colour2: Color = WATER_COLOUR.lerp(FOAM_COLOUR, clampf(1.0 - life, 0.0, 1.0))
-			colour2.a = clampf(0.35 + life * 0.5, 0.0, 1.0)
-			return colour2
+			return WATER_COLOUR.lerp(FOAM_COLOUR, clampf(1.0 - life, 0.0, 1.0))
 		GrainSim.EMBER:
-			return Color(EMBER_COLOUR.r, EMBER_COLOUR.g, EMBER_COLOUR.b, clampf(life * 1.6, 0.0, 1.0))
+			return EMBER_COLOUR
 		_:
-			return Color(STEAM_COLOUR.r, STEAM_COLOUR.g, STEAM_COLOUR.b, life * 0.4)
+			return STEAM_COLOUR
 
 
 static func _grain_material() -> ShaderMaterial:

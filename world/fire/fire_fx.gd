@@ -1,11 +1,12 @@
 class_name FireFx
 extends Node3D
-## A fire: thousands of fine GPU particles rising, cooling and going out
-## (GpuFire), over a bed of coals, with a light that never burns steadily.
+## A fire drawn as a body of pixels: a dense mass of small solid blocks, white
+## hot in the middle, yellow, then orange at the edge, with specks thrown clear
+## of it and a pale, chunky column of smoke over the top. Every block is a grain
+## of the simulation (GrainSim), so the fire moves because its grains do.
 ##
 ## `size` is roughly the radius of the burning area in metres; `intensity`
-## (0..1) is how hard it burns, and 0 puts it out. Used for campfires, the
-## castaway's pit and every burning cell of a wildfire.
+## (0..1) is how hard it burns, and 0 puts it out.
 
 @export var size := 0.5
 @export var intensity := 1.0
@@ -13,8 +14,12 @@ extends Node3D
 @export var shadows := true
 @export var smoke := true
 
-var _fire: GpuFire
+var _grains: GrainField
+var _body: Dictionary
+var _sparks: Dictionary
 var _bed: MeshInstance3D
+var _light: OmniLight3D
+var _time := 0.0
 
 static var _flame_texture: Texture2D
 static var _puff_texture: Texture2D
@@ -23,17 +28,37 @@ static var _puff_texture: Texture2D
 func _ready() -> void:
 	_bed = _ember_bed()
 	add_child(_bed)
-	_fire = GpuFire.new()
-	_fire.size = size
-	_fire.smoke = smoke
-	_fire.shadows = shadows
-	add_child(_fire)
+	_grains = GrainField.new(int(clampf(1500.0 * (0.5 + size), 900.0, 3000.0)))
+	_grains.fire_width = size
+	add_child(_grains)
+	# The body of the fire: grains born all through the burning area and rising
+	# slowly, so they pile into a mass rather than streaming up in a jet.
+	_body = _grains.add_source(GrainSim.FIRE, Vector3(0.0, 0.05, 0.0),
+		_body_rate(), 0.3 + size * 0.3, 0.55 + size * 0.5, size * 1.05)
+	# And the specks that leave it.
+	_sparks = _grains.add_source(GrainSim.EMBER, Vector3(0.0, 0.1, 0.0),
+		_spark_rate(), 1.9 + size, 1.3, size * 0.6)
+	_light = OmniLight3D.new()
+	_light.light_color = Color(1.0, 0.62, 0.26)
+	_light.omni_range = 5.0 + size * 6.0
+	_light.shadow_enabled = shadows
+	_light.position.y = 0.3 + size * 0.5
+	add_child(_light)
 	set_intensity(intensity)
+
+
+## Grains of flame a second: enough at once that the fire is a solid body.
+func _body_rate() -> float:
+	return clampf(1400.0 * (0.4 + size), 600.0, 3400.0)
+
+
+func _spark_rate() -> float:
+	return clampf(26.0 * size, 8.0, 44.0)
 
 
 func set_intensity(value: float) -> void:
 	intensity = clampf(value, 0.0, 1.0)
-	if _fire == null:
+	if _grains == null:
 		return
 	var on := intensity > 0.01
 	if _bed != null:
@@ -41,7 +66,24 @@ func set_intensity(value: float) -> void:
 		_bed.visible = on
 		var coals: StandardMaterial3D = _bed.material_override
 		coals.emission_energy_multiplier = lerpf(0.3, 1.0, intensity)
-	_fire.set_intensity(intensity)
+	_body.rate = _body_rate() * intensity
+	_body.radius = size * lerpf(0.55, 1.05, intensity)
+	_sparks.rate = _spark_rate() * intensity * (1.0 if smoke else 0.0)
+	_grains.fire_width = size * lerpf(0.6, 1.0, intensity)
+	_grains.visible = on
+	_grains.set_process(on)
+	if not on:
+		_grains.sim.clear()
+	_light.visible = on
+	set_process(on)
+
+
+func _process(delta: float) -> void:
+	_time += delta
+	# Where the flame's heart is, for colouring it from the middle outward.
+	_grains.fire_origin = global_position + Vector3(0.0, size * 0.35, 0.0)
+	var flicker := 1.0 + 0.2 * sin(_time * 12.0) + 0.11 * sin(_time * 29.0 + 1.3) + 0.07 * sin(_time * 6.7)
+	_light.light_energy = (1.0 + size * 1.5) * intensity * flicker
 
 
 ## The ember bed: the fire is sitting on coals, so you never see bare ground

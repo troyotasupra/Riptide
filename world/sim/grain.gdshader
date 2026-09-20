@@ -1,16 +1,16 @@
 shader_type spatial;
 render_mode unshaded, cull_disabled, shadows_disabled;
-// One grain of the simulation: a small flat-shaded box, coloured by what it is
-// and how much life it has left. The colour comes in as per-instance custom
-// data (rgb, alpha), so the whole sim draws in one go.
+// One grain of the simulation: a small solid block. Grains are opaque — fire
+// made of pixels is hard-edged, not a glow — so a dying grain shrinks away
+// instead of fading, and the blocks sort against each other properly.
+// Its colour arrives as per-instance custom data.
 
-varying flat vec4 grain;
+varying flat vec3 grain;
 
 void vertex() {
-	grain = INSTANCE_CUSTOM;
+	grain = INSTANCE_CUSTOM.rgb;
 }
 
 void fragment() {
-	ALBEDO = grain.rgb;
-	ALPHA = grain.a;
+	ALBEDO = grain;
 }

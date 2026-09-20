@@ -22,13 +22,13 @@ const GRAVITY := 9.8
 ## How much speed a grain keeps when it lands on the ground.
 const BOUNCE := Vector2(0.72, 0.18)  # (along the slope, into it)
 ## Seconds a grain of each kind lives, at most.
-const LIFE := [6.0, 0.55, 2.6, 1.6, 1.4]
+const LIFE := [6.0, 0.85, 2.0, 1.6, 1.4]
 ## How fast fire and smoke climb (m/s² of lift while they are hot).
-const FIRE_LIFT := 4.2
+const FIRE_LIFT := 2.2
 const SMOKE_LIFT := 0.9
 const STEAM_LIFT := 2.6
 ## How wildly fire wanders as it rises.
-const SWIRL := 1.9
+const SWIRL := 1.4
 ## Water that lands gives itself up this fast (it soaks in, or joins the pool).
 const SOAK := 0.4
 ## Cell size for grains noticing each other (metres).
@@ -196,7 +196,7 @@ func _step_fire(i: int, dt: float) -> bool:
 	heat[i] -= dt / LIFE[FIRE]
 	if heat[i] <= 0.0:
 		# Some of what burns goes up as smoke; the rest is simply spent.
-		if randf() > 0.3:
+		if randf() > 0.07:
 			return false
 		kind[i] = SMOKE
 		heat[i] = 0.5
