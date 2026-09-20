@@ -173,11 +173,16 @@ func _camp_loop() -> void:
 	pack.add("sandbag", 4, Ocean.time)
 	_check(_to_hotbar(pack, "sandbag", 2), "took the bags in hand")
 	var walls_before := camp.structures.size()
-	camp.request_place(2, sand_spot + Vector3(2.0, 0.0, 0.0), 0.0)
+	# Somewhere clear on the sand: the beach is different on every world.
 	var wall_id := ""
-	for id: String in camp.structures:
-		if camp.structures[id].type == "sandbag_wall":
-			wall_id = id
+	for step in 8:
+		var angle := step * TAU / 8.0
+		camp.request_place(2, sand_spot + Vector3(cos(angle), 0.0, sin(angle)) * 2.2, 0.0)
+		for id: String in camp.structures:
+			if camp.structures[id].type == "sandbag_wall":
+				wall_id = id
+		if not wall_id.is_empty():
+			break
 	_check(camp.structures.size() == walls_before + 1 and not wall_id.is_empty(), "started a sandbag wall")
 	if not wall_id.is_empty():
 		camp.interact_structure(s, wall_id, 2)
