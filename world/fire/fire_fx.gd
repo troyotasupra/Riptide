@@ -1,9 +1,12 @@
 class_name FireFx
 extends Node3D
-## A fire: crossed sheets of flame whose tongues lick up from white-hot at the
-## root to red at the tips (FlameSheets), one solid body with no gaps, a few rising embers, smoke and a flickering light. `size` is roughly
-## the radius of the burning area in metres; `intensity` (0..1) scales how hard it
-## burns, and 0 puts it out. Used for campfires, the castaway's pit and wildfire.
+## A fire, simulated grain by grain (GrainSim): hot grains born in the fuel bed
+## climb, wander, cool from white through orange to red, and go up as smoke;
+## sparks are thrown clear and fall back. Nothing here is a painted sheet.
+##
+## `size` is roughly the radius of the burning area in metres; `intensity`
+## (0..1) is how hard it burns, and 0 puts it out. Used for campfires, the
+## castaway's pit and every burning cell of a wildfire.
 
 @export var size := 0.5
 @export var intensity := 1.0
@@ -11,10 +14,10 @@ extends Node3D
 @export var shadows := true
 @export var smoke := true
 
-var _tongues: FlameSheets
+var _grains: GrainField
+var _flames: Dictionary
+var _sparks: Dictionary
 var _bed: MeshInstance3D
-var _embers: GPUParticles3D
-var _smoke: GPUParticles3D
 var _light: OmniLight3D
 var _time := 0.0
 
@@ -25,15 +28,14 @@ static var _puff_texture: Texture2D
 func _ready() -> void:
 	_bed = _ember_bed()
 	add_child(_bed)
-	_tongues = FlameSheets.new()
-	add_child(_tongues)
-	_tongues.set_sheets(_campfire_sheets())
-	var embers := FireChips.ember_process()
-	embers.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	embers.emission_sphere_radius = size * 0.5
-	_embers = _particles(embers, FireChips.ember_mesh(), int(clampf(10.0 * size + 4.0, 4.0, 24.0)), 2.2)
-	if smoke:
-		_smoke = _particles(_smoke_material(), _smoke_draw(), int(clampf(8.0 * size + 5.0, 5.0, 24.0)), 5.0)
+	# Room for the flames, their smoke and a few sparks at once.
+	_grains = GrainField.new(int(clampf(700.0 * (0.6 + size), 420.0, 2200.0)))
+	add_child(_grains)
+	# Born across the fuel bed, not from one point, so the fire has width.
+	_flames = _grains.add_source(GrainSim.FIRE, Vector3(0.0, 0.04, 0.0),
+		_flame_rate(), 0.7 + size * 0.6, 0.3 + size * 0.35, size * 0.75)
+	_sparks = _grains.add_source(GrainSim.EMBER, Vector3(0.0, 0.12, 0.0),
+		clampf(5.0 * size, 1.5, 9.0), 2.6 + size, 1.1, size * 0.5)
 	_light = OmniLight3D.new()
 	_light.light_color = Color(1.0, 0.58, 0.24)
 	_light.omni_range = 5.0 + size * 6.0
@@ -43,48 +45,31 @@ func _ready() -> void:
 	set_intensity(intensity)
 
 
+## Grains of flame a second: enough at once that the fire is a body, not sparks.
+func _flame_rate() -> float:
+	return clampf(620.0 * (0.4 + size), 260.0, 1500.0)
+
+
 func set_intensity(value: float) -> void:
 	intensity = clampf(value, 0.0, 1.0)
-	if _tongues == null:
+	if _grains == null:
 		return
 	var on := intensity > 0.01
-	_tongues.visible = on
 	if _bed != null:
 		# The coals outlive the flames and fade as the fire dies.
 		_bed.visible = on
 		var coals: StandardMaterial3D = _bed.material_override
 		coals.emission_energy_multiplier = lerpf(0.3, 1.0, intensity)
-	# A fire burning low is a smaller fire, not a thinner one.
-	_tongues.scale = Vector3.ONE * lerpf(0.45, 1.0, intensity)
-	for particles: GPUParticles3D in [_embers, _smoke]:
-		if particles != null:
-			particles.emitting = on
-			particles.amount_ratio = maxf(0.05, intensity)
+	# A fire burning low throws fewer, weaker flames — not thinner ones.
+	_flames.rate = _flame_rate() * intensity
+	_flames.strength = lerpf(0.5, 1.0, intensity)
+	_sparks.rate = clampf(5.0 * size, 1.5, 9.0) * intensity * (0.0 if not smoke else 1.0)
+	_grains.visible = on
+	_grains.set_process(on)
+	if not on:
+		_grains.sim.clear()
 	_light.visible = on
 	set_process(on)
-
-
-## Sheets stood through the fire at every angle and offset — never a neat star,
-## which reads as an X from above — with a lower ring round the edge, so from
-## any side and any height it is one body of fire with the ground hidden.
-func _campfire_sheets() -> Array:
-	var list: Array = []
-	var tall := 0.4 + size * 0.95
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 5150
-	for i in 7:
-		# Each sheet is offset off the middle and turned freely, so the sheets
-		# cross all over the fire rather than all through one line.
-		var offset := Vector2.from_angle(rng.randf() * TAU) * size * rng.randf_range(0.0, 0.42)
-		list.append({"pos": Vector3(offset.x, 0.0, offset.y), "yaw": rng.randf() * TAU,
-			"width": size * rng.randf_range(1.25, 1.8), "height": tall * rng.randf_range(0.78, 1.0),
-			"seed": 5150 + i, "heat": 1.0})
-	for i in 8:
-		var a := i * TAU / 8.0 + rng.randf_range(-0.2, 0.2)
-		list.append({"pos": Vector3(cos(a), 0.0, sin(a)) * size * rng.randf_range(0.4, 0.6),
-			"yaw": -a + PI / 2.0 + rng.randf_range(-0.4, 0.4), "width": size * 0.95,
-			"height": tall * rng.randf_range(0.42, 0.62), "seed": 5170 + i, "heat": 0.6})
-	return list
 
 
 ## The ember bed: the fire is sitting on coals, so you never see bare ground
@@ -112,60 +97,6 @@ func _process(delta: float) -> void:
 	_time += delta
 	var flicker := 1.0 + 0.22 * sin(_time * 13.0) + 0.12 * sin(_time * 31.0 + 1.3) + 0.08 * sin(_time * 7.1)
 	_light.light_energy = (1.1 + size * 1.4) * intensity * flicker
-
-
-func _particles(process: ParticleProcessMaterial, draw: Mesh, amount: int, lifetime: float) -> GPUParticles3D:
-	var particles := GPUParticles3D.new()
-	particles.amount = amount
-	particles.lifetime = lifetime
-	particles.preprocess = lifetime
-	particles.randomness = 0.5
-	particles.process_material = process
-	particles.draw_pass_1 = draw
-	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	particles.visibility_aabb = AABB(Vector3(-2.0, -0.5, -2.0) * maxf(1.0, size * 2.0), Vector3(4.0, 12.0, 4.0) * maxf(1.0, size * 2.0))
-	add_child(particles)
-	return particles
-
-
-func _smoke_material() -> ParticleProcessMaterial:
-	var m := ParticleProcessMaterial.new()
-	m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	m.emission_sphere_radius = size * 0.4
-	m.direction = Vector3.UP
-	m.spread = 10.0
-	m.initial_velocity_min = 0.6
-	m.initial_velocity_max = 1.2 + size * 0.5
-	m.gravity = Vector3(0.25, 0.35, 0.1)
-	m.damping_min = 0.1
-	m.damping_max = 0.3
-	m.scale_min = 0.8 + size
-	m.scale_max = 1.4 + size * 1.5
-	m.scale_curve = _curve([Vector2(0.0, 0.4), Vector2(1.0, 2.4)])
-	m.angle_min = -180.0
-	m.angle_max = 180.0
-	var ramp := Gradient.new()
-	ramp.offsets = PackedFloat32Array([0.0, 0.12, 0.6, 1.0])
-	ramp.colors = PackedColorArray([Color(0.25, 0.22, 0.2, 0.0), Color(0.3, 0.28, 0.26, 0.4), Color(0.45, 0.44, 0.43, 0.22), Color(0.55, 0.55, 0.55, 0.0)])
-	var ramp_texture := GradientTexture1D.new()
-	ramp_texture.gradient = ramp
-	m.color_ramp = ramp_texture
-	return m
-
-
-func _smoke_draw() -> QuadMesh:
-	var quad := QuadMesh.new()
-	quad.size = Vector2(1.0, 1.0)
-	var m := StandardMaterial3D.new()
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	m.billboard_keep_scale = true
-	m.vertex_color_use_as_albedo = true
-	m.albedo_texture = _puff()
-	m.roughness = 1.0
-	m.disable_receive_shadows = true
-	quad.material = m
-	return quad
 
 
 static func _curve(points: Array) -> CurveTexture:
