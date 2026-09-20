@@ -232,6 +232,18 @@ static func _stream(shape: CampIsland) -> Node3D:
 	water.mesh = _surface(vertices, normals, uvs)
 	water.material_override = _flow_material("stream", 1.4, 0.07, 0.035, 1.0)
 	stream.add_child(water)
+	# The water itself, near enough to see: grains poured in at the top of the
+	# reach you are standing by, finding their own way down the bed.
+	var grains := GrainStream.new()
+	grains.name = "StreamGrains"
+	var course := PackedVector3Array()
+	for i in SEGMENTS + 1:
+		var t := float(i) / SEGMENTS
+		var p := shape.stream_point(t)
+		course.append(Vector3(p.x, shape.stream_bed(t) + 0.06, p.y))
+	grains.set_course(course, HALF_WIDTH * 1.6)
+	grains.water_level = 0.0
+	stream.add_child(grains)
 	return stream
 
 

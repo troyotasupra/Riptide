@@ -30,7 +30,7 @@ const STEAM_LIFT := 2.6
 ## How wildly fire wanders as it rises.
 const SWIRL := 1.9
 ## Water that lands gives itself up this fast (it soaks in, or joins the pool).
-const SOAK := 0.55
+const SOAK := 0.4
 ## Cell size for grains noticing each other (metres).
 const CELL := 0.45
 
