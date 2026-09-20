@@ -9,7 +9,7 @@ extends Node3D
 const POINTS_PER_CELL := 24
 const MAX_POINTS := 14000
 ## Flame specks over the whole fire, however big it gets.
-const FLAMES := 260000
+const FLAMES := 420000
 const SMOKE := 900
 const EMBERS := 1200
 const LIGHTS := 6
@@ -84,7 +84,7 @@ func set_cells(cells: Array, ground: Callable, fuel: Callable = Callable()) -> v
 		process.emission_point_count = _count
 	var cells_burning := float(_count) / POINTS_PER_CELL
 	# Enough specks for the ground that is actually alight, and no more.
-	_flames.amount_ratio = clampf(cells_burning * 2600.0 / FLAMES, 0.02, 1.0)
+	_flames.amount_ratio = clampf(cells_burning * 9000.0 / FLAMES, 0.02, 1.0)
 	_smoke.amount_ratio = clampf(cells_burning * 8.0 / SMOKE, 0.05, 1.0)
 	_embers.amount_ratio = clampf(cells_burning * 2.0 / EMBERS, 0.02, 1.0)
 	_place_lights(points)
