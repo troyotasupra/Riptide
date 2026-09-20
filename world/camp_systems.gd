@@ -53,7 +53,7 @@ const PICKUPS := {
 	"page_shelter": {"item": "book_page_shelter", "count": 1, "label": "Take the torn book page"},
 	"page_prosthetics": {"item": "book_page_prosthetics", "count": 1, "label": "Take the torn book page"},
 }
-## In the cave behind the waterfall: what the two dead pirates fought over, and
+## In the cave in the rock band: what the two dead pirates fought over, and
 ## what they fought with. Offsets from the chamber's middle (CaveBuild.room_point).
 const CAVE_PICKUPS := {
 	"outboard_motor": {"item": "outboard_motor", "count": 1, "label": "Take the outboard motor (18 kg)", "at": Vector3(0.4, 0.05, 1.6)},

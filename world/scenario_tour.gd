@@ -145,7 +145,7 @@ func _model_rack() -> void:
 	await _shot("rack_bushes")
 	holder.queue_free()
 
-## The cave behind the waterfall: its doorway from the pool, the hill over it
+## The cave in the rock band: its doorway from the pool, the hill over it
 ## (no sign of the cut), and inside by torchlight: the tunnel and the chamber.
 func _cave() -> void:
 	if not _wants("cave_"):
@@ -472,17 +472,17 @@ func _terrain() -> void:
 			await _wait(0.8)
 			await _shot("terrain_jungle")
 			break
-	var fall: Dictionary = island.waterfall()
+	var fall: Dictionary = island.rock_band()
 	var foot: Vector3 = fall.foot
 	var top: Vector3 = fall.top
 	var out := Vector3(float(fall.direction.x), 0.0, float(fall.direction.y))
 	var side := out.cross(Vector3.UP)
 	_look(foot + out * 26.0 + side * 10.0 + Vector3.UP * 9.0, top.lerp(foot, 0.55))
 	await _wait(0.8)
-	await _shot("terrain_waterfall")
+	await _shot("terrain_rock_band")
 	_look(foot + out * 8.0 + side * 3.0 + Vector3.UP * 2.0, foot + Vector3.UP * 1.0)
 	await _wait(0.5)
-	await _shot("terrain_plunge_pool")
+	await _shot("terrain_stream_cut")
 	_look(foot + side * 30.0 + out * 6.0 + Vector3.UP * 4.0, top.lerp(foot, 0.3))
 	await _wait(0.5)
 	await _shot("terrain_cliff")

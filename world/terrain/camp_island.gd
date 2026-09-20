@@ -15,14 +15,13 @@ const HILL_PEAK := 48.0
 const HILL_RADIUS := 110.0
 const POND_RADIUS := 7.0
 const STREAM_WIDTH := 1.6
-## The stream drops over one big waterfall on its way down: where along the run,
-## how tall the rock band it falls over is, how wide that band runs across the
-## hillside, and how big the plunge pool at its foot is.
+## A band of rock crosses the hillside partway down the stream's run. The stream
+## cuts through it rather than falling over it, so the water runs the whole way
+## to the sea; the cave's mouth opens in the same band.
 const FALL_T := 0.22
 const FALL_SPAN := 0.05
-const FALL_HEIGHT := 9.0
+const FALL_HEIGHT := 2.2
 const FALL_BAND := 26.0
-const PLUNGE_RADIUS := 4.5
 ## The reef raises the seabed to this depth around the shipwreck, so it's always diveable.
 const WRECK_DEPTH := -8.0
 ## The sandbar the freighter is stuck on: its crest depth, and how far it spreads.
@@ -46,7 +45,7 @@ var spring := Vector2.ZERO
 ## Surface level of the spring pond.
 var spring_height := 0.0
 var stream_mouth := Vector2.ZERO
-## The cave: its mouth at the foot of the waterfall's cliff, beside the fall; a
+## The cave: its mouth in the rock band beside the stream; a
 ## tunnel running back into the hill, and a round chamber at the end (`cave` is
 ## the chamber's middle). The terrain is cut down to the cave floor there;
 ## CaveBuild roofs it over.
@@ -152,8 +151,8 @@ func height_at(x: float, z: float) -> float:
 	return h
 
 
-## Behind the waterfall's cliff, beside the fall: the mouth sits at the cliff foot
-## (full drop is 5 m past the brink) and the cave runs back under the brink's shelf.
+## Beside the stream where it cuts the rock band: the mouth sits in the face and
+## the cave runs back into the hill.
 func _place_cave() -> void:
 	var brink := stream_point(FALL_T)
 	var side := _outflow.orthogonal()
@@ -211,10 +210,6 @@ func height_over_cave(x: float, z: float) -> float:
 		# A notch where the stream leaves, so the pool has an outflow.
 		h = minf(h, lerpf(spring_height - 0.15, h, smoothstep(STREAM_WIDTH, STREAM_WIDTH * 2.5,
 			absf((p - spring).dot(_outflow.orthogonal())))) if outlet > 0.5 else h)
-	var plunge_distance := p.distance_to(stream_point(FALL_T + FALL_SPAN))
-	if plunge_distance < PLUNGE_RADIUS * 1.4:
-		var plunge_bed := stream_bed(FALL_T + FALL_SPAN) - 0.6
-		h = minf(h, lerpf(plunge_bed, h, smoothstep(PLUNGE_RADIUS * 0.5, PLUNGE_RADIUS * 1.4, plunge_distance)))
 	var along := _stream_param(p)
 	if along.x > 0.0 and along.x < 1.0 and along.y < STREAM_WIDTH * 3.0:
 		h = minf(h, lerpf(stream_bed(along.x), h, smoothstep(STREAM_WIDTH, STREAM_WIDTH * 3.0, along.y)))
@@ -308,7 +303,9 @@ func _flattest_bench(from: Vector2, bearing: float) -> Vector2:
 
 
 ## The brink and the foot of the waterfall, and which way the water is falling.
-func waterfall() -> Dictionary:
+## The rock band the stream cuts through, and the way it runs there: the cave's
+## mouth is placed against it.
+func rock_band() -> Dictionary:
 	var top := stream_point(FALL_T)
 	var foot := stream_point(FALL_T + FALL_SPAN)
 	var direction := (foot - top)

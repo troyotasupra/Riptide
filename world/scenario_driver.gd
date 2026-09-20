@@ -1184,12 +1184,6 @@ func _look() -> void:
 	world.weather.set_wind(0.8, 3.0)
 	# A face can carry an argument after a colon, e.g. "guns:m4".
 	match GameState.face.split(":")[0]:
-		"fallclose":
-			# Stood at the plunge pool looking up into the fall.
-			var fall: Dictionary = world.camp_island.waterfall()
-			var fall_foot: Vector3 = fall.foot
-			var out_dir := Vector3(fall.direction.x, 0.0, fall.direction.y)
-			_fixed_camera(fall_foot + out_dir * 9.0 + Vector3.UP * 2.0, fall_foot + Vector3.UP * 5.5)
 		"sandclose":
 			# Nose to the sand: close enough to see the grains.
 			var beach: Vector2 = world.camp_island.cove
@@ -1263,13 +1257,6 @@ func _look() -> void:
 			var eye3 := island2.spring + from_hill * 15.0
 			_fixed_camera(Vector3(eye3.x, island2.spring_height + 7.0, eye3.y),
 				Vector3(island2.spring.x, island2.spring_height, island2.spring.y))
-		"waterfall":
-			var fall: Dictionary = world.camp_island.waterfall()
-			var foot: Vector3 = fall.foot
-			var top: Vector3 = fall.top
-			var out3 := Vector3(float(fall.direction.x), 0.0, float(fall.direction.y))
-			var side3 := out3.cross(Vector3.UP)
-			_fixed_camera(foot + out3 * 26.0 + side3 * 10.0 + Vector3.UP * 9.0, top.lerp(foot, 0.55))
 		"castaway":
 			var island: CampIsland = world.camp_island
 			var yaw := CampIslandPois.yaw_toward(island.camp, island.center)

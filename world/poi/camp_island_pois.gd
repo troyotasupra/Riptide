@@ -9,7 +9,6 @@ static func build(shape: CampIsland) -> Node3D:
 	root.name = "Landmarks"
 	root.add_child(_spring(shape))
 	root.add_child(_stream(shape))
-	root.add_child(_waterfall(shape))
 	root.add_child(_castaway_camp(shape))
 	root.add_child(CaveBuild.build(shape))
 	root.add_child(FishingShack.build(shape))
@@ -173,7 +172,6 @@ static func _surface(vertices: PackedVector3Array, normals: PackedVector3Array, 
 static func _stream(shape: CampIsland) -> Node3D:
 	const SEGMENTS := 220
 	const HALF_WIDTH := 1.1
-	var plunge_at := shape.stream_point(CampIsland.FALL_T + CampIsland.FALL_SPAN)
 	var stream := Interactable.new()
 	stream.name = "Stream"
 	stream.interact_id = "stream"
@@ -192,16 +190,7 @@ static func _stream(shape: CampIsland) -> Node3D:
 	var previous_travelled := 0.0
 	for i in SEGMENTS + 1:
 		var t := float(i) / SEGMENTS
-		# Stop short of the brink: the fall's own curtain starts upstream of it and
-		# carries the water over the edge, so the stream never ends in a stub of
-		# mesh hanging over the drop.
-		if t > CampIsland.FALL_T - 0.025 and t < CampIsland.FALL_T + CampIsland.FALL_SPAN:
-			had_previous = false  # the falling stretch
-			continue
 		var p := shape.stream_point(t)
-		if p.distance_to(plunge_at) < CampIsland.PLUNGE_RADIUS * 0.8:
-			had_previous = false  # the plunge pool has its own water
-			continue
 		var ahead := shape.stream_point(minf(t + 0.01, 1.0)) - shape.stream_point(maxf(t - 0.01, 0.0))
 		var side := ahead.normalized().orthogonal() * HALF_WIDTH
 		var y: float = shape.stream_bed(t) + 0.3
@@ -246,214 +235,7 @@ static func _stream(shape: CampIsland) -> Node3D:
 	return stream
 
 
-## The big fall: the stream shoots off the lip and pours down the rock face in
-## rolling, faceted water (water_flow.gdshader), a thinner fast strand over the
-## top of it; a splash of white water at the foot where it lands (the fire's
-## flowing sheets in white and blue), mist, wet boulders either side, and a pool.
-static func _waterfall(shape: CampIsland) -> Node3D:
-	var node := Node3D.new()
-	node.name = "Waterfall"
-	var fall: Dictionary = shape.waterfall()
-	var top: Vector3 = fall.top
-	var foot: Vector3 = fall.foot
-	var direction: Vector2 = fall.direction
-	var forward := Vector3(direction.x, 0.0, direction.y)
-	var across := forward.cross(Vector3.UP).normalized() * CampIsland.STREAM_WIDTH * 0.9
-
-	var path := _fall_path(shape, top, foot, forward)
-	# Three curtains one behind another: the body of the fall, a torn veil of
-	# strands hanging in front of it, and a wider, slower wash against the rock.
-	# Together they have depth instead of reading as one painted ribbon.
-	for layer: Array in [
-			[1.0, 0.0, _fall_material("fall_body", 7.0, 1.0, 0.55, 20.0)],
-			[0.74, 0.18, _fall_material("fall_veil", 9.5, 0.6, 0.3, 34.0)],
-			[1.18, -0.12, _fall_material("fall_wash", 5.0, 0.8, 0.45, 13.0)]]:
-		var sheet := MeshInstance3D.new()
-		sheet.mesh = _fall_sheet(path, across, layer[0], layer[1])
-		sheet.material_override = layer[2]
-		sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		node.add_child(sheet)
-	# The lip: boulders the stream pours between and over, either side of the fall
-	# and a couple breaking the flow right at the edge.
-	var lip_rng := RandomNumberGenerator.new()
-	lip_rng.seed = hash("lip:%d" % shape.island_seed)
-	var side_dir := across.normalized()
-	for spot: Array in [[-1.25, 0.1, 1.5], [1.3, -0.1, 1.6], [-2.3, -0.6, 2.0], [2.4, -0.5, 1.9], [-0.45, 0.35, 0.55], [0.55, 0.25, 0.5]]:
-		var at := top + side_dir * float(spot[0]) * CampIsland.STREAM_WIDTH + forward * float(spot[1])
-		# Sat on the ground where they are, not hung in the air at lip height.
-		var size: float = spot[2] * lip_rng.randf_range(0.85, 1.15)
-		at.y = shape.height_at(at.x, at.z) - size * 0.3
-		_mesh(node, MeshKit.rock(160 + lip_rng.randi() % 8, 0.2, 0.75), "fall_rock", Color(0.36, 0.35, 0.34), at,
-			Vector3(lip_rng.randf() * 0.4, lip_rng.randf() * TAU, lip_rng.randf() * 0.4)).scale = Vector3(size * 1.2, size * 0.8, size)
-		var stone := SphereShape3D.new()
-		stone.radius = size * 0.45
-		_solid(node, stone, at)
-	# Where it lands: the pool is beaten white, with rings of froth riding out
-	# from the impact. Foam on water, not a fire in disguise.
-	var landing: Vector3 = path[path.size() - 1]
-	var width := across.length() * 2.6
-	var foam := MeshInstance3D.new()
-	foam.name = "PlungeFoam"
-	var disc := PlaneMesh.new()
-	disc.size = Vector2(width * 2.4, width * 2.4)
-	disc.subdivide_width = 6
-	disc.subdivide_depth = 6
-	foam.mesh = disc
-	var foam_material := ShaderMaterial.new()
-	foam_material.shader = load("res://world/foam_ring.gdshader")
-	foam.material_override = foam_material
-	foam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	foam.position = Vector3(landing.x, foot.y + 0.32, landing.z)
-	node.add_child(foam)
-
-	var plunge := MeshInstance3D.new()
-	plunge.mesh = _pool_mesh(shape, Vector2(foot.x, foot.z), CampIsland.PLUNGE_RADIUS * 2.0, foot.y + 0.3)
-	plunge.material_override = _flow_material("pool", 0.0, 0.0, 0.035, 1.0, true)
-	node.add_child(plunge)
-
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash("waterfall:%d" % shape.island_seed)
-	for i in 22:
-		var at := top.lerp(foot, rng.randf()) + forward * rng.randf_range(-1.0, 2.5)
-		var sideways := across.normalized() * (CampIsland.STREAM_WIDTH * rng.randf_range(1.0, 2.4) * (1.0 if i % 2 == 0 else -1.0))
-		var spot := at + sideways
-		var size := rng.randf_range(0.9, 2.4)
-		# Bedded into the face, not perched on it.
-		spot.y = shape.height_at(spot.x, spot.z) - size * 0.55
-		_mesh(node, MeshKit.rock(70 + i, 0.4, 0.8), "fall_rock", Color(0.38, 0.37, 0.36), spot,
-			Vector3(rng.randf() * 0.4, rng.randf() * TAU, rng.randf() * 0.4)).scale = Vector3(size * 1.3, size, size * 1.1)
-
-	var spray := GPUParticles3D.new()
-	spray.name = "Spray"
-	spray.amount = 420
-	spray.lifetime = 1.8
-	spray.position = foot + Vector3.UP * 0.4 + forward * 0.6
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.5, 0.5)
-	spray.draw_pass_1 = quad
-	spray.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var process := ParticleProcessMaterial.new()
-	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	process.emission_sphere_radius = CampIsland.STREAM_WIDTH
-	process.direction = Vector3.UP
-	process.spread = 55.0
-	process.initial_velocity_min = 1.4
-	process.initial_velocity_max = 4.5
-	process.gravity = Vector3(0.0, -3.4, 0.0)
-	process.damping_min = 0.6
-	process.damping_max = 1.4
-	process.scale_min = 0.35
-	process.scale_max = 1.3
-	spray.process_material = process
-	var mist := StandardMaterial3D.new()
-	mist.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mist.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mist.albedo_color = Color(0.97, 0.99, 1.0, 0.3)
-	# A soft round puff, not a square.
-	mist.albedo_texture = FireFx._puff()
-	mist.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	spray.material_override = mist
-	node.add_child(spray)
-	return node
-
-
-
-
-## Where the falling water runs: it shoots off the lip on a falling arc, then
-## runs down the face a hand's width off the rock, into the pool.
-static func _fall_path(shape: CampIsland, top: Vector3, foot: Vector3, forward: Vector3) -> Array[Vector3]:
-	const FINE := 600
-	const SPACING := 0.3
-	# The curtain starts upstream of the lip and lies on the stream bed there, so
-	# the water bends over the edge as one surface instead of one mesh ending
-	# where the next begins.
-	const APPROACH := 2.0
-	var run := Vector2(foot.x - top.x, foot.z - top.z).length() + 1.2
-	var start := top + Vector3.UP * 0.25
-	var dense: Array[Vector3] = []
-	for i in FINE + 1:
-		var d := -APPROACH + (run + APPROACH) * float(i) / FINE
-		var xz := Vector2(top.x, top.z) + Vector2(forward.x, forward.z) * d
-		if d < 0.0:
-			# Running down to the lip, riding on the bed.
-			var bed := shape.height_at(xz.x, xz.y) + 0.1
-			dense.append(Vector3(xz.x, maxf(bed, start.y - 0.05), xz.y))
-			continue
-		# Off the lip at about 2.5 m/s, falling under gravity.
-		var fall_t := d / 2.5
-		var free := start.y - 0.5 * 9.8 * fall_t * fall_t
-		var rock := shape.height_at(xz.x, xz.y) + 0.12
-		var y := maxf(maxf(free, rock), foot.y + 0.2)
-		dense.append(Vector3(xz.x, y, xz.y))
-	# Even steps along the water itself, so the drop gets as many facets as the run.
-	var path: Array[Vector3] = [dense[0]]
-	var since := 0.0
-	for i in range(1, dense.size()):
-		since += dense[i].distance_to(dense[i - 1])
-		if since >= SPACING:
-			path.append(dense[i])
-			since = 0.0
-	if path[path.size() - 1] != dense[dense.size() - 1]:
-		path.append(dense[dense.size() - 1])
-	return path
-
-
-## A ribbon down `path`, `width_scale` of the stream's width, spreading as it falls,
-## standing `lift` metres off the main sheet. UV.y is metres travelled.
-static func _fall_sheet(path: Array[Vector3], across: Vector3, width_scale: float, lift: float) -> ArrayMesh:
-	const COLUMNS := 8
-	var vertices := PackedVector3Array()
-	var normals := PackedVector3Array()
-	var uvs := PackedVector2Array()
-	var side := across.normalized()
-	var travelled := [0.0]
-	for i in range(1, path.size()):
-		travelled.append(float(travelled[i - 1]) + path[i].distance_to(path[i - 1]))
-	var rows: Array = []
-	for i in path.size():
-		var ahead := path[mini(i + 1, path.size() - 1)] - path[maxi(i - 1, 0)]
-		var out := ahead.normalized().cross(side).normalized()
-		if out.y < 0.0:
-			out = -out
-		var spread := across.length() * width_scale * (1.0 + 0.35 * float(i) / path.size())
-		var row: Array = []
-		for c in COLUMNS + 1:
-			var x := -1.0 + 2.0 * c / COLUMNS
-			row.append([path[i] + side * x * spread + out * lift, out, Vector2(x, travelled[i])])
-		rows.append(row)
-	for i in rows.size() - 1:
-		for c in COLUMNS:
-			var quad := [rows[i][c], rows[i][c + 1], rows[i + 1][c + 1], rows[i + 1][c]]
-			# Alternate the diagonal, so the facets zigzag like the fire's.
-			var order := [0, 2, 1, 0, 3, 2] if (i + c) % 2 == 0 else [0, 3, 1, 1, 3, 2]
-			for k: int in order:
-				vertices.append(quad[k][0])
-				normals.append(quad[k][1])
-				uvs.append(quad[k][2])
-	return _surface(vertices, normals, uvs)
-
-
 static var _flow_materials := {}
-
-
-## One curtain of the fall (waterfall.gdshader): how fast it runs, how solid the
-## sheet is, how much of it is still whole at the lip, and how many strands it
-## pulls apart into.
-static func _fall_material(key: String, speed: float, body: float, lip: float, strands: float) -> ShaderMaterial:
-	if _flow_materials.has(key):
-		return _flow_materials[key]
-	var m := ShaderMaterial.new()
-	m.shader = load("res://world/waterfall.gdshader")
-	m.set_shader_parameter("speed", speed)
-	m.set_shader_parameter("body", body)
-	m.set_shader_parameter("lip_opacity", lip)
-	m.set_shader_parameter("strands", strands)
-	# The curtain begins upstream of the lip, so the water stays whole for the
-	# run-up and the first metre of the drop before it starts to break up.
-	m.set_shader_parameter("aerate_start", 2.8)
-	m.set_shader_parameter("aerate_full", 9.0)
-	_flow_materials[key] = m
-	return m
 
 
 ## The faceted water material (water_flow.gdshader), one per use.
