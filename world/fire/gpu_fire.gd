@@ -20,11 +20,15 @@ extends Node3D
 ## Only a few fires can afford a shadow-casting light.
 @export var shadows := false
 
-## Flame specks alive at once for a fire of `size` 1.
-const FLAMES_PER_METRE := 3600
-const SMOKE_PER_METRE := 260
+## Specks alive at once for a fire of `size` 1. They are tiny — millimetres —
+## so it takes tens of thousands of them to make a body of fire.
+const FLAMES_PER_METRE := 270000
+const SMOKE_PER_METRE := 42000
 const FLAME_LIFE := 0.9
-const SMOKE_LIFE := 4.5
+const SMOKE_LIFE := 3.5
+## How big one speck is, in metres, for a fire of `size` 1.
+const SPECK := 0.006
+const SMOKE_SPECK := 0.012
 
 var flames: GPUParticles3D
 var smoke_puffs: GPUParticles3D
@@ -63,6 +67,11 @@ func set_intensity(value: float) -> void:
 
 
 func _process(delta: float) -> void:
+	# The specks are coloured by where they are relative to the fire's heart.
+	var heart := global_position + Vector3(0.0, size * 0.35, 0.0)
+	var flame_material: ShaderMaterial = (flames.draw_pass_1 as QuadMesh).material
+	flame_material.set_shader_parameter("fire_origin", heart)
+	flame_material.set_shader_parameter("fire_width", size * lerpf(0.6, 1.0, intensity))
 	# A fire never burns steadily: the light jumps about.
 	_time += delta
 	var flicker := 1.0 + 0.2 * sin(_time * 12.0) + 0.11 * sin(_time * 29.0 + 1.3) + 0.07 * sin(_time * 6.7)
@@ -74,7 +83,7 @@ func _process(delta: float) -> void:
 func _build_flames() -> GPUParticles3D:
 	var particles := GPUParticles3D.new()
 	particles.name = "Flames"
-	particles.amount = int(clampf(FLAMES_PER_METRE * size, 400, 6000))
+	particles.amount = int(clampf(FLAMES_PER_METRE * size, 36000, 260000))
 	particles.lifetime = FLAME_LIFE * (0.8 + size * 0.4)
 	particles.randomness = 0.45
 	particles.preprocess = particles.lifetime
@@ -85,19 +94,21 @@ func _build_flames() -> GPUParticles3D:
 		Vector3(size * 6.0, 3.0 + size * 5.0, size * 6.0))
 
 	var process := ParticleProcessMaterial.new()
-	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE_SURFACE
-	process.emission_sphere_radius = size * 0.55
+	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	process.emission_sphere_radius = size * 0.6
 	process.direction = Vector3.UP
-	process.spread = 14.0
-	process.initial_velocity_min = 0.35 + size * 0.3
-	process.initial_velocity_max = 0.9 + size * 0.7
+	process.spread = 22.0
+	process.initial_velocity_min = 0.2 + size * 0.2
+	process.initial_velocity_max = 0.6 + size * 0.5
 	# Hot gas rises: gravity points up for flames.
-	process.gravity = Vector3(0.0, 1.0 + size * 0.8, 0.0)
+	process.gravity = Vector3(0.0, 0.8 + size * 0.7, 0.0)
 	process.damping_min = 0.4
 	process.damping_max = 1.2
 	process.scale_min = 0.5
 	process.scale_max = 1.0
-	process.scale_curve = _curve([Vector2(0.0, 0.8), Vector2(0.3, 1.0), Vector2(1.0, 0.15)])
+	# A speck is full size almost all its life and then gone, so it never fades
+	# into a smear — it simply stops being there.
+	process.scale_curve = _curve([Vector2(0.0, 0.9), Vector2(0.75, 1.0), Vector2(1.0, 0.0)])
 	# Turbulence is what makes it curl instead of going straight up.
 	process.turbulence_enabled = true
 	process.turbulence_noise_strength = 1.6
@@ -105,15 +116,13 @@ func _build_flames() -> GPUParticles3D:
 	process.turbulence_noise_speed = Vector3(0.0, 1.2, 0.0)
 	process.turbulence_influence_min = 0.06
 	process.turbulence_influence_max = 0.18
-	process.color_ramp = _ramp([0.0, 0.18, 0.45, 0.78, 1.0], [
-		Color(1.0, 0.93, 0.70, 0.85),  # white hot at the root
-		Color(1.0, 0.70, 0.22, 0.85),
-		Color(1.0, 0.40, 0.06, 0.7),
-		Color(0.72, 0.15, 0.03, 0.35),  # dull red as it dies
-		Color(0.35, 0.05, 0.02, 0.0),
+	# White through the ramp: the draw-pass shader decides the colour from where
+	# a speck is in the flame. Alpha carries how much life it has left.
+	process.color_ramp = _ramp([0.0, 0.75, 1.0], [
+		Color(1.0, 1.0, 1.0, 1.0), Color(1.0, 1.0, 1.0, 0.45), Color(1.0, 1.0, 1.0, 0.0),
 	])
 	particles.process_material = process
-	particles.draw_pass_1 = _speck(0.055 + size * 0.05, "res://world/fire/fire_particle.gdshader")
+	particles.draw_pass_1 = _speck(SPECK * (0.6 + size * 0.8), "res://world/fire/fire_particle.gdshader")
 	return particles
 
 
@@ -122,7 +131,7 @@ func _build_flames() -> GPUParticles3D:
 func _build_smoke() -> GPUParticles3D:
 	var particles := GPUParticles3D.new()
 	particles.name = "Smoke"
-	particles.amount = int(clampf(SMOKE_PER_METRE * size, 60, 700))
+	particles.amount = int(clampf(SMOKE_PER_METRE * size, 6000, 60000))
 	particles.lifetime = SMOKE_LIFE
 	particles.randomness = 0.6
 	particles.preprocess = SMOKE_LIFE * 0.5
@@ -155,7 +164,7 @@ func _build_smoke() -> GPUParticles3D:
 		Color(0.6, 0.6, 0.6, 0.0),
 	])
 	particles.process_material = process
-	particles.draw_pass_1 = _speck(0.5 + size, "res://world/fire/smoke_particle.gdshader")
+	particles.draw_pass_1 = _speck(SMOKE_SPECK * (0.6 + size * 0.8), "res://world/fire/smoke_particle.gdshader")
 	return particles
 
 
