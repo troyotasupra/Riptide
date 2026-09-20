@@ -9,6 +9,9 @@ render_mode unshaded, cull_disabled, shadows_disabled, depth_draw_opaque;
 // dull orange once it is clear of the fire altogether.
 
 uniform vec3 fire_origin;
+// The width of the body to colour from its middle outward. A negative width
+// means there is no single middle — a hillside of wildfire — and the colour is
+// taken from how much life the speck has left instead.
 uniform float fire_width = 0.5;
 uniform vec3 core_colour : source_color = vec3(1.0, 0.99, 0.86);
 uniform vec3 body_colour : source_color = vec3(1.0, 0.79, 0.28);
@@ -20,10 +23,15 @@ varying flat vec3 speck;
 void vertex() {
 	// Where this speck actually is, before the billboard turns it to face us.
 	vec3 at = MODEL_MATRIX[3].xyz;
-	float out_from_middle = length(at.xz - fire_origin.xz) / max(fire_width, 0.05);
-	float up = clamp((at.y - fire_origin.y) / max(fire_width * 2.4, 0.2), 0.0, 1.4);
 	// COLOR.a falls away over the speck's life, which stands in for cooling.
-	float from_core = clamp(out_from_middle * 0.8 + up * 0.7 + (1.0 - COLOR.a) * 0.3, 0.0, 1.0);
+	float cooled = 1.0 - COLOR.a;
+	float from_core = cooled;
+	if (fire_width > 0.0) {
+		float out_from_middle = length(at.xz - fire_origin.xz) / fire_width;
+		float up = clamp((at.y - fire_origin.y) / max(fire_width * 2.4, 0.2), 0.0, 1.4);
+		from_core = out_from_middle * 0.8 + up * 0.7 + cooled * 0.3;
+	}
+	from_core = clamp(from_core, 0.0, 1.0);
 	if (from_core < 0.18) {
 		speck = core_colour;
 	} else if (from_core < 0.42) {
