@@ -1,8 +1,7 @@
 class_name FireFx
 extends Node3D
-## A fire, simulated grain by grain (GrainSim): hot grains born in the fuel bed
-## climb, wander, cool from white through orange to red, and go up as smoke;
-## sparks are thrown clear and fall back. Nothing here is a painted sheet.
+## A fire: thousands of fine GPU particles rising, cooling and going out
+## (GpuFire), over a bed of coals, with a light that never burns steadily.
 ##
 ## `size` is roughly the radius of the burning area in metres; `intensity`
 ## (0..1) is how hard it burns, and 0 puts it out. Used for campfires, the
@@ -14,12 +13,8 @@ extends Node3D
 @export var shadows := true
 @export var smoke := true
 
-var _grains: GrainField
-var _flames: Dictionary
-var _sparks: Dictionary
+var _fire: GpuFire
 var _bed: MeshInstance3D
-var _light: OmniLight3D
-var _time := 0.0
 
 static var _flame_texture: Texture2D
 static var _puff_texture: Texture2D
@@ -28,31 +23,17 @@ static var _puff_texture: Texture2D
 func _ready() -> void:
 	_bed = _ember_bed()
 	add_child(_bed)
-	# Room for the flames, their smoke and a few sparks at once.
-	_grains = GrainField.new(int(clampf(2000.0 * (0.6 + size), 1200.0, 4000.0)))
-	add_child(_grains)
-	# Born across the fuel bed, not from one point, so the fire has width.
-	_flames = _grains.add_source(GrainSim.FIRE, Vector3(0.0, 0.04, 0.0),
-		_flame_rate(), 0.7 + size * 0.6, 0.3 + size * 0.35, size * 0.75)
-	_sparks = _grains.add_source(GrainSim.EMBER, Vector3(0.0, 0.12, 0.0),
-		clampf(24.0 * size, 8.0, 40.0), 2.6 + size, 1.1, size * 0.5)
-	_light = OmniLight3D.new()
-	_light.light_color = Color(1.0, 0.58, 0.24)
-	_light.omni_range = 5.0 + size * 6.0
-	_light.shadow_enabled = shadows
-	_light.position.y = 0.35 + size * 0.5
-	add_child(_light)
+	_fire = GpuFire.new()
+	_fire.size = size
+	_fire.smoke = smoke
+	_fire.shadows = shadows
+	add_child(_fire)
 	set_intensity(intensity)
-
-
-## Grains of flame a second: enough at once that the fire is a body, not sparks.
-func _flame_rate() -> float:
-	return clampf(2600.0 * (0.4 + size), 900.0, 5200.0)
 
 
 func set_intensity(value: float) -> void:
 	intensity = clampf(value, 0.0, 1.0)
-	if _grains == null:
+	if _fire == null:
 		return
 	var on := intensity > 0.01
 	if _bed != null:
@@ -60,16 +41,7 @@ func set_intensity(value: float) -> void:
 		_bed.visible = on
 		var coals: StandardMaterial3D = _bed.material_override
 		coals.emission_energy_multiplier = lerpf(0.3, 1.0, intensity)
-	# A fire burning low throws fewer, weaker flames — not thinner ones.
-	_flames.rate = _flame_rate() * intensity
-	_flames.strength = lerpf(0.5, 1.0, intensity)
-	_sparks.rate = clampf(24.0 * size, 8.0, 40.0) * intensity * (0.0 if not smoke else 1.0)
-	_grains.visible = on
-	_grains.set_process(on)
-	if not on:
-		_grains.sim.clear()
-	_light.visible = on
-	set_process(on)
+	_fire.set_intensity(intensity)
 
 
 ## The ember bed: the fire is sitting on coals, so you never see bare ground
@@ -91,12 +63,6 @@ func _ember_bed() -> MeshInstance3D:
 	bed.material_override = coals
 	bed.position.y = 0.02
 	return bed
-
-
-func _process(delta: float) -> void:
-	_time += delta
-	var flicker := 1.0 + 0.22 * sin(_time * 13.0) + 0.12 * sin(_time * 31.0 + 1.3) + 0.08 * sin(_time * 7.1)
-	_light.light_energy = (1.1 + size * 1.4) * intensity * flicker
 
 
 static func _curve(points: Array) -> CurveTexture:
