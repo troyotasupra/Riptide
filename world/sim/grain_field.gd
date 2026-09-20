@@ -19,8 +19,8 @@ const FOAM_COLOUR := Color(0.97, 0.99, 1.0)
 const EMBER_COLOUR := Color(1.0, 0.62, 0.18)
 const STEAM_COLOUR := Color(0.92, 0.95, 0.97)
 
-## How big one grain is drawn, by kind.
-const SIZE := [0.055, 0.055, 0.17, 0.035, 0.15]
+## How big one grain is drawn, by kind — a speck, not a brick.
+const SIZE := [0.016, 0.018, 0.075, 0.012, 0.06]
 
 var sim: GrainSim
 ## Each source: {"kind", "at": local Vector3, "radius", "rate" per second,

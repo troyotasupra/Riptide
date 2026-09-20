@@ -29,13 +29,13 @@ func _ready() -> void:
 	_bed = _ember_bed()
 	add_child(_bed)
 	# Room for the flames, their smoke and a few sparks at once.
-	_grains = GrainField.new(int(clampf(700.0 * (0.6 + size), 420.0, 2200.0)))
+	_grains = GrainField.new(int(clampf(2000.0 * (0.6 + size), 1200.0, 4000.0)))
 	add_child(_grains)
 	# Born across the fuel bed, not from one point, so the fire has width.
 	_flames = _grains.add_source(GrainSim.FIRE, Vector3(0.0, 0.04, 0.0),
 		_flame_rate(), 0.7 + size * 0.6, 0.3 + size * 0.35, size * 0.75)
 	_sparks = _grains.add_source(GrainSim.EMBER, Vector3(0.0, 0.12, 0.0),
-		clampf(5.0 * size, 1.5, 9.0), 2.6 + size, 1.1, size * 0.5)
+		clampf(24.0 * size, 8.0, 40.0), 2.6 + size, 1.1, size * 0.5)
 	_light = OmniLight3D.new()
 	_light.light_color = Color(1.0, 0.58, 0.24)
 	_light.omni_range = 5.0 + size * 6.0
@@ -47,7 +47,7 @@ func _ready() -> void:
 
 ## Grains of flame a second: enough at once that the fire is a body, not sparks.
 func _flame_rate() -> float:
-	return clampf(620.0 * (0.4 + size), 260.0, 1500.0)
+	return clampf(2600.0 * (0.4 + size), 900.0, 5200.0)
 
 
 func set_intensity(value: float) -> void:
@@ -63,7 +63,7 @@ func set_intensity(value: float) -> void:
 	# A fire burning low throws fewer, weaker flames — not thinner ones.
 	_flames.rate = _flame_rate() * intensity
 	_flames.strength = lerpf(0.5, 1.0, intensity)
-	_sparks.rate = clampf(5.0 * size, 1.5, 9.0) * intensity * (0.0 if not smoke else 1.0)
+	_sparks.rate = clampf(24.0 * size, 8.0, 40.0) * intensity * (0.0 if not smoke else 1.0)
 	_grains.visible = on
 	_grains.set_process(on)
 	if not on:
