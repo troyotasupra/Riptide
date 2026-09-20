@@ -89,6 +89,8 @@ var carried_weight_kg := 0.0
 var held_id := ""
 ## What the crosshair is on (local player only).
 var focus_id := ""
+## How long digging a handful of sand out of the beach takes.
+const DIG_SECONDS := 2.2
 var focus_text := ""
 var give_peer := 0
 var give_text := ""
@@ -915,12 +917,27 @@ func _update_focus() -> void:
 		return
 	var target := hit.collider as Interactable
 	if target == null:
+		# Nothing put there by hand — but sand underfoot can be dug.
+		_focus_sand(hit)
 		return
 	var text := target.interact_text(self)
 	if not text.is_empty():
 		focus_id = target.interact_id
 		focus_text = text
 		_focus_hold = target.hold_seconds(self)
+
+
+## Looking at bare sand within reach: you can dig it out by the handful.
+func _focus_sand(hit: Dictionary) -> void:
+	var world := GameState.world
+	if world == null or world.camp_island == null or swimming or downed:
+		return
+	var at: Vector3 = hit.position
+	if Vector3(hit.normal).y < 0.65 or not world.is_diggable(at):
+		return
+	focus_id = "dig:%.1f:%.1f" % [at.x, at.z]
+	focus_text = "Dig sand (hold %s)" % Controls.tag("interact")
+	_focus_hold = DIG_SECONDS
 
 
 ## Finds a crewmate you're looking at, to hand them what you're holding.
@@ -1009,22 +1026,7 @@ func _press_primary() -> void:
 				GameState.hints_shown[held_id] = true
 				survivor.notified.emit(ItemTable.get_item(held_id).get("hint", ""))
 		return
-	if (tool == "torch" or tool == "lighter") and focus_id.is_empty() and _try_ignite():
-		return
 	survivor.use_selected()
-
-
-## A lit torch or lighter held to the ground in front of you sets it alight.
-func _try_ignite() -> bool:
-	var from := camera.global_position
-	var to := from - camera.global_basis.z * FireService.IGNITE_REACH
-	var query := PhysicsRayQueryParameters3D.create(from, to, Layers.WORLD, [get_rid()])
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	if hit.is_empty() or (hit.normal as Vector3).y < 0.6:
-		return false
-	GameState.world.fire.rpc_id(1, "request_ignite", hit.position)
-	Sound.play("cloth", -6.0)
-	return true
 
 
 func _swing(tool: String) -> void:

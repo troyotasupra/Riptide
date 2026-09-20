@@ -23,6 +23,7 @@ var _time_left := 240.0
 var _sync_accum := 0.0
 var _gust := 0.0
 var _rain: GPUParticles3D
+var _rain_material: ShaderMaterial
 var _rain_process: ParticleProcessMaterial
 var _flash := 0.0
 var _next_flash := 6.0
@@ -166,12 +167,13 @@ func _build_rain() -> void:
 		for v: Vector3 in [-w - h, w - h, w + h, -w - h, w + h, -w + h]:
 			tool.add_vertex(v)
 	_rain.draw_pass_1 = tool.commit()
-	var streak := StandardMaterial3D.new()
-	streak.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	streak.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	streak.cull_mode = BaseMaterial3D.CULL_DISABLED
-	streak.albedo_color = Color(0.78, 0.82, 0.9, 0.35)
+	# The drops are drawn by a shader that throws away anything falling inside a
+	# roofed room, so standing in the shack you watch the rain through the door
+	# and the windows instead of it stopping dead.
+	var streak := ShaderMaterial.new()
+	streak.shader = preload("res://world/rain.gdshader")
 	_rain.material_override = streak
+	_rain_material = streak
 	add_child(_rain)
 
 
@@ -180,8 +182,8 @@ func _update_rain() -> void:
 		return
 	var camera := get_viewport().get_camera_3d()
 	var rain: float = current.rain
-	var indoors: bool = camera != null and GameState.world != null and GameState.world.camp != null and GameState.world.camp.in_shack(camera.global_position)
-	_rain.emitting = rain > 0.03 and not indoors
+	_rain.emitting = rain > 0.03
+	_mask_room()
 	_rain.amount_ratio = clampf(rain, 0.05, 1.0)
 	if camera != null:
 		var ahead := -camera.global_basis.z
@@ -189,6 +191,25 @@ func _update_rain() -> void:
 		_rain.global_position = camera.global_position + Vector3.UP * 14.0 + ahead.normalized() * 6.0
 	var wind := WeatherMath.wind_vector(wind_angle, wind_speed)
 	_rain_process.gravity = Vector3(wind.x * 1.2, -9.8, wind.y * 1.2)
+
+
+## Tells the rain shader about the room the camera is in, so its drops are cut
+## away — the roof keeps the rain out even though drops fall right through it.
+func _mask_room() -> void:
+	if _rain_material == null:
+		return
+	var world := GameState.world
+	var shack: Dictionary = world.camp.shack if world != null and world.camp != null else {}
+	if shack.is_empty() or not shack.has("xf"):
+		_rain_material.set_shader_parameter("room_on", 0)
+		return
+	var xf := Transform3D(shack.xf)
+	_rain_material.set_shader_parameter("room_on", 1)
+	_rain_material.set_shader_parameter("room_world_to_local", Projection(xf.affine_inverse()))
+	var size: Vector3 = FishingShack.SIZE
+	_rain_material.set_shader_parameter("room_min", Vector3(-size.x * 0.5, -0.6, -size.z * 0.5))
+	# Up to the roof line: a drop above the tin is outside, and shows over it.
+	_rain_material.set_shader_parameter("room_max", Vector3(size.x * 0.5, size.y + 0.9, size.z * 0.5))
 
 
 func _update_lightning(delta: float) -> void:

@@ -1,6 +1,6 @@
 class_name CaveBuild
 extends RefCounted
-## The cave behind the waterfall. CampIsland cuts a tunnel and a round chamber
+## The cave in the hillside rock band. CampIsland cuts a tunnel and a round chamber
 ## down to the cave floor; this roofs it over and furnishes it:
 ##   - a lid over the cut that follows the hillside as it was, in the terrain's
 ##     own material, so from outside it is just the hill (and, over the doorway,

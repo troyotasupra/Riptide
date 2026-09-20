@@ -53,7 +53,7 @@ const PICKUPS := {
 	"page_shelter": {"item": "book_page_shelter", "count": 1, "label": "Take the torn book page"},
 	"page_prosthetics": {"item": "book_page_prosthetics", "count": 1, "label": "Take the torn book page"},
 }
-## In the cave behind the waterfall: what the two dead pirates fought over, and
+## In the cave in the rock band: what the two dead pirates fought over, and
 ## what they fought with. Offsets from the chamber's middle (CaveBuild.room_point).
 const CAVE_PICKUPS := {
 	"outboard_motor": {"item": "outboard_motor", "count": 1, "label": "Take the outboard motor (18 kg)", "at": Vector3(0.4, 0.05, 1.6)},
@@ -111,6 +111,8 @@ var shack_door := {"open": false, "locked": false}
 ## The shack's two windows: open or shut.
 var shack_windows := [false, false]
 var shack_glow: OmniLight3D
+## Smoke from the shack's chimney, on while the stove burns.
+var shack_smoke: GPUParticles3D
 ## peer id -> true (host)
 var sleeping := {}
 ## Owner-side mirrors for the local player's UI.
@@ -1401,6 +1403,8 @@ func _apply_station_visual(id: String) -> void:
 			node.set_lit(station.lit)
 	elif id == "shack:stove" and shack_glow != null:
 		shack_glow.visible = station.lit
+		if shack_smoke != null:
+			shack_smoke.emitting = station.lit
 
 
 func _apply_picked(id: String) -> void:

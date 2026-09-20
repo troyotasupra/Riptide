@@ -152,6 +152,43 @@ func _camp_loop() -> void:
 	camp.request_craft("campfire_kit")
 	_check(pack.count_of("campfire_kit") == 1 and pack.count_of("stone") == 4, "crafted a campfire ring from two stones")
 
+	# Digging the beach, bagging the sand, and stacking the bags into a wall.
+	var beach: Vector2 = world.camp_island.cove
+	var sand_spot := Vector3(beach.x, world.ground_height(beach.x, beach.y), beach.y)
+	_check(world.is_diggable(sand_spot), "the beach is sand you can dig")
+	var inland: Vector2 = world.camp_island.hill
+	_check(not world.is_diggable(Vector3(inland.x, world.ground_height(inland.x, inland.y), inland.y)), "the hillside is not")
+	player.teleport(sand_spot + Vector3(0.0, 1.0, 0.0))
+	await _wait(1.0)
+	var sand_before := pack.count_of("sand")
+	for i in 3:
+		var dig_id := "dig:%.1f:%.1f" % [sand_spot.x, sand_spot.z]
+		world.begin_interact(dig_id)
+		await _wait(Player.DIG_SECONDS + 0.2)
+		world.request_interact(dig_id, 0)
+	_check(pack.count_of("sand") == sand_before + 3, "dug three handfuls of sand out of the beach")
+	pack.add("fiber", 3, Ocean.time)
+	camp.request_craft("sandbag")
+	_check(pack.count_of("sandbag") == 1 and pack.count_of("sand") == sand_before, "filled a sandbag with it")
+	pack.add("sandbag", 4, Ocean.time)
+	_check(_to_hotbar(pack, "sandbag", 2), "took the bags in hand")
+	var walls_before := camp.structures.size()
+	# Somewhere clear on the sand: the beach is different on every world.
+	var wall_id := ""
+	for step in 8:
+		var angle := step * TAU / 8.0
+		camp.request_place(2, sand_spot + Vector3(cos(angle), 0.0, sin(angle)) * 2.2, 0.0)
+		for id: String in camp.structures:
+			if camp.structures[id].type == "sandbag_wall":
+				wall_id = id
+		if not wall_id.is_empty():
+			break
+	_check(camp.structures.size() == walls_before + 1 and not wall_id.is_empty(), "started a sandbag wall")
+	if not wall_id.is_empty():
+		camp.interact_structure(s, wall_id, 2)
+		camp.interact_structure(s, wall_id, 2)
+		_check(StructureTable.next_stage("sandbag_wall", camp.structures[wall_id].progress).is_empty(), "and stacked it up to full height")
+
 	var island: CampIsland = world.camp_island
 	var ashore: Vector2 = island.cove + (island.center - island.cove).normalized() * 14.0
 	var ground := Vector3(ashore.x, island.height_at(ashore.x, ashore.y), ashore.y)
@@ -277,47 +314,6 @@ func _camp_loop() -> void:
 		_check(not camp.structures.has(tent_id), "held the dismantle key: the tent comes down")
 		_check(pack.count_of("tarp") == 1 and pack.count_of("rope") == 3 and pack.count_of("driftwood") == 3,
 			"and most of it comes back (tarp %d, rope %d, wood %d)" % [pack.count_of("tarp"), pack.count_of("rope"), pack.count_of("driftwood")])
-
-	# Fire: light the grass beside a crate and it spreads, burns the crate down, and hurts.
-	var fire: FireService = world.fire
-	var meadow := Vector2.INF
-	for attempt in 400:
-		var probe: Vector2 = island.center + Vector2.from_angle(attempt * 2.39) * (30.0 + attempt * 0.4)
-		var h := island.height_at(probe.x, probe.y)
-		if island.biome_at(probe.x, probe.y, h) in [CampIsland.Biome.MEADOW, CampIsland.Biome.JUNGLE] and fire.grid.fuel(FireGrid.cell_of(probe)) > 0.6:
-			meadow = probe
-			break
-	_check(meadow != Vector2.INF, "found dry grass to burn")
-	if meadow != Vector2.INF:
-		var crate_at := Vector3(meadow.x + 2.0, island.height_at(meadow.x + 2.0, meadow.y), meadow.y)
-		camp._spawn_structure("s_firetest", "storage_crate", crate_at, 0.0)
-		world.weather.set_state("clear", true)
-		world.weather.set_wind(0.0, 8.0)
-		_check(fire.ignite_at(Vector3(meadow.x, 0.0, meadow.y)), "the grass catches")
-		await _wait(8.0)
-		_check(fire.grid.burning.size() + fire.grid.burnt.size() > 3, "the fire spreads (%d burning, %d burnt)" % [fire.grid.burning.size(), fire.grid.burnt.size()])
-		_check(fire.burning_cells.size() > 0 or fire.burnt_cells.size() > 0, "and everyone is told where it's burning")
-		player.teleport(Vector3(meadow.x, island.height_at(meadow.x, meadow.y) + 0.5, meadow.y))
-		var health_before := s.survival.health
-		# Stand in whichever cell has the longest left to burn.
-		var fires_near := false
-		var hottest := Vector2i.ZERO
-		for cell: Vector2i in fire.grid.burning:
-			if not fires_near or float(fire.grid.burning[cell]) > float(fire.grid.burning[hottest]):
-				hottest = cell
-				fires_near = true
-		if fires_near:
-			var c := FireGrid.center_of(hottest)
-			player.teleport(Vector3(c.x, island.height_at(c.x, c.y) + 0.3, c.y))
-		await _wait(1.0)
-		if fires_near:
-			_check(s.survival.health < health_before, "standing in the fire burns you")
-		await _wait(26.0)
-		_check(not camp.structures.has("s_firetest"), "the crate beside it burned down")
-		world.weather.set_state("storm", true)
-		await _wait(8.0)
-		_check(fire.grid.burning.size() == 0, "the rain puts it out (%d still burning)" % fire.grid.burning.size())
-		world.weather.set_state("clear", true)
 
 	world.save_now()
 	var saved := SaveGame.read()
@@ -1147,6 +1143,17 @@ func _look() -> void:
 	world.weather.set_wind(0.8, 3.0)
 	# A face can carry an argument after a colon, e.g. "guns:m4".
 	match GameState.face.split(":")[0]:
+		"sandclose":
+			# Nose to the sand: close enough to see the grains.
+			var beach: Vector2 = world.camp_island.cove
+			var sand_y: float = world.ground_height(beach.x, beach.y)
+			_fixed_camera(Vector3(beach.x, sand_y + 0.55, beach.y), Vector3(beach.x + 0.8, sand_y, beach.y + 0.6))
+		"raininside":
+			# Standing in the shack in a downpour, looking out of the door.
+			world.weather.set_state("storm", true)
+			world.weather.set_wind(0.8, 14.0)
+			var inside: Transform3D = camp.shack.xf
+			_fixed_camera(inside * Vector3(0.0, 1.6, 0.4), inside * Vector3(0.0, 0.9, -7.0))
 		"storm":
 			world.weather.set_state("storm", true)
 			world.weather.set_wind(0.8, 16.0)
@@ -1209,13 +1216,6 @@ func _look() -> void:
 			var eye3 := island2.spring + from_hill * 15.0
 			_fixed_camera(Vector3(eye3.x, island2.spring_height + 7.0, eye3.y),
 				Vector3(island2.spring.x, island2.spring_height, island2.spring.y))
-		"waterfall":
-			var fall: Dictionary = world.camp_island.waterfall()
-			var foot: Vector3 = fall.foot
-			var top: Vector3 = fall.top
-			var out3 := Vector3(float(fall.direction.x), 0.0, float(fall.direction.y))
-			var side3 := out3.cross(Vector3.UP)
-			_fixed_camera(foot + out3 * 26.0 + side3 * 10.0 + Vector3.UP * 9.0, top.lerp(foot, 0.55))
 		"castaway":
 			var island: CampIsland = world.camp_island
 			var yaw := CampIslandPois.yaw_toward(island.camp, island.center)
@@ -1241,20 +1241,6 @@ func _look() -> void:
 			GameState.day_offset = 0.78 - Ocean.time / DayNight.DAY_LENGTH
 			var side := Vector3(cos(0.4), 0.0, -sin(0.4))
 			_fixed_camera(fire_at + side * 3.5 + Vector3(sin(0.4), 0.0, cos(0.4)) * 3.0 + Vector3.UP * 1.8, base.lerp(fire_at, 0.5) + Vector3.UP * 0.6)
-		"wildfire":
-			var island3: CampIsland = world.camp_island
-			var fire: FireService = world.fire
-			var meadow := island3.center
-			for attempt in 400:
-				var probe: Vector2 = island3.center + Vector2.from_angle(attempt * 2.39) * (30.0 + attempt * 0.4)
-				if fire.grid.fuel(FireGrid.cell_of(probe)) > 0.75:
-					meadow = probe
-					break
-			world.weather.set_wind(0.0, 7.0)
-			fire.ignite_at(Vector3(meadow.x, 0.0, meadow.y))
-			await _wait(16.0)
-			var ground_at := Vector3(meadow.x, island3.height_at(meadow.x, meadow.y), meadow.y)
-			_fixed_camera(ground_at + Vector3(-14.0, 7.0, 10.0), ground_at + Vector3(4.0, 0.5, 0.0))
 		"cooking":
 			var stove: CookStation = camp.stations["shack:stove"]
 			stove.add_fuel(400.0)

@@ -15,7 +15,7 @@ const PART_SPOTS := {
 	"chest": Vector3(1.7, 0.3, 1.55),
 	"lockers": Vector3(2.15, 0.85, 0.3),
 	"footlocker": Vector3(-0.16, 0.22, 1.45),
-	"stove": Vector3(-1.95, 0.5, -1.2),
+	"stove": Vector3(-1.95, 0.5, -0.6),
 	"chart": Vector3(1.5, 0.85, -1.2),
 }
 const PART_SIZES := {
@@ -133,6 +133,52 @@ static func _box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material, sol
 	return visual
 
 
+## A thin curl of woodsmoke out of the stove pipe.
+static func _chimney_smoke() -> GPUParticles3D:
+	var puffs := GPUParticles3D.new()
+	puffs.amount = 12
+	puffs.lifetime = 4.0
+	puffs.draw_order = GPUParticles3D.DRAW_ORDER_VIEW_DEPTH
+	var m := ParticleProcessMaterial.new()
+	m.direction = Vector3.UP
+	m.spread = 8.0
+	m.initial_velocity_min = 0.5
+	m.initial_velocity_max = 0.9
+	# It leans away with the breeze rather than standing straight up.
+	m.gravity = Vector3(0.35, 0.3, 0.15)
+	m.damping_min = 0.1
+	m.damping_max = 0.25
+	m.scale_min = 0.22
+	m.scale_max = 0.4
+	var grow := Curve.new()
+	grow.add_point(Vector2(0.0, 0.5))
+	grow.add_point(Vector2(1.0, 2.2))
+	var grow_texture := CurveTexture.new()
+	grow_texture.curve = grow
+	m.scale_curve = grow_texture
+	m.angle_min = -180.0
+	m.angle_max = 180.0
+	var ramp := Gradient.new()
+	ramp.offsets = PackedFloat32Array([0.0, 0.15, 0.7, 1.0])
+	ramp.colors = PackedColorArray([Color(0.6, 0.6, 0.6, 0.0), Color(0.62, 0.62, 0.6, 0.35),
+		Color(0.7, 0.7, 0.7, 0.18), Color(0.75, 0.75, 0.75, 0.0)])
+	var ramp_texture := GradientTexture1D.new()
+	ramp_texture.gradient = ramp
+	m.color_ramp = ramp_texture
+	puffs.process_material = m
+	var quad := QuadMesh.new()
+	quad.size = Vector2(1.0, 1.0)
+	var smoke_material := StandardMaterial3D.new()
+	smoke_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	smoke_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	smoke_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	smoke_material.vertex_color_use_as_albedo = true
+	smoke_material.albedo_color = Color(0.72, 0.72, 0.72)
+	quad.material = smoke_material
+	puffs.draw_pass_1 = quad
+	return puffs
+
+
 static func _post(parent: Node3D, from: Vector3, to: Vector3, radius: float, mat: Material) -> void:
 	var visual := MeshInstance3D.new()
 	visual.mesh = MeshKit.tube(PackedVector3Array([from, from.lerp(to, 0.5) + Vector3(0.015, 0.0, 0.01), to]), PackedFloat32Array([radius, radius * 0.95, radius * 0.9]), 8)
@@ -230,17 +276,33 @@ static func _hut(shape: CampIsland, shack: Dictionary) -> Node3D:
 	_box(node, Vector3(0.02, 0.1, 0.08), Vector3(0.06, 0.28, 1.45), Materials.metal(Color(0.8, 0.65, 0.28), 0.35))
 	for z: float in [1.12, 1.78]:
 		_box(node, Vector3(0.44, 0.03, 0.04), Vector3(-0.16, 0.3, z), Materials.metal(Color(0.15, 0.15, 0.15), 0.5))
-	# Wood stove with its flue out through the roof.
-	_box(node, Vector3(0.55, 0.75, 0.55), Vector3(-1.95, 0.375, -1.2), iron, true)
+	# Wood stove, stood between the tie beams so its flue has a clear run up and
+	# out of the roof instead of through a rafter.
+	var stove_z := -0.6
+	_box(node, Vector3(0.55, 0.75, 0.55), Vector3(-1.95, 0.375, stove_z), iron, true)
 	# The firebox faces into the room, not the wall.
-	_box(node, Vector3(0.02, 0.2, 0.3), Vector3(-1.67, 0.35, -1.2), Materials.glow(Color(1.0, 0.45, 0.15), 0.4))
-	_post(node, Vector3(-1.95, 0.75, -1.2), Vector3(-1.95, SIZE.y + 0.6, -1.2), 0.06, iron)
+	_box(node, Vector3(0.02, 0.2, 0.3), Vector3(-1.67, 0.35, stove_z), Materials.glow(Color(1.0, 0.45, 0.15), 0.4))
+	# Flue up through the tin, a collar where it passes, and a capped chimney
+	# standing proud of the roof.
+	var roof_here := ridge + (stove_z + 0.35) * ROOF_TILT
+	var chimney_top := roof_here + 0.75
+	_post(node, Vector3(-1.95, 0.75, stove_z), Vector3(-1.95, chimney_top, stove_z), 0.06, iron)
+	_box(node, Vector3(0.3, 0.03, 0.3), Vector3(-1.95, roof_here + 0.02, stove_z), Materials.metal(Color(0.32, 0.3, 0.28), 0.5), false)
+	_box(node, Vector3(0.24, 0.03, 0.24), Vector3(-1.95, chimney_top + 0.08, stove_z), Materials.metal(Color(0.2, 0.19, 0.18), 0.5), false)
+	for cap_x: float in [-0.08, 0.08]:
+		_post(node, Vector3(-1.95 + cap_x, chimney_top, stove_z), Vector3(-1.95 + cap_x, chimney_top + 0.09, stove_z), 0.012, iron)
+	# Smoke from the chimney while it's alight (shown with the stove's glow).
+	var chimney_smoke := _chimney_smoke()
+	chimney_smoke.name = "StoveSmoke"
+	chimney_smoke.position = Vector3(-1.95, chimney_top + 0.12, stove_z)
+	chimney_smoke.emitting = false
+	node.add_child(chimney_smoke)
 	var glow := OmniLight3D.new()
 	glow.name = "StoveGlow"
 	glow.light_color = Color(1.0, 0.55, 0.2)
 	glow.light_energy = 1.2
 	glow.omni_range = 3.5
-	glow.position = Vector3(-1.5, 0.6, -1.2)
+	glow.position = Vector3(-1.5, 0.6, stove_z)
 	glow.visible = false
 	node.add_child(glow)
 	# Chart table.

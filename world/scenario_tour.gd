@@ -3,7 +3,7 @@ extends Node
 ## --scenario=tour --shot-dir=<absolute folder>: one run that visits every place
 ## worth judging up close and saves a picture of each to <folder>/<stop>.png.
 ## Guns and tools in hand, tents and fires at every stage, the castaway camp by
-## day and night, terrain edges, trees, the shack, pickups, and a wildfire last
+## day and night, terrain edges, trees, the shack and pickups
 ## (it spreads, so nothing after it would look normal).
 ## --face=<prefix> runs only the stops whose names start with it.
 
@@ -56,7 +56,6 @@ func run() -> void:
 	await _wreck()
 	await _raft()
 	await _chart()
-	await _wildfire()
 	print("[tour] saved %d picture(s) to %s" % [saved, dir])
 
 
@@ -145,7 +144,7 @@ func _model_rack() -> void:
 	await _shot("rack_bushes")
 	holder.queue_free()
 
-## The cave behind the waterfall: its doorway from the pool, the hill over it
+## The cave in the rock band: its doorway from the pool, the hill over it
 ## (no sign of the cut), and inside by torchlight: the tunnel and the chamber.
 func _cave() -> void:
 	if not _wants("cave_"):
@@ -472,17 +471,17 @@ func _terrain() -> void:
 			await _wait(0.8)
 			await _shot("terrain_jungle")
 			break
-	var fall: Dictionary = island.waterfall()
+	var fall: Dictionary = island.rock_band()
 	var foot: Vector3 = fall.foot
 	var top: Vector3 = fall.top
 	var out := Vector3(float(fall.direction.x), 0.0, float(fall.direction.y))
 	var side := out.cross(Vector3.UP)
 	_look(foot + out * 26.0 + side * 10.0 + Vector3.UP * 9.0, top.lerp(foot, 0.55))
 	await _wait(0.8)
-	await _shot("terrain_waterfall")
+	await _shot("terrain_rock_band")
 	_look(foot + out * 8.0 + side * 3.0 + Vector3.UP * 2.0, foot + Vector3.UP * 1.0)
 	await _wait(0.5)
-	await _shot("terrain_plunge_pool")
+	await _shot("terrain_stream_cut")
 	_look(foot + side * 30.0 + out * 6.0 + Vector3.UP * 4.0, top.lerp(foot, 0.3))
 	await _wait(0.5)
 	await _shot("terrain_cliff")
@@ -581,44 +580,3 @@ func _pickups() -> void:
 	_look(bag_at + Vector3(1.0, 1.1, 1.0), bag_at)
 	await _wait(0.4)
 	await _shot("pickup_bag")
-
-
-func _wildfire() -> void:
-	if not _wants("wildfire"):
-		return
-	var fire: FireService = world.fire
-	var meadow := island.center
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 17
-	for attempt in 400:
-		var probe: Vector2 = island.center + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(30.0, 190.0)
-		if fire.grid.fuel(FireGrid.cell_of(probe)) > 0.75:
-			meadow = probe
-			break
-	world.weather.set_wind(0.0, 7.0)
-	fire.ignite_at(Vector3(meadow.x, 0.0, meadow.y))
-	# It creeps now: give it time to become a fire front worth looking at.
-	await _wait(45.0)
-	var at := _ground(meadow)
-	for view: Array in [["wildfire_2m", 2.0, 1.6], ["wildfire_15m", 15.0, 4.0], ["wildfire_60m", 60.0, 14.0]]:
-		var d: float = view[1]
-		var eye := at + Vector3(-d * 0.8, 0.0, d * 0.6)
-		eye.y = maxf(world.ground_height(eye.x, eye.z), 0.0) + float(view[2])
-		_look(eye, at + Vector3.UP * 0.8)
-		await _wait(0.5)
-		await _shot(view[0])
-	_day(0.95)
-	await _wait(1.0)
-	var night_eye := at + Vector3(-12.0, 0.0, 9.0)
-	night_eye.y = maxf(world.ground_height(night_eye.x, night_eye.z), 0.0) + 3.5
-	_look(night_eye, at + Vector3.UP * 0.8)
-	await _wait(0.5)
-	await _shot("wildfire_night")
-	_day(0.45)
-	await _wait(30.0)
-	_look(at + Vector3(-4.0, 2.2, 3.0), at)
-	await _wait(0.5)
-	await _shot("wildfire_burnt_ground")
-	_look(at + Vector3(-14.0, 18.0, 10.0), at)
-	await _wait(0.3)
-	await _shot("wildfire_burnt_above")

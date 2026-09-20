@@ -21,6 +21,14 @@ uniform vec4 burn_rect = vec4(0.0, 0.0, 0.0, 0.0);
 uniform vec4 scales_a = vec4(3.0, 2.5, 3.5, 5.0);
 uniform float scale_wet = 3.0;
 
+// How the ground breaks into separate grains close to the eye: how far the
+// grain shows, and how big a grain is on each layer (metres).
+uniform float grain_fade_start = 1.5;
+uniform float grain_fade_end = 16.0;
+uniform vec4 grain_size = vec4(0.013, 0.018, 0.022, 0.016);
+uniform float grain_size_wet = 0.013;
+uniform float grain_strength = 0.55;
+
 varying vec3 world_pos;
 varying vec3 world_normal;
 varying vec4 weights;
@@ -33,6 +41,20 @@ void vertex() {
 	TANGENT = normalize(vec3(1.0, 0.0, 0.0) - NORMAL * NORMAL.x);
 	BINORMAL = normalize(cross(TANGENT, NORMAL));
 }
+
+float grain_hash(vec2 cell) {
+	return fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+// Loose grains: every speck its own brightness, at three sizes so the ground
+// reads as sand rather than a noisy photograph.
+float grains(vec2 xz, float size) {
+	float g = grain_hash(floor(xz / size));
+	g = mix(g, grain_hash(floor(xz / (size * 2.3) + 17.0)), 0.45);
+	g = mix(g, grain_hash(floor(xz / (size * 5.1) + 41.0)), 0.25);
+	return g;
+}
+
 
 // One layer on flat ground: two scales, blended by the macro noise.
 vec4 planar(sampler2D tex, vec2 xz, float metres, float blend) {
@@ -100,6 +122,36 @@ void fragment() {
 			albedo = mix(albedo, vec3(0.045, 0.04, 0.035) + albedo * 0.08, burnt * 0.92);
 			ROUGHNESS = mix(ROUGHNESS, 1.0, burnt);
 		}
+	}
+	// --- the ground as loose grains, close to ---------------------------------
+	// Every surface is made of specks: fine pale sand, coarser soil, grit on the
+	// rock. It fades out with distance so it never turns into noise far away.
+	float near = 1.0 - smoothstep(grain_fade_start, grain_fade_end, length(VERTEX));
+	if (near > 0.002) {
+		float size = grain_size.x * hw.x + grain_size.y * hw.y + grain_size.z * hw.z
+			+ grain_size.w * hw.w + grain_size_wet * hwet;
+		size = max(size, 0.002);
+		// Up close the photo is magnified into visible blocks, so it gives way to
+		// its own average colour and the grains carry the detail instead.
+		vec3 flat_colour = textureLod(sand_albedo, xz / scales_a.x, 7.0).rgb * hw.x
+			+ textureLod(grass_albedo, xz / scales_a.y, 7.0).rgb * hw.y
+			+ textureLod(jungle_albedo, xz / scales_a.z, 7.0).rgb * hw.z
+			+ textureLod(rock_albedo, xz / rs, 7.0).rgb * hw.w
+			+ textureLod(wet_albedo, xz / scale_wet, 7.0).rgb * hwet;
+		flat_colour *= clamp(COLOR.rgb * 2.0, vec3(0.0), vec3(2.0)) * mix(0.86, 1.1, variation);
+		albedo = mix(albedo, flat_colour, near * 0.85);
+		float g = grains(xz, size);
+		// Grains differ in brightness, but only a little: sand is pale all over,
+		// and a heavy spread reads as grit thrown over the ground.
+		float depth = grain_strength * near;
+		albedo *= 1.0 + (g - 0.45) * 0.5 * depth;
+		// A few catch the sun the way quartz does, on dry sand most of all.
+		float sparkle = pow(g, 30.0) * (hw.x + hwet * 0.6) * near;
+		albedo += vec3(0.95, 0.92, 0.84) * sparkle * 0.55;
+		// And they sit at their own angles, so the surface isn't glass-smooth.
+		vec2 tilt = vec2(grains(xz + vec2(size, 0.0), size) - g, grains(xz + vec2(0.0, size), size) - g);
+		NORMAL_MAP = clamp(NORMAL_MAP + vec3(tilt * depth * 0.16, 0.0), vec3(0.0), vec3(1.0));
+		ROUGHNESS = clamp(ROUGHNESS + (g - 0.5) * 0.12 * near, 0.25, 1.0);
 	}
 	ALBEDO = albedo;
 }

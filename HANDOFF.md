@@ -254,3 +254,24 @@ Troy's change list, in his order (tick these off as they land):
     like gas, not fluid, with tongues spiking up and breaking away.
 15. Aiming down the sights: hide the white dot, and lower the irons so the front
     post sits where the dot was.
+
+## 2026-09-20: fire and water
+- The **waterfall is gone**. The stream cuts through the rock band and runs the
+  whole way to the sea; the cave keeps its mouth in that band.
+- **Ground fire is gone too** (Troy's call). Deleted: `fire_grid.gd`,
+  `fire_service.gd`, `wildfire_fx.gd`, `flame_sheets.gd`/`flame_sheet.gdshader`,
+  the torch-lights-the-grass path, the dev fire buttons, the camp scenario's
+  wildfire block and the tour's wildfire stop. Campfires, the stove, the
+  castaway's pit and torches are unaffected.
+- **Fire is GPU particles** (`world/fire/gpu_fire.gd` + `fire_particle.gdshader`,
+  `smoke_particle.gdshader`). One recipe, `GpuFire.flame_process()`, so every
+  fire behaves the same. Specks are billboarded, hard-edged (no glow), coloured
+  from the fire's heart outward, contained, with smoke starting above the flame.
+  Counts come from a shared `WORLD_BUDGET`.
+  **Troy is still unhappy with it: it reads as sparks, not a body of flame.**
+  The direction that was being tried when he called it off: fewer, larger,
+  overlapping flame-tongue billboards whose shape is quantised to blocks, so
+  they merge into one mass instead of staying separate specks.
+- **Water grains** (`world/sim/grain_sim.gd`, `grain_field.gd`, `grain_stream.gd`)
+  are a CPU falling-grain sim with tests: grains fall, land on real ground, run
+  downhill, soak away, and turn fire to steam. The stream uses it near the eye.

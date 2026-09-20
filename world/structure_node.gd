@@ -261,7 +261,8 @@ func _tent() -> void:
 	var wood := Materials.wood(Color(0.55, 0.42, 0.28))
 	for z: float in [-TENT_HALF_LENGTH - 0.03, TENT_HALF_LENGTH + 0.03]:
 		for side: float in [-1.0, 1.0]:
-			_pole(Vector3(side * (TENT_HALF_WIDTH + 0.02), 0.0, z), Vector3(0.0, TENT_RIDGE + 0.1, z), 0.028, 96 + int(side), wood)
+			# The poles are footed a little into the ground, not sat on top of it.
+			_pole(Vector3(side * (TENT_HALF_WIDTH + 0.02), -0.12, z), Vector3(0.0, TENT_RIDGE + 0.1, z), 0.028, 96 + int(side), wood)
 	_pole(Vector3(0.0, TENT_RIDGE + 0.04, -TENT_HALF_LENGTH - 0.15), Vector3(0.0, TENT_RIDGE + 0.04, TENT_HALF_LENGTH + 0.15), 0.03, 97, wood)
 
 
@@ -272,20 +273,25 @@ func _tent_progress(progress: Dictionary) -> void:
 	var r := TENT_RIDGE
 	var w := TENT_HALF_WIDTH
 	var l := TENT_HALF_LENGTH
+	# The canvas carries on below the ground line, so on uneven ground the tent
+	# never stands on stilts with daylight under its walls.
+	var skirt := -0.28
 	if int(progress.get("tarp", 0)) >= 1:
 		for side: float in [-1.0, 1.0]:
-			_part_node(_sheet(Vector3(0.0, r, -l), Vector3(0.0, r, l), Vector3(side * w, 0.02, l), Vector3(side * w, 0.02, -l), 0.05 * side, canvas))
+			_part_node(_sheet(Vector3(0.0, r, -l), Vector3(0.0, r, l), Vector3(side * w, skirt, l), Vector3(side * w, skirt, -l), 0.05 * side, canvas))
 		# Closed back wall.
-		_part_node(_triangle(Vector3(-w, 0.02, -l), Vector3(0.0, r, -l), Vector3(w, 0.02, -l), canvas))
+		_part_node(_triangle(Vector3(-w, skirt, -l), Vector3(0.0, r, -l), Vector3(w, skirt, -l), canvas))
 		# Door flaps, rolled back and tied either side of the opening.
 		for side: float in [-1.0, 1.0]:
-			_part_node(_triangle(Vector3(0.0, r, l), Vector3(side * w, 0.02, l), Vector3(side * w * 0.55, 0.02, l + 0.02), canvas))
+			_part_node(_triangle(Vector3(0.0, r, l), Vector3(side * w, skirt, l), Vector3(side * w * 0.55, skirt, l + 0.02), canvas))
 			var roll := MeshKit.tube(PackedVector3Array([Vector3(side * w * 0.57, 0.05, l + 0.05), Vector3(side * w * 0.3, r * 0.52, l + 0.05), Vector3(side * 0.06, r - 0.05, l + 0.05)]),
 				PackedFloat32Array([0.05, 0.045, 0.03]), 6)
 			_part(roll, canvas, Vector3.ZERO)
+		# The groundsheet is laid a touch under the sod and reaches the walls, so
+		# no strip of bare ground shows inside.
 		var ground := BoxMesh.new()
-		ground.size = Vector3(w * 2.0 - 0.05, 0.012, l * 2.0)
-		_part(ground, Materials.cloth(Color(0.22, 0.24, 0.2)), Vector3(0.0, 0.01, 0.0))
+		ground.size = Vector3(w * 2.0, 0.05, l * 2.0 + 0.04)
+		_part(ground, Materials.cloth(Color(0.22, 0.24, 0.2)), Vector3(0.0, -0.012, 0.0))
 		if worn:
 			# Faded, and patched with whatever the castaway had.
 			var patch := _double_sided(Materials.cloth(Color(0.55, 0.44, 0.30)))
@@ -310,6 +316,44 @@ func _tent_progress(progress: Dictionary) -> void:
 		var line: Array = lines[i]
 		_part_cord(line[0], line[1] + Vector3.UP * 0.1)
 		_part_pole(line[1] - Vector3(0.0, 0.08, 0.0), line[1] + Vector3(0.0, 0.14, 0.0), 0.018, 98, wood)
+
+
+## Filled bags stacked in courses, each one sagging under the one above and
+## offset so the joints break, the way a wall of them is really built.
+func _sandbag_progress(progress: Dictionary) -> void:
+	var bags := mini(int(progress.get("sandbag", 0)), 5)
+	if bags <= 0:
+		return
+	var hessian := Materials.burlap(Color(0.66, 0.58, 0.42))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(structure_id)
+	var per_course := 3
+	var bag_w := 0.52
+	var bag_h := 0.2
+	for i in bags * per_course:
+		var course := i / per_course
+		var along := i % per_course
+		# Every other course is shifted half a bag, so the joints break.
+		var offset := (0.0 if course % 2 == 0 else bag_w * 0.5) + (along - 1) * bag_w
+		var bag := MeshInstance3D.new()
+		var lump := SphereMesh.new()
+		lump.radius = 0.5
+		lump.height = 1.0
+		lump.radial_segments = 10
+		lump.rings = 6
+		bag.mesh = lump
+		bag.material_override = hessian
+		# Squashed flat under its own weight, and a little out of true.
+		bag.scale = Vector3(bag_w, bag_h, 0.34) * rng.randf_range(0.94, 1.04)
+		bag.position = Vector3(offset, bag_h * 0.5 + course * bag_h * 0.92, rng.randf_range(-0.02, 0.02))
+		bag.rotation.y = rng.randf_range(-0.12, 0.12)
+		_build_parts.add_child(bag)
+		if course == 0:
+			continue
+	var wall := BoxShape3D.new()
+	var courses := maxi(1, int(ceil(bags * per_course / float(per_course))))
+	wall.size = Vector3(bag_w * (per_course + 0.5), courses * bag_h * 0.92, 0.36)
+	_part_collider(wall, Vector3(0.0, wall.size.y * 0.5, 0.0))
 
 
 ## A slatted wooden bin with a heap of dark compost showing over the top.
@@ -392,6 +436,9 @@ func set_progress(progress: Dictionary) -> void:
 			return
 		"tent":
 			_tent_progress(progress)
+			return
+		"sandbag_wall":
+			_sandbag_progress(progress)
 			return
 	var bark := Materials.bark(Color(0.46, 0.34, 0.22))
 	var logs := mini(int(progress.get("log", 0)), 6)

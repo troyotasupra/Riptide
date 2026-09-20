@@ -21,6 +21,8 @@ const TYPES := {
 		"stages": [{"item": "tarp", "count": 1}, {"item": "rope", "count": 3}]},
 	"compost_bin": {"name": "Compost bin", "station": "compost", "footprint": 1.0, "hp": 60.0},
 	"drying_rack": {"name": "Drying rack", "station": "dry", "footprint": 1.2, "hp": 70.0},
+	"sandbag_wall": {"name": "Sandbag wall", "footprint": 1.0, "hp": 240.0,
+		"stages": [{"item": "sandbag", "count": 2}, {"item": "sandbag", "count": 3}]},
 	"storage_crate": {"name": "Storage crate", "container": [8, 5], "footprint": 1.0, "hp": 150.0},
 	"raft_site": {"name": "Raft", "footprint": 2.4, "shore": true, "launches": "raft", "hp": 120.0,
 		"stages": [{"item": "log", "count": 6}, {"item": "rope", "count": 3}]},

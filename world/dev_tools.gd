@@ -89,17 +89,6 @@ func request(command: String, args: Array) -> void:
 		"shark":
 			var forward := Vector3(-sin(player.yaw), 0.0, -cos(player.yaw))
 			world.sharks.spawn(Vector3(at.x, -2.0, at.z) + forward * 10.0, Vector3(at.x, 0.0, at.z), 14.0)
-		"fire":
-			# Light the ground a few metres ahead; it spreads from there on its own.
-			var ahead := at + Vector3(-sin(player.yaw), 0.0, -cos(player.yaw)) * 6.0
-			if world.fire.ignite_at(ahead):
-				s.notify("Dev: fire started ahead of you")
-			else:
-				s.notify("Dev: nothing there will burn — face grass or brush")
-		"put_out":
-			for cell: Vector2i in world.fire.grid.burning.keys():
-				world.fire.grid.burning[cell] = 0.01
-			s.notify("Dev: fires out")
 		"kill_sharks":
 			for shark: Shark in world.sharks.sharks.values():
 				shark.hit(9999.0, at)

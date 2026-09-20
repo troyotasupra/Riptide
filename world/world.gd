@@ -32,7 +32,6 @@ var sharks: SharkField
 var weather: Weather
 var fishing: FishingService
 var combat: CombatService
-var fire: FireService
 var dev: DevTools
 var _next_boat_index := FIRST_BUILT_BOAT_INDEX
 var _age := 0.0
@@ -60,9 +59,6 @@ func _ready() -> void:
 	combat = CombatService.new()
 	combat.name = "Combat"
 	add_child(combat)
-	fire = FireService.new()
-	fire.name = "Fire"
-	add_child(fire)
 	dev = DevTools.new()
 	dev.name = "Dev"
 	add_child(dev)
@@ -262,6 +258,7 @@ func _generate() -> void:
 	resources.populate_start(island)
 	camp_root.add_child(CampIslandPois.build(camp_island))
 	camp.shack_glow = camp_root.find_child("StoveGlow", true, false) as OmniLight3D
+	camp.shack_smoke = camp_root.find_child("StoveSmoke", true, false) as GPUParticles3D
 	add_child(StarterWreckage.build(island, start_direction()))
 
 	var john_boat := JohnBoat.create(1)
@@ -365,7 +362,6 @@ func save_now() -> void:
 		"next_boat_index": _next_boat_index,
 		"weather": weather.to_save(),
 		"camp": camp.to_save(now),
-		"fire": fire.to_save(now),
 		"players": players,
 	})
 	print("[save] world saved: %s" % ok)
@@ -416,7 +412,6 @@ func _apply_save(data: Dictionary) -> void:
 			if boat != null and towed != null:
 				boat.set_tow(towed)
 	camp.from_save(data.get("camp", {}), now)
-	fire.from_save(data.get("fire", {}), now)
 	if data.has("weather"):
 		weather.from_save(data.weather)
 	saved_players = data.get("players", {})
@@ -456,6 +451,18 @@ func request_interact(target_id: String, slot: int) -> void:
 	var at := player.world_transform().origin
 	var parts := target_id.split(":")
 	match parts[0]:
+		"dig":
+			if parts.size() < 3:
+				return
+			var spot := Vector3(float(parts[1]), 0.0, float(parts[2]))
+			spot.y = ground_height(spot.x, spot.z)
+			if at.distance_to(spot) > INTERACT_RANGE + 1.0 or not is_diggable(spot):
+				return
+			var started: Dictionary = _interact_started.get(sender, {})
+			if started.get("id", "") != target_id or Ocean.time - float(started.get("at", 0.0)) < Player.DIG_SECONDS * 0.75:
+				return
+			_interact_started.erase(sender)
+			_dig_sand(survivor, spot)
 		"spring":
 			_use_spring(survivor, at, slot)
 		"stream":
@@ -524,6 +531,27 @@ func request_interact(target_id: String, slot: int) -> void:
 			target.survivor.notify("%s pulls you back up. You're hurt — patch yourself up." % player.display_name)
 			survivor.notify("You got %s back on their feet." % target.display_name)
 			target.survivor.push_survival()
+
+
+## Sand you can dig: dry or wet beach sand, not grass, jungle, rock or a floor.
+func is_diggable(at: Vector3) -> bool:
+	if camp_island == null:
+		return false
+	var height := camp_island.height_at(at.x, at.z)
+	if absf(height - at.y) > 0.6:
+		return false  # standing on a deck, a dock or a boat, not on the ground
+	var biome := camp_island.biome_at(at.x, at.z, height)
+	return biome == CampIsland.Biome.BEACH or (biome == CampIsland.Biome.SEA and height > -1.2)
+
+
+## Host: a handful of sand out of the beach, and a scrape left where it came from.
+func _dig_sand(survivor: Survivor, at: Vector3) -> void:
+	if survivor.inventory.add("sand", 1, Ocean.time) > 0:
+		survivor.notify("Your pack is full — nowhere to put the sand.")
+		return
+	survivor.notify("You scoop out a handful of sand.")
+	sfx_at("thud", at)
+	survivor.push_inventory()
 
 
 func _use_spring(survivor: Survivor, at: Vector3, slot: int) -> void:
@@ -625,7 +653,6 @@ func _on_peer_ready(peer_id: int) -> void:
 		sharks.sync_to(peer_id)
 		weather.sync_to(peer_id)
 		fishing.sync_to(peer_id)
-		fire.sync_to(peer_id)
 		dev._set_allowed.rpc_id(peer_id, GameState.dev_mode)
 		_set_friendly_fire.rpc_id(peer_id, GameState.friendly_fire)
 	var player_name: String = Net.roster[peer_id]["name"]
