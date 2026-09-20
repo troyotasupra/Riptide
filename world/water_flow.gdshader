@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_disabled, depth_draw_always;
+render_mode cull_disabled;
 // Running water in flat-coloured facets, the same way the fire is drawn: waves
 // roll along the surface in the direction it flows, lifting and dropping the
 // facets, and foam streaks ride down with them, white on blue-green, one colour
@@ -8,8 +8,14 @@ render_mode cull_disabled, depth_draw_always;
 // Flowing meshes carry UV.x -1..1 across and UV.y = metres along the flow.
 // Still water uses world x/z instead and just shivers.
 
-uniform vec3 deep : source_color = vec3(0.14, 0.45, 0.52);
-uniform vec3 shallow : source_color = vec3(0.38, 0.70, 0.74);
+// The same colours and clarity as the sea, so fresh water and salt water read
+// as one substance: you see the bottom through it, and it deepens to blue as
+// the bottom falls away.
+uniform vec3 deep : source_color = vec3(0.04, 0.26, 0.40);
+uniform vec3 shallow : source_color = vec3(0.30, 0.60, 0.62);
+uniform float clarity = 6.0;
+uniform float min_opacity = 0.3;
+uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 uniform vec3 foam : source_color = vec3(0.90, 0.96, 1.0);
 // Metres per second along the flow.
 uniform float speed = 3.0;
@@ -19,8 +25,8 @@ uniform float ripple = 0.05;
 uniform float alpha = 1.0;
 uniform bool still = false;
 
-varying flat vec3 facet;
-varying flat float facet_alpha;
+varying flat float facet_light;
+varying flat float facet_white;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -43,18 +49,35 @@ void vertex() {
 		// Foam streaks: lanes across the flow, each with bands that ride down it.
 		float lane = floor((across + 1.0) * 3.5);
 		float band = 0.5 + 0.5 * sin(along * 1.1 - t * speed * 1.1 + hash(vec2(lane, 3.0)) * 6.2832 + sin(across * 5.0 + along * 0.4) * 1.2);
-		white = step(1.0 - foam_amount, band * 0.85 + hash(vec2(float(VERTEX_ID), lane)) * 0.3);
+		// Foam comes on over a band rather than switching, so a facet can be
+		// half white water instead of a sheet of paper.
+		white = smoothstep(1.0 - foam_amount - 0.12, 1.0 - foam_amount + 0.06, band * 0.85 + hash(vec2(float(VERTEX_ID), lane)) * 0.3);
 	}
 	VERTEX += NORMAL * wave * ripple;
 	float light = 0.5 + 0.25 * wave + (hash(world.xz * 7.0) - 0.5) * 0.25;
-	vec3 body = mix(deep, shallow, clamp(light, 0.0, 1.0));
-	facet = mix(body, foam, white);
-	facet_alpha = mix(alpha, 1.0, white * 0.8);
+	facet_light = clamp(light, 0.0, 1.0);
+	facet_white = white;
 }
 
 void fragment() {
-	ALBEDO = facet;
-	ALPHA = facet_alpha;
+	// How deep the water is along this line of sight, exactly as the sea works
+	// it out: shallow water shows the bottom, deep water closes up.
+	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
+	float raw = texture(depth_tex, SCREEN_UV).r;
+	vec4 below = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, raw, 1.0);
+	float column = max(-below.z / below.w + VERTEX.z, 0.0);
+	float under = column * max(facing, 0.12);
+
+	vec3 colour = mix(shallow, deep, smoothstep(0.6, 14.0, under));
+	// The facets keep their own light, so the surface still reads as flat planes.
+	colour *= 0.82 + 0.36 * facet_light;
+	ALBEDO = mix(colour, foam, facet_white);
+
+	float murk = clamp(under / max(clarity, 0.5), 0.0, 1.0);
+	float body = mix(min_opacity, 1.0, pow(murk, 1.4));
+	float grazing = 0.45 * pow(1.0 - facing, 3.0);
+	// White water is white water: you can't see through it.
+	ALPHA = clamp(max(max(body, grazing), facet_white) * alpha, 0.0, 1.0);
 	ROUGHNESS = 0.18;
 	SPECULAR = 0.55;
 }

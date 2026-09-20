@@ -238,7 +238,7 @@ static func _stream(shape: CampIsland) -> Node3D:
 		had_previous = true
 	var water := MeshInstance3D.new()
 	water.mesh = _surface(vertices, normals, uvs)
-	water.material_override = _flow_material("stream", 1.4, 0.12, 0.035, 1.0)
+	water.material_override = _flow_material("stream", 1.4, 0.07, 0.035, 1.0)
 	stream.add_child(water)
 	return stream
 
@@ -258,7 +258,7 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 	var across := forward.cross(Vector3.UP).normalized() * CampIsland.STREAM_WIDTH * 0.9
 
 	var path := _fall_path(shape, top, foot, forward)
-	for layer: Array in [[1.0, 0.0, _flow_material("fall", 5.5, 0.38, 0.07, 1.0)], [0.45, 0.14, _flow_material("fall_strand", 7.0, 0.55, 0.05, 1.0)]]:
+	for layer: Array in [[1.0, 0.0, _flow_material("fall", 5.5, 0.24, 0.07, 1.0)], [0.45, 0.14, _flow_material("fall_strand", 7.0, 0.34, 0.05, 1.0)]]:
 		var sheet := MeshInstance3D.new()
 		sheet.mesh = _fall_sheet(path, across, layer[0], layer[1])
 		sheet.material_override = layer[2]
@@ -422,14 +422,6 @@ static func _flow_material(key: String, speed: float, foam: float, ripple: float
 	m.set_shader_parameter("alpha", alpha)
 	m.set_shader_parameter("still", still)
 	_flow_materials[key] = m
-	return m
-
-
-static func _water_material() -> StandardMaterial3D:
-	var m := Props.material("fresh_water", Color(0.34, 0.66, 0.74, 0.8))
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.cull_mode = BaseMaterial3D.CULL_DISABLED
-	m.roughness = 0.1
 	return m
 
 
