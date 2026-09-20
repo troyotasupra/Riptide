@@ -258,7 +258,13 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 	var across := forward.cross(Vector3.UP).normalized() * CampIsland.STREAM_WIDTH * 0.9
 
 	var path := _fall_path(shape, top, foot, forward)
-	for layer: Array in [[1.0, 0.0, _flow_material("fall", 5.5, 0.24, 0.07, 1.0)], [0.45, 0.14, _flow_material("fall_strand", 7.0, 0.34, 0.05, 1.0)]]:
+	# Three curtains one behind another: the body of the fall, a torn veil of
+	# strands hanging in front of it, and a wider, slower wash against the rock.
+	# Together they have depth instead of reading as one painted ribbon.
+	for layer: Array in [
+			[1.0, 0.0, _fall_material("fall_body", 7.0, 1.0, 0.55, 20.0)],
+			[0.74, 0.18, _fall_material("fall_veil", 9.5, 0.6, 0.3, 34.0)],
+			[1.18, -0.12, _fall_material("fall_wash", 5.0, 0.8, 0.45, 13.0)]]:
 		var sheet := MeshInstance3D.new()
 		sheet.mesh = _fall_sheet(path, across, layer[0], layer[1])
 		sheet.material_override = layer[2]
@@ -271,8 +277,9 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 	var side_dir := across.normalized()
 	for spot: Array in [[-1.25, 0.1, 1.5], [1.3, -0.1, 1.6], [-2.3, -0.6, 2.0], [2.4, -0.5, 1.9], [-0.45, 0.35, 0.55], [0.55, 0.25, 0.5]]:
 		var at := top + side_dir * float(spot[0]) * CampIsland.STREAM_WIDTH + forward * float(spot[1])
-		at.y = maxf(shape.height_at(at.x, at.z), top.y - 0.2)
+		# Sat on the ground where they are, not hung in the air at lip height.
 		var size: float = spot[2] * lip_rng.randf_range(0.85, 1.15)
+		at.y = shape.height_at(at.x, at.z) - size * 0.3
 		_mesh(node, MeshKit.rock(160 + lip_rng.randi() % 8, 0.2, 0.75), "fall_rock", Color(0.36, 0.35, 0.34), at,
 			Vector3(lip_rng.randf() * 0.4, lip_rng.randf() * TAU, lip_rng.randf() * 0.4)).scale = Vector3(size * 1.2, size * 0.8, size)
 		var stone := SphereShape3D.new()
@@ -303,8 +310,9 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 		var at := top.lerp(foot, rng.randf()) + forward * rng.randf_range(-1.0, 2.5)
 		var sideways := across.normalized() * (CampIsland.STREAM_WIDTH * rng.randf_range(1.0, 2.4) * (1.0 if i % 2 == 0 else -1.0))
 		var spot := at + sideways
-		spot.y = shape.height_at(spot.x, spot.z) - 0.3
 		var size := rng.randf_range(0.9, 2.4)
+		# Bedded into the face, not perched on it.
+		spot.y = shape.height_at(spot.x, spot.z) - size * 0.55
 		_mesh(node, MeshKit.rock(70 + i, 0.4, 0.8), "fall_rock", Color(0.38, 0.37, 0.36), spot,
 			Vector3(rng.randf() * 0.4, rng.randf() * TAU, rng.randf() * 0.4)).scale = Vector3(size * 1.3, size, size * 1.1)
 
@@ -408,6 +416,22 @@ static func _fall_sheet(path: Array[Vector3], across: Vector3, width_scale: floa
 
 
 static var _flow_materials := {}
+
+
+## One curtain of the fall (waterfall.gdshader): how fast it runs, how solid the
+## sheet is, how much of it is still whole at the lip, and how many strands it
+## pulls apart into.
+static func _fall_material(key: String, speed: float, body: float, lip: float, strands: float) -> ShaderMaterial:
+	if _flow_materials.has(key):
+		return _flow_materials[key]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://world/waterfall.gdshader")
+	m.set_shader_parameter("speed", speed)
+	m.set_shader_parameter("body", body)
+	m.set_shader_parameter("lip_opacity", lip)
+	m.set_shader_parameter("strands", strands)
+	_flow_materials[key] = m
+	return m
 
 
 ## The faceted water material (water_flow.gdshader), one per use.

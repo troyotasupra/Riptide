@@ -60,6 +60,9 @@ void vertex() {
 }
 
 void fragment() {
+	// Seen from underneath (a pool from below the surface), light the face you
+	// are actually looking at instead of leaving it black.
+	NORMAL = FRONT_FACING ? NORMAL : -NORMAL;
 	// How deep the water is along this line of sight, exactly as the sea works
 	// it out: shallow water shows the bottom, deep water closes up.
 	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
