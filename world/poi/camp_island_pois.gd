@@ -192,7 +192,10 @@ static func _stream(shape: CampIsland) -> Node3D:
 	var previous_travelled := 0.0
 	for i in SEGMENTS + 1:
 		var t := float(i) / SEGMENTS
-		if t > CampIsland.FALL_T and t < CampIsland.FALL_T + CampIsland.FALL_SPAN:
+		# Stop short of the brink: the fall's own curtain starts upstream of it and
+		# carries the water over the edge, so the stream never ends in a stub of
+		# mesh hanging over the drop.
+		if t > CampIsland.FALL_T - 0.025 and t < CampIsland.FALL_T + CampIsland.FALL_SPAN:
 			had_previous = false  # the falling stretch
 			continue
 		var p := shape.stream_point(t)
@@ -285,19 +288,23 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 		var stone := SphereShape3D.new()
 		stone.radius = size * 0.45
 		_solid(node, stone, at)
-	# White water boiling up where it lands.
-	var splash := FlameSheets.new()
-	splash.set_palette([Color(1.0, 1.0, 1.0), Color(0.88, 0.95, 1.0), Color(0.7, 0.86, 0.94), Color(0.55, 0.76, 0.86)], 1.0)
+	# Where it lands: the pool is beaten white, with rings of froth riding out
+	# from the impact. Foam on water, not a fire in disguise.
 	var landing: Vector3 = path[path.size() - 1]
-	var sheets: Array = []
 	var width := across.length() * 2.6
-	for i in 4:
-		sheets.append({"pos": landing, "yaw": atan2(forward.x, forward.z) + i * PI / 4.0, "width": width, "height": 1.1 - i * 0.12, "seed": 900 + i, "heat": 1.0})
-	for i in 6:
-		var a := i * TAU / 6.0
-		sheets.append({"pos": landing + Vector3(cos(a), 0.0, sin(a)) * width * 0.35, "yaw": -a + PI / 2.0, "width": width * 0.5, "height": 0.55, "seed": 910 + i, "heat": 0.5})
-	splash.set_sheets(sheets)
-	node.add_child(splash)
+	var foam := MeshInstance3D.new()
+	foam.name = "PlungeFoam"
+	var disc := PlaneMesh.new()
+	disc.size = Vector2(width * 2.4, width * 2.4)
+	disc.subdivide_width = 6
+	disc.subdivide_depth = 6
+	foam.mesh = disc
+	var foam_material := ShaderMaterial.new()
+	foam_material.shader = load("res://world/foam_ring.gdshader")
+	foam.material_override = foam_material
+	foam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	foam.position = Vector3(landing.x, foot.y + 0.32, landing.z)
+	node.add_child(foam)
 
 	var plunge := MeshInstance3D.new()
 	plunge.mesh = _pool_mesh(shape, Vector2(foot.x, foot.z), CampIsland.PLUNGE_RADIUS * 2.0, foot.y + 0.3)
@@ -318,11 +325,11 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 
 	var spray := GPUParticles3D.new()
 	spray.name = "Spray"
-	spray.amount = 220
-	spray.lifetime = 1.4
+	spray.amount = 420
+	spray.lifetime = 1.8
 	spray.position = foot + Vector3.UP * 0.4 + forward * 0.6
 	var quad := QuadMesh.new()
-	quad.size = Vector2(0.9, 0.9)
+	quad.size = Vector2(0.5, 0.5)
 	spray.draw_pass_1 = quad
 	spray.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var process := ParticleProcessMaterial.new()
@@ -330,16 +337,18 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 	process.emission_sphere_radius = CampIsland.STREAM_WIDTH
 	process.direction = Vector3.UP
 	process.spread = 55.0
-	process.initial_velocity_min = 1.0
-	process.initial_velocity_max = 3.0
-	process.gravity = Vector3(0.0, -3.0, 0.0)
-	process.scale_min = 0.5
-	process.scale_max = 1.6
+	process.initial_velocity_min = 1.4
+	process.initial_velocity_max = 4.5
+	process.gravity = Vector3(0.0, -3.4, 0.0)
+	process.damping_min = 0.6
+	process.damping_max = 1.4
+	process.scale_min = 0.35
+	process.scale_max = 1.3
 	spray.process_material = process
 	var mist := StandardMaterial3D.new()
 	mist.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mist.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mist.albedo_color = Color(0.92, 0.96, 1.0, 0.22)
+	mist.albedo_color = Color(0.97, 0.99, 1.0, 0.3)
 	# A soft round puff, not a square.
 	mist.albedo_texture = FireFx._puff()
 	mist.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
@@ -355,12 +364,21 @@ static func _waterfall(shape: CampIsland) -> Node3D:
 static func _fall_path(shape: CampIsland, top: Vector3, foot: Vector3, forward: Vector3) -> Array[Vector3]:
 	const FINE := 600
 	const SPACING := 0.3
+	# The curtain starts upstream of the lip and lies on the stream bed there, so
+	# the water bends over the edge as one surface instead of one mesh ending
+	# where the next begins.
+	const APPROACH := 2.0
 	var run := Vector2(foot.x - top.x, foot.z - top.z).length() + 1.2
 	var start := top + Vector3.UP * 0.25
 	var dense: Array[Vector3] = []
 	for i in FINE + 1:
-		var d := run * float(i) / FINE
+		var d := -APPROACH + (run + APPROACH) * float(i) / FINE
 		var xz := Vector2(top.x, top.z) + Vector2(forward.x, forward.z) * d
+		if d < 0.0:
+			# Running down to the lip, riding on the bed.
+			var bed := shape.height_at(xz.x, xz.y) + 0.1
+			dense.append(Vector3(xz.x, maxf(bed, start.y - 0.05), xz.y))
+			continue
 		# Off the lip at about 2.5 m/s, falling under gravity.
 		var fall_t := d / 2.5
 		var free := start.y - 0.5 * 9.8 * fall_t * fall_t
@@ -430,6 +448,10 @@ static func _fall_material(key: String, speed: float, body: float, lip: float, s
 	m.set_shader_parameter("body", body)
 	m.set_shader_parameter("lip_opacity", lip)
 	m.set_shader_parameter("strands", strands)
+	# The curtain begins upstream of the lip, so the water stays whole for the
+	# run-up and the first metre of the drop before it starts to break up.
+	m.set_shader_parameter("aerate_start", 2.8)
+	m.set_shader_parameter("aerate_full", 9.0)
 	_flow_materials[key] = m
 	return m
 
